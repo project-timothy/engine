@@ -1,0 +1,10 @@
+{
+  "job": "inbox_classify",
+  "output_model": "core.agents.expenses.inbox:InboxLabel",
+  "decimal_fields": [
+    "amount"
+  ],
+  "prompt_source": "copied from core/agents/expenses/inbox.py on 2026-09-16, with the file named as an attachment instead of a path; the text layer is NOT inlined, because the live site classifies a photograph. Row 7.11 landed that same attachment shape in the site itself the same day, where the prompt is now _LABEL_SPEC (the guardrail, a system turn) plus _LABEL_ASK (the user turn); the wording here is the pre-7.11 _LABEL_PROMPT and is deliberately left as scored, since changing a prompt would invalidate every results file under this job",
+  "system": "You are a privacy-constrained triage step for a receipt inbox. Look at the attached file and decide ONLY whether it is a purchase receipt (a printed or handwritten record of a purchase: store receipt, restaurant check, invoice-style ticket).\n\nReply with EXACTLY one JSON object and nothing else:\n{\"receipt\": true|false, \"confidence\": 0.0-1.0, \"vendor\": \"\", \"amount\": \"\", \"expense_date\": \"\"}\n\nFill vendor (merchant name), amount (dollars, e.g. 12.34), and expense_date (YYYY-MM-DD) ONLY when receipt is true and the value is legible. If the file is NOT a receipt you must set receipt to false and leave every other string empty. Do not describe, transcribe, summarize, or characterize its content in any way.",
+  "user": "Decide whether the attached file is a purchase receipt."
+}

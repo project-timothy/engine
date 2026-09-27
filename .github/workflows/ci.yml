@@ -1,0 +1,346 @@
+name: ci
+
+# Fixture-based CI: no secrets, no network calls. Runs lint, the bleed-through
+# tenant-boundary check, a dependency-pinning gate, and the full test + eval
+# suite on every PR and on the long-lived branches. Two jobs: `check` installs
+# the [claude] extra (the Claude Agent SDK) and runs everything; `check-no-sdk`
+# installs without it and runs the suite again, proving the core never needs
+# the SDK at import (row 7.15).
+on:
+  pull_request:
+  push:
+    branches: [main, "phase-*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TENANT_KEY: ${{ secrets.TENANT_DEPLOY_KEY != '' && vars.TENANT_REPOSITORY != '' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.9.27"
+
+      - name: Pin Python 3.12
+        run: uv python install 3.12
+
+      - name: Dependency pinning gate (fails on an out-of-date or unpinned lock)
+        run: uv lock --check
+
+      - name: Sync (locked, with the Claude Agent SDK extra)
+        run: uv sync --locked --extra claude
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Bleed-through lint (tenant boundary)
+        run: uv run python -m core.evals.bleedthrough_lint
+
+      - name: Independence lint (auditor imports nothing from core)
+        run: uv run python -m auditor.evals.independence_lint
+
+      - name: Dead code (vulture; the whitelist holds inspected false positives)
+        run: uv run vulture core auditor tenants vulture_whitelist.py --min-confidence 80
+
+      - name: Tests + evals (with coverage floor)
+        run: uv run coverage run -m pytest -q && uv run coverage report
+
+      # The first tenant's names and values live in its private repository so
+      # the list itself is never published. While this repository can read
+      # that one (a read-only deploy key), the boundary lint runs with them;
+      # a public export carries no such secret and these steps skip.
+      - name: Private token list (the first tenant's repository)
+        if: env.HAS_TENANT_KEY == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ${{ vars.TENANT_REPOSITORY }}
+          ref: main
+          ssh-key: ${{ secrets.TENANT_DEPLOY_KEY }}
+          path: .private-tenant
+          sparse-checkout: lint
+
+      - name: Bleed-through lint with the private tokens
+        if: env.HAS_TENANT_KEY == 'true'
+        env:
+          ENGINE_LINT_TOKENS: .private-tenant/lint/tokens.txt
+        run: uv run python -m core.evals.bleedthrough_lint
+
+      - name: Wide scan with the private tokens (report until the export gate reaches zero)
+        if: env.HAS_TENANT_KEY == 'true'
+        continue-on-error: true
+        env:
+          ENGINE_LINT_TOKENS: .private-tenant/lint/tokens.txt
+        run: uv run python -m core.evals.bleedthrough_lint --wide
+
+  check-no-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.9.27"
+
+      - name: Pin Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync (locked, WITHOUT the Claude Agent SDK extra)
+        run: uv sync --locked
+
+      - name: Tests + evals without the SDK
+        run: uv run pytest -q
+
+  # The container is the product's host (phase 7 row 7.21). This job builds the
+  # image and watches ONE whole cycle: supercronic reads the crontab that
+  # `engine schedule` rendered from the demo tenant, fires the real scheduled
+  # scripts, and `engine doctor` comes back green inside the running box. The
+  # crontab is the fast one (--every-minute): same commands, a minute apart
+  # instead of at 02:00.
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Buildx (layer cache)
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build the image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: engine:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Lift sops and age out of the image (row 7.22)
+        run: |
+          # The versions under test are the versions that ship: the binaries
+          # come out of the image this job just built, not from apt. This Mac
+          # has neither, so the cases in tests/unit/test_secrets_sops.py skip
+          # there and run here.
+          set -eu
+          mkdir -p "$HOME/bin"
+          cid=$(docker create engine:ci)
+          docker cp "$cid":/usr/local/bin/sops "$HOME/bin/sops"
+          docker cp "$cid":/usr/local/bin/age-keygen "$HOME/bin/age-keygen"
+          docker rm -v "$cid" > /dev/null
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Start the box (fast crontab)
+        env:
+          ENGINE_IMAGE: engine:ci
+          ENGINE_SCHEDULE_EVERY_MINUTE: "1"
+        run: docker compose up -d
+
+      - name: Wait for the first boot
+        run: |
+          # `up -d` returns when the container starts, not when the entrypoint
+          # has created the tenant and its ledger. Everything below talks to
+          # that ledger, so wait for the line that says the scheduler is up.
+          for _ in $(seq 1 40); do
+            if docker compose logs --no-color engine | grep -q "entrypoint. supercronic"; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "the container did not finish its first boot inside 120s" >&2
+          docker compose logs --no-color engine >&2
+          exit 1
+
+      - name: Give the ledger somewhere to push (docs/install.md step 5)
+        run: |
+          docker compose exec -T engine git init --bare -q /data/ledger-backup.git
+          docker compose exec -T engine \
+            git -C /data/ledger/demo remote add origin /data/ledger-backup.git
+
+      - name: engine doctor is green inside the container
+        run: |
+          # A plain exec, not the entrypoint: an operator's own command has to
+          # see the same volume the scheduled jobs do.
+          docker compose exec -T engine uv run engine doctor demo
+
+      - name: The ledger was born on main, whatever the host prefers
+        run: |
+          branch=$(docker compose exec -T engine git -C /data/ledger/demo symbolic-ref --short HEAD)
+          test "$(echo "$branch" | tr -d '\r')" = "main"
+
+      - name: Wait for one whole cycle
+        run: |
+          # Each job's own FINISHED line, never "the log exists": the first
+          # run of this job caught a daily log one second old, three stages in,
+          # and failed on a workbook that had not happened yet. A successful
+          # push is in the condition for the same reason, since the first fire
+          # can land in the same minute the remote was added.
+          done_engine="=== done: mail="
+          done_audit="=== done: auditor="
+          for _ in $(seq 1 40); do
+            if docker compose exec -T engine \
+                 grep -q "$done_engine" /data/logs/engine-ap-daily.log 2>/dev/null \
+               && docker compose exec -T engine \
+                 grep -q "$done_audit" /data/logs/auditor-nightly.log 2>/dev/null \
+               && docker compose exec -T engine \
+                 grep -q "ledger push rc=0" /data/logs/ledger-backup.log 2>/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "no complete cycle inside 200s" >&2
+          docker compose logs --no-color engine >&2
+          exit 1
+
+      - name: The daily loop ran
+        run: |
+          docker compose exec -T engine cat /data/logs/engine-ap-daily.log
+          docker compose exec -T engine grep -q "=== engine-ap-daily" /data/logs/engine-ap-daily.log
+          docker compose exec -T engine grep -q "ap/workbook @ demo: ok" /data/logs/engine-ap-daily.log
+          # mail and reconcile report "not configured" until this tenant is
+          # connected to a mailbox and an accounting system; every other stage
+          # is 0 (docs/install.md says so, and engine doctor names both).
+          docker compose exec -T engine grep -q \
+            "intake=0 apply=0 qbopush=0 qbopushpay=0 statement=0" /data/logs/engine-ap-daily.log
+
+      - name: The nightly audit ran
+        run: |
+          docker compose exec -T engine cat /data/logs/auditor-nightly.log
+          docker compose exec -T engine grep -q "=== done: auditor=0 ===" /data/logs/auditor-nightly.log
+          # The report is dated in the TENANT's timezone and this runner is
+          # UTC, so naming the file by `date -u` would fail for part of every
+          # day. The log line above already names the one it wrote.
+          docker compose exec -T engine \
+            sh -c 'ls /data/demo-data/reports/_auditor/audit-*.md'
+
+      - name: The ledger pushed, the retries ran, the heartbeat stayed quiet
+        run: |
+          docker compose exec -T engine grep -q "=== done: ledger push rc=0" /data/logs/ledger-backup.log
+          docker compose exec -T engine grep -q "no retries due for demo" /data/logs/engine-jobs-resume.log
+          docker compose exec -T engine test ! -s /data/logs/host-heartbeat.log
+
+      - name: The image carries no Claude Agent SDK (row 7.26)
+        run: |
+          ! docker compose exec -T engine uv run python -c "import claude_agent_sdk" 2>/dev/null
+          ! docker compose exec -T engine test -e /usr/local/bin/claude
+
+      # ---- row 7.22: the encrypted secrets lane, in the running box ----------
+      - name: Encrypt a fixture secret with a throwaway age identity
+        run: |
+          # Exactly the steps docs/credentials-checklist.md gives an operator:
+          # generate the identity inside the container, encrypt to it, leave
+          # the file beside tenant.toml on the volume.
+          set -eu
+          docker compose exec -T engine sh -euc '
+            mkdir -p /data/age
+            age-keygen -o /data/age/keys.txt 2>/dev/null
+            chmod 600 /data/age/keys.txt
+          '
+          recipient=$(docker compose exec -T engine \
+            sh -c "grep 'public key' /data/age/keys.txt | tr -d '\r' | awk '{print \$NF}'")
+          recipient=$(echo "$recipient" | tr -d '\r\n')
+          case "$recipient" in age1*) ;; *) echo "no recipient: $recipient" >&2; exit 1 ;; esac
+          docker compose exec -T engine sh -euc "
+            umask 077
+            printf 'DEMO_QBO_CLIENT_ID: ci-id-0001\nDEMO_QBO_CLIENT_SECRET: ci-canary-7f3a\n' > /tmp/p.yaml
+            sops --encrypt --age $recipient /tmp/p.yaml > /data/tenants/demo/tenant.secrets.enc.yaml
+            rm -f /tmp/p.yaml
+          "
+          # The file on the volume is ciphertext, whatever else happens below.
+          ! docker compose exec -T engine grep -q ci-canary-7f3a \
+              /data/tenants/demo/tenant.secrets.enc.yaml
+
+      - name: The box boots with it, and says only the names
+        run: |
+          set -eu
+          docker compose restart
+          for _ in $(seq 1 40); do
+            if docker compose logs --no-color engine \
+               | grep -q "decrypted /data/tenants/demo/tenant.secrets.enc.yaml"; then
+              break
+            fi
+            sleep 3
+          done
+          docker compose logs --no-color engine | grep "exported:"
+          docker compose logs --no-color engine | grep -q "DEMO_QBO_CLIENT_SECRET"
+          ! docker compose logs --no-color engine | grep -q ci-canary-7f3a
+
+      - name: The value reaches the scheduled jobs
+        run: |
+          # pid 1 is supercronic, which the entrypoint exec'd with the
+          # decrypted environment: every scheduled job inherits it.
+          #
+          # The poll is not politeness. /proc/1/environ is the snapshot execve
+          # took, so the exports the boot shell did appear there only once it
+          # has exec'd supercronic, and the step above returns as soon as the
+          # DECRYPT line lands, several seconds earlier. Checking immediately
+          # read the entrypoint's own pre-export snapshot (CI, 2026-09-16).
+          set -eu
+          for _ in $(seq 1 30); do
+            if docker compose exec -T engine sh -c "tr '\0' '\n' < /proc/1/environ" \
+               | grep -q '^DEMO_QBO_CLIENT_SECRET=ci-canary-7f3a'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "pid 1 never carried the decrypted value; its DEMO_QBO names:" >&2
+          docker compose exec -T engine sh -c "tr '\0' '\n' < /proc/1/environ" \
+            | sed 's/=.*//' | sort | grep '^DEMO_QBO' >&2 || true
+          exit 1
+
+      - name: A plain exec carries the image's environment and no value
+        run: |
+          # The boundary: a value readable from `docker compose exec` is a
+          # value readable by anything that can reach the daemon.
+          set -eu
+          if docker compose exec -T engine env | grep -n ci-canary-7f3a; then
+            echo "the canary is in the image environment" >&2
+            exit 1
+          fi
+
+      - name: Nothing on the volume outside the ciphertext holds it
+        run: |
+          set -eu
+          found=$(docker compose exec -T engine \
+            sh -c 'grep -rl ci-canary-7f3a /data 2>/dev/null || true' | tr -d '\r')
+          if [ -n "$found" ]; then
+            echo "the canary is on the volume:" >&2
+            echo "$found" >&2
+            exit 1
+          fi
+
+      - name: engine doctor reports the file, the count, and never a value
+        run: |
+          set -eu
+          docker compose exec -T engine uv run engine doctor demo | tee /tmp/doctor.txt
+          grep -q "secrets file" /tmp/doctor.txt
+          grep -q "secrets coverage" /tmp/doctor.txt
+          ! grep -q ci-canary-7f3a /tmp/doctor.txt
+          ! grep -q "MISSING" /tmp/doctor.txt
+
+      - name: Install uv for the sops-dependent tests
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.9.27"
+
+      - name: The sops and age cases the Mac has to skip
+        run: |
+          uv python install 3.12
+          uv sync --locked
+          uv run pytest -q -p no:cacheprovider tests/unit/test_secrets_sops.py
+
+      - name: Scheduler log
+        if: always()
+        run: docker compose logs --no-color engine
+
+      - name: Stop
+        if: always()
+        run: docker compose down -v

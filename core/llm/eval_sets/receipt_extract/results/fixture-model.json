@@ -1,0 +1,121 @@
+{
+  "job": "receipt_extract",
+  "model_id": "fixture-model",
+  "adapter": "fixture",
+  "tier": "",
+  "seeded": true,
+  "ran_at": "2026-09-16T16:49:38.931171+00:00",
+  "engine_commit": "cae908cfd03b180767a6622aed48be61377220f7",
+  "provider_models": [],
+  "cases": 3,
+  "passed": 3,
+  "failed": 0,
+  "summary": "receipt_extract: 3 of 3 cases passed on model 'fixture-model' (adapter fixture); replies seeded from the cases, so this scores the harness, not a model",
+  "results": [
+    {
+      "case": "fuel_receipt",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "41.17",
+          "actual": "41.17",
+          "passed": true
+        },
+        {
+          "field": "category",
+          "expected": "Fuel",
+          "actual": "Fuel",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-06-07",
+          "actual": "2026-06-07",
+          "passed": true
+        },
+        {
+          "field": "vendor_name",
+          "expected": "Highway Fuel Stop",
+          "actual": "Highway Fuel Stop",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "hotel_folio",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "312.75",
+          "actual": "312.75",
+          "passed": true
+        },
+        {
+          "field": "category",
+          "expected": "Lodging",
+          "actual": "Lodging",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "vendor_name",
+          "expected": "Lakeside Inn",
+          "actual": "Lakeside Inn",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "meal_receipt",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "28.40",
+          "actual": "28.40",
+          "passed": true
+        },
+        {
+          "field": "category",
+          "expected": "Meals",
+          "actual": "Meals",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-06-04",
+          "actual": "2026-06-04",
+          "passed": true
+        },
+        {
+          "field": "vendor_name",
+          "expected": "Riverside Diner",
+          "actual": "Riverside Diner",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

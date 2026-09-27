@@ -1,0 +1,249 @@
+# Tenant "demo": Demo Tenant Inc.. Rendered by `engine init demo --archetype A`
+# from tenants/_templates/tenant.toml.tmpl (archetype A: project-coded technical services).
+# Every path below is relative to the directory the engine runs from; the
+# data tree sits at demo-data/. Edit freely: this file is the tenant, and
+# nothing under core/ knows its values.
+
+[identity]
+legal_name = "Demo Tenant Inc."
+slug = "demo"
+timezone = "America/Chicago"
+# The design archetype this tenant was rendered from (docs/archetypes.md).
+archetype = "A"
+
+[fiscal]
+year_start_month = 7
+
+[approval]
+# An invoice under this amount from a registered vendor files without a card;
+# everything else parks an approval card. 0 queues every invoice.
+auto_file_under = 100.0
+currency = "USD"
+
+[ap]
+# Where invoices land (the mail fetch and any drop folder feed it), where
+# approved invoices are filed by month, and where the human-readable
+# workbook view is written. protected_paths lists any production folder the
+# engine must never write; allowed_paths carves write surfaces out of it.
+landing_dir = "demo-data/inbox"
+filing_dir = "demo-data/ap/filed"
+workbook_path = "demo-data/reports/ap-ledger.xlsx"
+protected_paths = []
+allowed_paths = []
+# The workbook columns, in order: a display label and the ledger field it
+# renders. Labels are your vocabulary.
+workbook_columns = [
+    {label = "Vendor", field = "vendor"},
+    {label = "Invoice #", field = "invoice_number"},
+    {label = "Amount", field = "amount_cents"},
+    {label = "Project", field = "project"},
+    {label = "Status", field = "status"},
+]
+
+[timesheets]
+# Timesheet submissions land in the same inbox as invoices; filed copies go
+# to their own tree by month.
+landing_dir = "demo-data/inbox"
+filing_dir = "demo-data/timesheets"
+
+[expenses]
+# The per-person drop tree (one subfolder per person, project subfolders
+# inside), the phone-photo inbox the classifier pre-stages, and the filing
+# tree where receipts, report packages, and _filed/ land by month.
+drop_dir = "demo-data/expenses/drop"
+inbox_dir = "demo-data/expenses/inbox"
+inbox_person = "Pat Owner"
+filing_dir = "demo-data/expenses/filed"
+# Replace the placeholder people with yours. role decides the accounting
+# treatment: owner and employee reports are reimbursements; a vendor-role
+# person books every line to the accounting-system vendor named by
+# qbo_vendor on the project's own cost account.
+persons = [
+    {name = "Pat Owner", role = "owner"},
+    {name = "Sam Staffer", role = "employee"},
+    {name = "Vic Vendor", role = "vendor", qbo_vendor = "Vic Vendor LLC", default_channel = "Check"},
+]
+default_channel = "Transfer"
+# Vendor-role booking: every line is a project cost on the project's own
+# chart account; {number} is the project code minus its letter prefix.
+project_account_template = "Project Costs - PN{number}"
+
+[expenses.category_accounts]
+# Report category -> the fully qualified account name in your chart. An
+# unmapped category parks a card, never guesses.
+Meals = "Meals Out"
+Travel = "Travel Costs"
+Lodging = "Lodging"
+Airfare = "Airfare"
+
+[bank_csv]
+# Your bank's CSV export: the column headers, the date format, and the folder
+# the exports land in. The names below are placeholders; match them to a real
+# export before the first statement file is dropped. The daily run hands the
+# newest CSV in statement_dir to reconcile as clearing evidence.
+date_col = "Posted"
+description_col = "Memo"
+check_number_col = "Chk"
+amount_col = "Value"
+date_format = "%Y-%m-%d"
+statement_dir = "demo-data/statements"
+
+[w9]
+# Inbound W-9 forms are detected before any model call and, once the card is
+# approved, copied here as <Vendor_Slug>_W9_<year>. vendors.toml is the W-9
+# status registry of record; a TIN never enters the engine.
+folder = "demo-data/vendor-w9s"
+
+[qbo]
+# The accounting-system connection. token_file names a JSON file OUTSIDE the
+# repo holding the client credentials and the rotating refresh token; empty
+# means no live connection (reconcile then needs --param evidence_file=).
+token_file = ""
+since_days = 30
+# Recurring non-AP payees (bank fees, the payroll processor) whose clearings
+# the bank rules own; reconcile treats them as out of scope.
+reconcile_ignore_payees = []
+# Payment records (W2) stay off until you decide the engine, not the bank
+# feed, records payments; the flag is a tenant setting, off by default.
+payment_records = false
+
+[mail]
+# The tenant mailbox (Microsoft Graph). Fill in the app registration and the
+# keychain names, run `engine mail consent demo` once, then add
+# "mail/fetch" to [auditor].expected_daily_jobs so the heartbeat lens
+# watches it. Empty client_id disables the fetch.
+client_id = ""
+tenant_id = ""
+keychain_service = ""
+keychain_account = ""
+landing_dir = "demo-data/inbox"
+since_days = 3
+denied_senders = []
+
+[close]
+# Month-end close: where CLOSE_PREFLIGHT.md and the close packet land (month
+# subfolders), the checking account's name in the accounting system, the
+# owners whose transactions are owner-shaped, and how payroll journal
+# entries are recognized (a DocNumber or note marker, case-insensitive).
+report_dir = "demo-data/reports/close"
+bank_account = "Business Checking"
+uncategorized_block_over = 500.0
+owner_names = ["Pat Owner"]
+payroll_markers = ["payroll"]
+expenses_dir = "demo-data/expenses/filed"
+# Who receives the sealed month's statements; the send always rides an
+# approval card, and an empty list skips the send leg.
+statements_recipients = []
+# macOS only, and deliberately left at its default here: after a live
+# statements render, reveal the workbook in Finder (`open -R`). A headless or
+# Linux host never calls it (row 7.20), so turn it on only where the close is
+# run by hand on a Mac.
+# reveal_in_finder = false
+
+[host]
+# The machine this tenant runs on (phase 7 row 7.21). A Mac under launchd
+# ignores this section: its schedule is its plists. A container renders its
+# crontab from it (`engine schedule <slug>`), and `engine doctor <slug>` reads
+# it to report what an install is still missing.
+#
+# healthchecks: this host is expected to ping the off-box dead man
+# (HC_PING_BASE in the environment). Left false, doctor treats the absent ping
+# key as a host that chose not to be watched rather than an unfinished install.
+healthchecks = false
+
+[host.schedule]
+# Five-field cron (minute hour day-of-month month day-of-week), read in
+# [identity].timezone. The expression IS the on switch: empty renders no line.
+# The daily loop.
+engine = "0 8 * * *"
+# The independent nightly audit.
+auditor = "0 2 * * *"
+# Push the ledger repo to its remote; needs a remote (doctor checks).
+ledger_backup = "0 23 * * *"
+# The off-box dead-man ping: shell and curl only, no engine code.
+heartbeat = "*/30 * * * *"
+# Due job retries (docs/retries.md).
+retries = "*/15 * * * *"
+# The build lane is the host's own program, not one this repo ships: name a
+# time AND the command it runs, or leave both empty to keep the lane off.
+build = ""
+build_command = ""
+
+[secrets]
+# Logical name -> the environment variable holding the value. Names only,
+# never values; secrets.ref beside this file lists the same names.
+qbo_client_id = "DEMO_QBO_CLIENT_ID"
+qbo_client_secret = "DEMO_QBO_CLIENT_SECRET"
+
+# ---- the auditor (docs/auditor-design.md) ----
+# An independent application that reads this same file with its OWN parser
+# and writes only the nightly checklist report. Lenses are on by default;
+# a lens whose path is unset stays out of scope.
+
+[auditor]
+report_dir = "demo-data/reports/_auditor"
+# The daily run's stages, agent/job, as the heartbeat lens expects to find
+# them in the engine's runs table. This is the offline loop; add
+# "mail/fetch" once [mail] is connected.
+expected_daily_jobs = [
+    "ap/intake",
+    "ap/apply",
+    "ap/qbo-push",
+    "ap/reconcile",
+    "ap/workbook",
+    "timesheets/intake",
+    "expenses/inbox",
+    "expenses/intake",
+    "expenses/extract",
+    "ap/janitor",
+]
+daily_run_max_age_hours = 25
+decision_window_days = 14
+filing_grace_days = 2
+stale_approval_days = 7
+backup_max_age_hours = 25
+
+[auditor.triage]
+# Owner triage lives in triage.toml beside this file; dated triage notes
+# land here (the 06:00 triage marker lens reads it).
+enabled = true
+notes_dir = "demo-data/reports/_auditor/triage"
+
+[auditor.vendor_1099]
+# Registry-vs-accounting-system 1099 flag sync (external: skipped under
+# --local-only until [qbo].token_file is set).
+enabled = true
+
+[auditor.projects]
+# Project code integrity: every cost row carries a code the registry
+# knows. overhead_tokens are the words that mean "not a project".
+enabled = true
+overhead_tokens = []
+
+# ---- the model policy (docs/model-seam-design.md) ----
+# Every model job runs on the fixture adapter until you name a real tier:
+# the first hour is offline and needs no key. A tier names an adapter, a
+# model id (data, passed through untouched), the NAME of the key variable,
+# and its price; usd on every llm_calls row comes from that price, so the
+# budget below is a real cap.
+
+[llm.tiers]
+fixture = { adapter = "fixture", model = "fixture-model", api_key_env = "DEMO_MODEL_KEY", pricing = { input_usd_per_mtok = "1", output_usd_per_mtok = "5" } }
+
+[llm.jobs]
+inbox_classify  = "fixture"
+receipt_extract = "fixture"
+invoice_extract = "fixture"
+scan_group      = "fixture"
+draft_advisory  = "fixture"
+audit_triage    = "fixture"
+w9_detect       = "deterministic"   # no model may be called for this job
+
+[llm.budget]
+monthly_usd = 25
+# ---- archetype A: project-coded technical services ----
+# Every dollar carries a project number; field staff are often 1099 (the W-9
+# lane and the vendor-1099 lens are on); expenses are travel-heavy (the
+# category map above); customers pay on their own terms through portals, so
+# AR aging with per-customer terms and remittance parsing are the next lanes
+# (docs/archetypes.md, A), followed by payroll prep and contractor onboarding.

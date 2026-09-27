@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic fixture for the 2026-05-18 expense dedup + reference-image lessons",
+  "incoming": [
+    {"file": "scan_a.jpg", "md5": "aaa111", "vendor": "Coffee Cart", "amount": 18.50, "date": "2026-05-10", "kind": "receipt", "single_image": false, "body_empty": false},
+    {"file": "scan_b.jpg", "md5": "bbb222", "vendor": "Coffee Cart", "amount": 18.50, "date": "2026-05-11", "kind": "receipt", "single_image": false, "body_empty": false},
+    {"file": "bucket_map.png", "md5": "ccc333", "vendor": null, "amount": null, "date": null, "kind": "image", "single_image": true, "body_empty": true}
+  ],
+  "processed_last_60_days": []
+}

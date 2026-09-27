@@ -1,0 +1,55 @@
+# The engine on a Linux host (phase 7 row 7.21). See docs/install.md.
+#
+#   docker compose up -d       start the box
+#   docker compose logs -f     watch the scheduler
+#   docker compose down        stop it; the volume and everything in it stay
+#
+# One service, one volume. The volume holds the tenant file, the ledger, the
+# auditor store, the reports and the logs, so nothing but the process dies with
+# the container.
+
+services:
+  engine:
+    build: .
+    image: ${ENGINE_IMAGE:-engine:dev}
+    container_name: engine
+    restart: unless-stopped
+    environment:
+      # Which tenant this box runs, and the archetype its first boot renders
+      # (A project-coded technical services, B construction and trades, C
+      # agencies; docs/archetypes.md).
+      ENGINE_TENANT: ${ENGINE_TENANT:-demo}
+      ENGINE_ARCHETYPE: ${ENGINE_ARCHETYPE:-A}
+      # The image reference this box is running. The freshness guard reads it:
+      # there is no checkout in a container, and the image digest is the
+      # review (docs/decisions/2026-09-16-an-image-is-a-reviewed-checkout.md).
+      ENGINE_IMAGE: ${ENGINE_IMAGE:-engine:dev}
+      # This host installed no optional extras: no Claude Agent SDK, no Claude
+      # Code, no Max seat. `uv run` is asked for none (scripts/lib/uv-run.sh).
+      ENGINE_UV_EXTRA: ""
+      # And no optional dependency groups: the browser lane (the host group's
+      # Playwright) is a Mac-only job today, and a `--group host` here would
+      # resolve a package the locked sync left out, at 02:00, on a box that may
+      # have no network.
+      ENGINE_UV_GROUP: ""
+      # Set to 1 for a smoke test: every scheduled entry runs once a minute,
+      # same commands. Never leave it on.
+      ENGINE_SCHEDULE_EVERY_MINUTE: ${ENGINE_SCHEDULE_EVERY_MINUTE:-}
+    # Secrets are NAMES here and values in the environment (invariant: secrets
+    # resolve at runtime, never from a repo). The lane to use is the encrypted
+    # one (row 7.22): tenants/<slug>/tenant.secrets.enc.yaml on the volume,
+    # opened at boot by the age identity at /data/age/keys.txt, which lives on
+    # this box and nowhere else. See docs/credentials-checklist.md. A .env
+    # file beside this one and /data/secrets.env (mode 600) still work for a
+    # box whose disk you trust.
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - engine-data:/data
+    # The engine writes documents and reads a mailbox; it serves no port.
+    # Remote access is the host's business (tailscale serve, an SSH tunnel),
+    # not this file's.
+
+volumes:
+  engine-data:

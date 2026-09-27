@@ -1,0 +1,9 @@
+{
+  "name": "quote_is_never_an_invoice",
+  "note": "the house rule 'a vendor proposal or quote is never an invoice'. amount is deliberately NOT asserted here: the contract calls that field 'the total due', and a quotation states a quoted total with nothing due, so both an amount and a null are defensible readings and an ambiguous check makes a bad case. doc_type is the rule under test.",
+  "document": "quote_is_never_an_invoice.pdf",
+  "text": "Beta Supply Co\nQUOTATION\nQuote Number: 9034\nDate: 2026-06-03\nValid for 30 days. This is not a request for payment.\nQuoted Total: $2,300.00\n",
+  "expect": {
+    "doc_type": "quote"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "job": "scan_group",
+  "model_id": "fixture-model",
+  "adapter": "fixture",
+  "tier": "fixture",
+  "seeded": true,
+  "ran_at": "2026-09-16T17:22:57.140619+00:00",
+  "engine_commit": "d2e04a8b1e290f3ce30f52a2dbffe80f28d5f316",
+  "provider_models": [],
+  "cases": 4,
+  "passed": 4,
+  "failed": 0,
+  "summary": "scan_group: 4 of 4 cases passed on model 'fixture-model' (adapter fixture, tier fixture); replies seeded from the cases, so this scores the harness, not a model",
+  "results": [
+    {
+      "case": "a_terms_page_belongs_to_its_receipt",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "groups",
+          "expected": "[{\"pages\": [1, 2]}, {\"pages\": [3]}]",
+          "actual": "[{\"amount\": \"\", \"date\": \"\", \"pages\": [1, 2], \"vendor\": \"\"}, {\"amount\": \"\", \"date\": \"\", \"pages\": [3], \"vendor\": \"\"}]",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "one_receipt_over_three_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "groups",
+          "expected": "[{\"pages\": [1, 2, 3]}]",
+          "actual": "[{\"amount\": \"\", \"date\": \"\", \"pages\": [1, 2, 3], \"vendor\": \"\"}]",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "three_receipts_one_page_each",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "groups",
+          "expected": "[{\"pages\": [1]}, {\"pages\": [2]}, {\"pages\": [3]}]",
+          "actual": "[{\"amount\": \"\", \"date\": \"\", \"pages\": [1], \"vendor\": \"\"}, {\"amount\": \"\", \"date\": \"\", \"pages\": [2], \"vendor\": \"\"}, {\"amount\": \"\", \"date\": \"\", \"pages\": [3], \"vendor\": \"\"}]",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "two_receipts_split_after_page_two",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "groups",
+          "expected": "[{\"pages\": [1, 2]}, {\"pages\": [3, 4]}]",
+          "actual": "[{\"amount\": \"\", \"date\": \"\", \"pages\": [1, 2], \"vendor\": \"\"}, {\"amount\": \"\", \"date\": \"\", \"pages\": [3, 4], \"vendor\": \"\"}]",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

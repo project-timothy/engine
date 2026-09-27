@@ -1,0 +1,13 @@
+{
+  "name": "meal_receipt",
+  "note": "a restaurant check: doc_type receipt, category Meals, the date read off the slip.",
+  "document": "meal_receipt.pdf",
+  "text": "Riverside Diner\n88 Mill Street\n2026-06-04  19:12\n2 entrees, 2 coffees\nSubtotal 24.70\nTax 1.70\nTip 2.00\nTOTAL $28.40\nThank you\n",
+  "expect": {
+    "doc_type": "receipt",
+    "vendor_name": "Riverside Diner",
+    "amount": "28.40",
+    "invoice_date": "2026-06-04",
+    "category": "Meals"
+  }
+}

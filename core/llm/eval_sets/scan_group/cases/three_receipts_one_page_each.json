@@ -1,0 +1,25 @@
+{
+  "name": "three_receipts_one_page_each",
+  "note": "The plain batch, and the shape the splitter exists for: three unrelated single-page receipts fed through the scanner in one pass, one group each. The first real drop of 2026-08-10 was seventeen of these in one PDF.",
+  "document": "three_receipts_one_page_each.pdf",
+  "text": "HARBORLINE DINER\nCHECK 218\n2026-03-07\nTwo lunches                           22.10\nTax                                    2.50\nTOTAL                                 24.60\n\fSTATION 9 FUEL\nPUMP 4\n2026-03-07\nUnleaded 11.204 gal @ 3.734\nTOTAL                                 41.83\n\fCEDAR LOT PARKING\nSPACE 112\n2026-03-08\nDay rate                              12.00\nTOTAL                                 12.00\n",
+  "expect": {
+    "groups": [
+      {
+        "pages": [
+          1
+        ]
+      },
+      {
+        "pages": [
+          2
+        ]
+      },
+      {
+        "pages": [
+          3
+        ]
+      }
+    ]
+  }
+}

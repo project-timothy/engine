@@ -1,0 +1,18 @@
+{
+  "id": "msg_recorded_0002",
+  "type": "message",
+  "role": "assistant",
+  "model": "recorded-anthropic-model",
+  "content": [
+    {
+      "type": "text",
+      "text": "Aging: one payable is worth a look this week; Acme Fasteners A-100 is 41 days old at $1,875.00."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 300,
+    "output_tokens": 30
+  }
+}

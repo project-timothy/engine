@@ -1,0 +1,12 @@
+{
+  "name": "store_receipt_is_labelled",
+  "note": "a receipt: the label carries the boolean plus the three legible fields.",
+  "document": "store_receipt_is_labelled.pdf",
+  "text": "Corner Hardware\n2026-06-04\nAnchor bolts 4 @ 1.29\nShop rag bundle 7.18\nTOTAL $12.34\n",
+  "expect": {
+    "receipt": true,
+    "vendor": "Corner Hardware",
+    "amount": "12.34",
+    "expense_date": "2026-06-04"
+  }
+}

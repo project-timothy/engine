@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$title</title>
+<style>
+:root { color-scheme: light dark; }
+body {
+  margin: 0 auto; padding: 2rem 1.25rem; max-width: 60rem; line-height: 1.5;
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #1c1c1e; background: #fbfbfa;
+}
+h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; padding-bottom: .25rem;
+     border-bottom: 1px solid #d8d8d4; }
+h3 { font-size: .95rem; margin: 1rem 0 .35rem; font-weight: 600; }
+p.headline { margin: 0 0 1rem; color: #5b5b58; }
+table { border-collapse: collapse; width: 100%; font-size: .87rem; }
+th { text-align: left; font-weight: 600; color: #5b5b58; padding: .35rem .5rem;
+     border-bottom: 1px solid #d8d8d4; }
+td { padding: .35rem .5rem; border-bottom: 1px solid #ececea; vertical-align: top; }
+td.job { font-weight: 600; white-space: nowrap; }
+td.key, td.marks { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                   font-size: .78rem; color: #5b5b58; word-break: break-all; }
+tr.summary td { border-bottom: 1px solid #ececea; padding-top: 0;
+                color: #5b5b58; font-size: .82rem; }
+span.status { font-weight: 600; }
+span.status.error { color: #a1170f; }
+span.status.ok { color: #1c6b37; }
+span.status.needs_approval { color: #8a5a00; }
+span.tag { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+           color: #5b5b58; border: 1px solid #d8d8d4; border-radius: .6rem;
+           padding: 0 .35rem; margin-left: .35rem; }
+span.count { display: inline-block; min-width: 1.4rem; text-align: center;
+             background: #1c1c1e; color: #fbfbfa; border-radius: .7rem;
+             padding: 0 .4rem; font-size: .78rem; }
+span.age { color: #5b5b58; font-weight: 400; font-size: .8rem; margin-left: .35rem; }
+span.cardno { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+              color: #5b5b58; margin-right: .35rem; }
+ul { margin: .25rem 0 .75rem; padding-left: 1.2rem; }
+li { margin: .15rem 0; font-size: .87rem; }
+p.empty { color: #5b5b58; font-style: italic; }
+p.source { color: #5b5b58; font-size: .78rem; margin: .25rem 0 .5rem;
+           font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+           word-break: break-all; }
+footer { margin-top: 2.5rem; padding-top: .75rem; border-top: 1px solid #d8d8d4;
+         color: #5b5b58; font-size: .78rem; }
+footer code { word-break: break-all; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e8e8e6; background: #17171a; }
+  h2 { border-bottom-color: #33333a; }
+  th { border-bottom-color: #33333a; color: #a0a0a0; }
+  td { border-bottom-color: #26262b; }
+  tr.summary td, td.key, td.marks, p.headline, p.empty, p.source,
+  span.age, span.cardno, footer { color: #a0a0a0; }
+  span.status.error { color: #ff8a80; }
+  span.status.ok { color: #7ad69a; }
+  span.status.needs_approval { color: #f0c36d; }
+  span.count { background: #e8e8e6; color: #17171a; }
+  span.tag { border-color: #33333a; }
+  footer { border-top-color: #33333a; }
+}
+</style>
+</head>
+<body>
+<h1>$title</h1>
+<p class="headline">$headline</p>
+
+<section id="runs" data-section="runs">
+<h2>Last run per job</h2>
+$runs
+</section>
+
+<section id="cards" data-section="cards">
+<h2>Pending approval cards</h2>
+$cards
+</section>
+
+<section id="audit" data-section="audit">
+<h2>The auditor, new since the last report</h2>
+$audit
+</section>
+
+<footer>
+tenant <strong>$tenant</strong> &middot; engine commit <code>$commit</code> &middot;
+rendered $rendered &middot; ledger <code>$ledger</code><br>
+This page is read-only: it renders what the ledger and the newest audit report
+already say, and writes nothing.
+</footer>
+</body>
+</html>

@@ -1,0 +1,76 @@
+# The archetype knobs `engine init` substitutes into tenant.toml.tmpl.
+#
+# Three design archetypes (docs/archetypes.md;
+# docs/decisions/2026-09-11-three-design-archetypes.md;
+# docs/decisions/2026-09-15-engine-init-templates.md). The knobs below are
+# the ONLY values that differ across A, B, and C in a rendered tenant.toml
+# (tests/unit/test_engine_init.py pins the set); everything else in the
+# template is the same for every tenant and is the owner's to edit.
+#
+# unit_label: the code every dollar carries ("Project" or "Job"); it names
+#   the workbook column and the vendor-role cost-account vocabulary.
+# project_account_template: the per-unit cost account a vendor-role person's
+#   lines book to; {number} is the code minus its letter prefix.
+# category_accounts: the expense-report categories the archetype sees most,
+#   mapped to placeholder chart-of-accounts names the owner replaces.
+# notes: the archetype's later lanes, as a comment block at the end of the
+#   rendered file. No config exists for them yet; the notes say so.
+
+[A]
+name = "project-coded technical services"
+unit_label = "Project"
+project_account_template = "Project Costs - PN{number}"
+notes = """
+# ---- archetype A: project-coded technical services ----
+# Every dollar carries a project number; field staff are often 1099 (the W-9
+# lane and the vendor-1099 lens are on); expenses are travel-heavy (the
+# category map above); customers pay on their own terms through portals, so
+# AR aging with per-customer terms and remittance parsing are the next lanes
+# (docs/archetypes.md, A), followed by payroll prep and contractor onboarding.
+"""
+
+[A.category_accounts]
+Meals = "Meals Out"
+Travel = "Travel Costs"
+Lodging = "Lodging"
+Airfare = "Airfare"
+
+[B]
+name = "construction subcontractors and field-service trades"
+unit_label = "Job"
+project_account_template = "Job Costs - J{number}"
+notes = """
+# ---- archetype B: construction subcontractors and field-service trades ----
+# Jobs are the project codes (the "Job" column and the job-cost account
+# template above); vendors are many and supply houses bill by statement, so
+# statement reconciliation and job costing are the next lanes (docs/archetypes.md,
+# B). Progress billing, retainage receivable and payable, lien waivers,
+# certified payroll, and the COI register are later lanes for commercial
+# subs: no config for them exists yet, and nothing here pretends otherwise.
+"""
+
+[B.category_accounts]
+Materials = "Job Materials"
+Fuel = "Fuel"
+Tools = "Small Tools and Equipment"
+Meals = "Meals Out"
+
+[C]
+name = "agencies, creative, and IT studios"
+unit_label = "Project"
+project_account_template = "Project Costs - PN{number}"
+notes = """
+# ---- archetype C: agencies, creative, and IT studios ----
+# Contractor-heavy (the W-9 lane and the vendor-1099 lens are on),
+# project-coded, retainer-billed, already on open-API tools. The retainer
+# deferred-revenue schedule, milestone invoicing against an SOW registry, and
+# pass-through media accounts are the next lanes (docs/archetypes.md, C); no
+# config for them exists yet. Nonprofits are the alternate shape and get a
+# design day of their own for the fund and restriction dimension.
+"""
+
+[C.category_accounts]
+Software = "Software and Subscriptions"
+Contractors = "Contract Labor"
+Meals = "Meals Out"
+Travel = "Travel Costs"

@@ -1,0 +1,109 @@
+{
+  "job": "inbox_classify",
+  "model_id": "fixture-model",
+  "adapter": "fixture",
+  "tier": "",
+  "seeded": true,
+  "ran_at": "2026-09-16T16:49:38.696383+00:00",
+  "engine_commit": "cae908cfd03b180767a6622aed48be61377220f7",
+  "provider_models": [],
+  "cases": 3,
+  "passed": 3,
+  "failed": 0,
+  "summary": "inbox_classify: 3 of 3 cases passed on model 'fixture-model' (adapter fixture); replies seeded from the cases, so this scores the harness, not a model",
+  "results": [
+    {
+      "case": "a_list_of_prices_is_not_a_receipt",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "",
+          "actual": "",
+          "passed": true
+        },
+        {
+          "field": "expense_date",
+          "expected": "",
+          "actual": "",
+          "passed": true
+        },
+        {
+          "field": "receipt",
+          "expected": "false",
+          "actual": "false",
+          "passed": true
+        },
+        {
+          "field": "vendor",
+          "expected": "",
+          "actual": "",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "not_a_receipt_stays_bare",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "",
+          "actual": "",
+          "passed": true
+        },
+        {
+          "field": "expense_date",
+          "expected": "",
+          "actual": "",
+          "passed": true
+        },
+        {
+          "field": "receipt",
+          "expected": "false",
+          "actual": "false",
+          "passed": true
+        },
+        {
+          "field": "vendor",
+          "expected": "",
+          "actual": "",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "store_receipt_is_labelled",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "12.34",
+          "actual": "12.34",
+          "passed": true
+        },
+        {
+          "field": "expense_date",
+          "expected": "2026-06-04",
+          "actual": "2026-06-04",
+          "passed": true
+        },
+        {
+          "field": "receipt",
+          "expected": "true",
+          "actual": "true",
+          "passed": true
+        },
+        {
+          "field": "vendor",
+          "expected": "Corner Hardware",
+          "actual": "Corner Hardware",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

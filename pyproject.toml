@@ -1,0 +1,98 @@
+[project]
+name = "timothy-engine"
+version = "0.1.0"
+description = "Business-agnostic back-office agent engine. Every job is an idempotent CLI invocation against a git-backed ledger; every tenant is pure configuration."
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "keyring==25.7.0",
+    "msal==1.38.0",
+    "openai==2.44.0",
+    "openpyxl==3.1.5",
+    "pydantic==2.13.5",
+    "pypdf==6.16.2",
+    "pypdfium2==5.13.0",
+]
+
+[project.optional-dependencies]
+# The Claude Agent SDK (row 7.15): only a host that drives model jobs through
+# Claude Code needs it (`uv sync --extra claude`); the core imports it lazily
+# inside the SDK sites. The pin stays exact and tied to the Claude Code CLI
+# it was proven against (docs/lessons.md, "Pin both halves of a pair", tests/unit/test_sdk_cli_pair.py).
+claude = [
+    "claude-agent-sdk==0.2.152",
+]
+
+[project.scripts]
+engine = "core.engine.cli:main"
+auditor = "auditor.cli:main"
+
+[dependency-groups]
+dev = [
+    "coverage==7.16.1",
+    "pytest==9.1.1",
+    "ruff==0.12.2",
+    "vulture==2.16",
+]
+host = [
+    "playwright==1.62.0",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# auditor/ is a separate top-level package: an independent application that
+# imports nothing from core (enforced by auditor.evals.independence_lint).
+packages = ["core", "auditor"]
+
+[tool.ruff]
+# The vulture whitelist is machine-generated bare-name stubs by design, which
+# ruff correctly reads as useless expressions and undefined names.
+extend-exclude = ["vulture_whitelist.py"]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W", "C90"]
+
+[tool.coverage.run]
+source = ["core", "auditor", "tenants"]
+branch = false
+
+[tool.coverage.report]
+# Today the suite covers 95%. The floor sits at 94 so a normal change never
+# trips it, but a change that drops real coverage does. RATCHET THIS UP as the
+# number rises; never lower it to make a red build green.
+fail_under = 94
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
+
+[tool.ruff.lint.mccabe]
+# New code is held at 18 (20 until 2026-09-21, when the _reconcile_run split
+# finished: 62 -> 42 on 09-18, then eight functions each under the ceiling).
+# The four functions above it carry an explicit `# noqa: C901` naming their
+# number, so the debt is enumerated rather than hidden: _match_run 41,
+# _qbo_push_payments_run 28, _inbox_run 25, _run_locked 24. Ratchet this
+# down as they are split; the next notch is whatever the largest un-exempt
+# function measures (`ruff check --select C901 --ignore-noqa --config
+# 'lint.mccabe.max-complexity=1'` lists every number).
+max-complexity = 18
+
+[tool.pytest.ini_options]
+# Two trees, one suite: unit tests under tests/, incident + agent evals under
+# core/ and auditor/. All run in CI. Unit tests prove the code; evals prove
+# incident regressions.
+testpaths = ["tests", "core", "auditor"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+# Passed tests leave no temp tree behind and only the newest failed run is
+# kept: the default (three whole sessions) held 19 GB on the host on
+# 2026-09-15 once the installer tests each carried a browser download.
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 1
+markers = [
+    "phase2: eval whose engine module lands in a later phase; skipped with fixture in place",
+]

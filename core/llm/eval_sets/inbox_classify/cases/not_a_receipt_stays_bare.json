@@ -1,0 +1,12 @@
+{
+  "name": "not_a_receipt_stays_bare",
+  "note": "the label-only contract (owner decision 2026-08-12): a non-receipt comes back as the bare boolean. A model that describes the page fails here, which is the whole point of the case.",
+  "document": "not_a_receipt_stays_bare.pdf",
+  "text": "Maintenance Log\nLine 4 conveyor\n2026-06-05 bearing replaced, no charge\n2026-06-06 belt tension checked\nNext service 2026-07-06\n",
+  "expect": {
+    "receipt": false,
+    "vendor": "",
+    "amount": "",
+    "expense_date": ""
+  }
+}

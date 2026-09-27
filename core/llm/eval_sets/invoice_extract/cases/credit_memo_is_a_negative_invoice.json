@@ -1,0 +1,11 @@
+{
+  "name": "credit_memo_is_a_negative_invoice",
+  "note": "the house rule 'a credit memo is doc_type invoice with a negative amount, not a type of its own', and the sign has to survive.",
+  "document": "credit_memo_is_a_negative_invoice.pdf",
+  "text": "Alpha Parts LLC\nCREDIT MEMO\nCredit Memo Number: CM-204\nDate: 2026-06-14\nReason: two brackets returned, invoice 1001\nCredit Total: $125.00\n",
+  "expect": {
+    "doc_type": "invoice",
+    "invoice_number": "CM-204",
+    "amount": "-125.00"
+  }
+}

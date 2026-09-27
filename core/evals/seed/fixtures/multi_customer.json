@@ -1,0 +1,9 @@
+{
+  "_provenance": "synthetic fixture for the 2026-06-05 first-second-customer lesson",
+  "customers": ["Customer One", "Customer Two"],
+  "projects": [
+    {"pn": "P-2001", "customer": "Customer One", "net_terms": 60},
+    {"pn": "P-2002", "customer": "Customer Two", "net_terms": 30}
+  ],
+  "default_customer_assumption": "Customer One"
+}
