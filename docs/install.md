@@ -154,4 +154,5 @@ most. For everything else, back up the `engine-data` volume on the host the
 way you back up anything else on that machine.
 
 Every step above was followed on a Linux host that is not the machine the
-engine was written on: `docs/non-mac-proof-2026-09-16.md`.
+engine was written on: `docs/non-mac-proof-2026-09-16.md` (a local VM) and
+`docs/non-mac-proof-2026-09-28.md` (a one-core VPS, overnight).
