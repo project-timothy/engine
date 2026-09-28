@@ -5,8 +5,8 @@ nightly audit, the ledger push, the heartbeat and the retry sweep in the
 container on a Linux host that is not the Mac the engine was written on, with
 no Claude Code, no Max seat, and no Claude Agent SDK in the image.
 
-This is the first of two passes. The second is a $5 VPS, and it is owed (last
-section).
+This is the first of two passes. The second, on a VPS, closed the phase:
+`docs/non-mac-proof-2026-09-28.md`.
 
 ## The host
 
