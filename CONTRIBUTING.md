@@ -8,9 +8,8 @@ The engine is licensed under the GNU Affero General Public License,
 version 3 (AGPL-3.0), with an additional permission under AGPL-3.0
 section 7 (see [LICENSE](LICENSE)). The plug shapes in `core/contracts/`
 are Apache-2.0 (its own LICENSE), so an adapter built against them can be
-kept private. The section 7 permission follows the mechanism CiviCRM has
-used since 2010: it lets the project accept your code without a separate
-Contributor License Agreement.
+kept private. The section 7 permission lets the project accept your code
+without a separate Contributor License Agreement.
 
 Add this three-line header to the top of each new or substantially modified
 source file:
