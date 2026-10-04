@@ -1,0 +1,56 @@
+# Note contract for the audit-triage skill (core/llm/skill_harness.py,
+# docs/skill-harness.md). tests/skills/test_skill_contracts.py enforces it in
+# CI: the fixture notes must satisfy it and SKILL.md must still name every
+# section and marker below. Rename a section in SKILL.md and CI goes red
+# until this file (and the morning brief that lifts these sections) follow.
+name = "audit-triage"
+
+# The sections of triage-YYYY-MM-DD.md, in the order SKILL.md "Record" lists
+# them. The morning brief lifts the first bullet of "Recommended actions for
+# the owner" and of "Recurring patterns" by name (the tenant overlay puts
+# the owner's own name in that heading).
+required_sections = [
+    "New findings",
+    "Root cause",
+    "Actions taken",
+    "Recommended actions for the owner",
+    "Recurring patterns",
+    "Watch list",
+]
+
+# Evidence the session did something the guardrails forbid. The triage never
+# merges, never pushes main, never rewrites history: the owner merges every PR.
+banned_strings = [
+    "gh pr merge",
+    "git push origin main",
+    "git push --force",
+    "git push -f ",
+]
+
+# The wrapper treats a note whose first line says this as an unfinished run.
+first_line_never = ["preliminary"]
+
+# Headless-mode markers SKILL.md must keep. Row 7.17 moved the session onto
+# the runner, so the markers moved with it: the note is the session's final
+# message, the reports arrive in the context bundle (no stage variables, no
+# Desktop path), and the eval-first rule is the runner's `eval_first` gate.
+# The preliminary-first-line protocol and the authority line are unchanged.
+# Row 7.18 added the proposal lane: the step, both trees it writes, and the
+# line the gate keys on. Drop any of them and the 06:00 session loses the
+# lane silently, so they are contract, not prose.
+skill_must_mention = [
+    "final message",
+    "context bundle",
+    "eval_first",
+    "preliminary",
+    "never merge",
+    "The owner merges",
+    "tenant overlay",
+    "[NEEDS REVIEW]",
+    "Recommended Action",
+    "Proposal PRs",
+    "eval budget",
+    "docs/proposals/",
+    "evals/proposals/",
+    "Candidate:",
+]

@@ -1,0 +1,11 @@
+# Bleed-through tokens that ship with the engine. One token per line; blank
+# lines and # comments are ignored; matching is a case-insensitive substring.
+#
+# These are shapes, not names: an absolute path into one person's home or
+# cloud-drive mount has no place in tenant-agnostic code. A real tenant's
+# names and values (its people, customers, vendors, bank, hosts) are never
+# listed here, because this file ships; they live in the tenant's own private
+# repository and reach the scan through ENGINE_LINT_TOKENS (a path, or several
+# joined by ":"), which CI sets when it can read that repository.
+/Users/
+Library/CloudStorage

@@ -1,0 +1,23 @@
+# The deadline calendar for ${legal_name} (core/agents/deadlines).
+#
+# One [[obligation]] per dated thing a person must do: renew a passport or a
+# visa, file a return, renew a licence, send a report. The engine reminds
+# ahead of each due date (90, 30 and 7 days by default, [deadlines].lead_days
+# in tenant.toml), once per window, and writes a calendar file any phone can
+# open. It never does the act itself; when it is done, record it:
+#
+#     uv run engine run ${slug} deadlines done --param id=<id>
+#
+# A recurring obligation (every = "1y") then rolls to its next date. The
+# format is in core/agents/deadlines/schema.py. Uncomment and edit:
+#
+# [[obligation]]
+# id = "annual-report"          # a lowercase slug, unique in this file
+# title = "State annual report"
+# who = ""                      # the person or unit it belongs to
+# kind = "registration"         # a free label: passport, visa, tax, insurance...
+# due = 2027-05-01              # for a recurring one, the first due date
+# every = "1y"                  # optional: <n>d, <n>w, <n>m or <n>y
+# lead_days = [60, 14]          # optional; the tenant default otherwise
+# notes = ""
+# evidence = ""                 # a path or link to the paperwork

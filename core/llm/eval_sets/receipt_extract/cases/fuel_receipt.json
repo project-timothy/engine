@@ -1,0 +1,13 @@
+{
+  "name": "fuel_receipt",
+  "note": "a pump slip: the category word has to be Fuel, not Travel.",
+  "document": "fuel_receipt.pdf",
+  "text": "Highway Fuel Stop\nPump 6\n2026-06-07  07:41\nUnleaded 12.004 gal @ 3.430\nTOTAL $41.17\n",
+  "expect": {
+    "doc_type": "receipt",
+    "vendor_name": "Highway Fuel Stop",
+    "amount": "41.17",
+    "invoice_date": "2026-06-07",
+    "category": "Fuel"
+  }
+}

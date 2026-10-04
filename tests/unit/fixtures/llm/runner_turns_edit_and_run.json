@@ -1,0 +1,17 @@
+[
+  {
+    "reason": "write the greeting file",
+    "progress": "wrote hello.txt",
+    "call": {"tool": "write_file", "path": "notes/hello.txt", "content": "hello\n"}
+  },
+  {
+    "reason": "prove the shell tool",
+    "progress": "ran echo",
+    "call": {"tool": "shell", "argv": ["echo", "ok"]}
+  },
+  {
+    "reason": "done",
+    "progress": "done",
+    "note": "# Session note\n\n## What changed\n\n- wrote notes/hello.txt\n- ran echo ok\n"
+  }
+]

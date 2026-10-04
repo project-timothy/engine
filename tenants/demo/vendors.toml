@@ -1,0 +1,27 @@
+# Vendor registry for Demo Tenant Inc. (tenant "demo"). Rendered by
+# `engine init`; replace the three placeholder vendors with yours.
+#
+# One table per vendor, keyed by the sender domain (or a short slug when the
+# vendor has no domain of its own). vendors.toml is the W-9 status registry
+# of record: a TIN never goes here (it lives on the form and in the
+# accounting system). The engine never writes this file; an approved W-9
+# card emits the registry diff as an event for you to apply.
+
+["alphaparts.example"]
+vendor = "Alpha Parts"
+gl_account = "Cost of Goods Sold:Project Expense"
+cost_type = "Materials"
+subject_aliases = ["alpha parts"]
+payment_channel = "ACH"
+tax_entity = "alpha-group"
+
+["alphafab"]
+vendor = "Alpha Fabrication"
+cost_type = "Subcontractors"
+subject_aliases = ["alpha fab", "alpha fabrication"]
+tax_entity = "alpha-group"
+
+["betafreight.example"]
+vendor = "Beta Freight"
+cost_type = "Freight/Shipping"
+subject_aliases = ["beta freight"]

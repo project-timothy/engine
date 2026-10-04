@@ -1,0 +1,14 @@
+{
+  "name": "invoice_plain",
+  "note": "the ordinary case: a vendor invoice with both dates and a total.",
+  "document": "invoice_plain.pdf",
+  "text": "Alpha Parts LLC\n14 Foundry Road, Springfield\nINVOICE\nInvoice Number: 1001\nInvoice Date: 2026-06-01\nDue Date: 2026-07-01\nDescription: machined brackets, lot of 40\nTotal Due: $450.00\n",
+  "expect": {
+    "doc_type": "invoice",
+    "vendor_name": "Alpha Parts LLC",
+    "invoice_number": "1001",
+    "amount": "450.00",
+    "invoice_date": "2026-06-01",
+    "due_date": "2026-07-01"
+  }
+}

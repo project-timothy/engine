@@ -1,0 +1,11 @@
+{
+  "aging": {
+    "open_payables": 1,
+    "oldest": {
+      "vendor": "Acme Fasteners",
+      "invoice_number": "A-100",
+      "age_days": 41,
+      "cents": 187500
+    }
+  }
+}

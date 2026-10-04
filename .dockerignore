@@ -1,0 +1,38 @@
+# What never enters the image (phase 7 row 7.21).
+#
+# Two reasons, and the second is the important one: build speed, and the fact
+# that a distributed image must carry no business's data. A real tenant is one
+# company's vendor list, account names, paths and host wiring; the image ships
+# the engine, the demo and the archetype templates, and `engine init` renders
+# a tenant onto the volume at first boot.
+
+# Every tenant folder but the two that ship: never in the product image, even
+# one a developer has checked out beside the engine.
+tenants/*
+!tenants/demo/
+!tenants/_templates/
+
+# State that belongs to a host, not to an image.
+.ledger/
+.auditor/
+demo-data/
+*-data/
+data/
+
+# The checkout's own machinery. .git matters twice: it is large, and an image
+# that carried it would let run-preflight.sh think it had a checkout to pull.
+.git/
+.github/
+.gitignore
+.venv/
+.claude/
+
+# Build and test leftovers.
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+tests/
+htmlcov/
+.coverage

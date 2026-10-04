@@ -1,0 +1,16 @@
+{
+  "_provenance": "synthetic fixture for the 2026-05-21 payment cluster; names are invented",
+  "ap_ledger": [
+    {"row": 1, "payee": "Vendor Alpha", "invoice_ref": "A-1001", "amount": 2000.00, "status": "Outstanding"},
+    {"row": 2, "payee": "Vendor Alpha", "invoice_ref": "A-1002", "amount": 2000.00, "status": "Outstanding"},
+    {"row": 3, "payee": "Vendor Beta",  "invoice_ref": "B-77",   "amount": 5300.00, "status": "Outstanding"},
+    {"row": 4, "payee": "Vendor Gamma", "invoice_ref": "G-12",   "amount": 814.00,  "status": "Received"}
+  ],
+  "cleared_bank": [
+    {"check_ref": "CK-9100", "payee": "Vendor Gamma", "amount": 814.00},
+    {"check_ref": "CK-9043", "payee": "Vendor Delta", "amount": 5021.00}
+  ],
+  "billpay_queue": [
+    {"payee": "Vendor Alpha", "invoice_ref": "A-1001", "amount": 2000.00, "state": "Scheduled"}
+  ]
+}

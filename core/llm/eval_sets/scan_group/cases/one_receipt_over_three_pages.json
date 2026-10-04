@@ -1,0 +1,17 @@
+{
+  "name": "one_receipt_over_three_pages",
+  "note": "The hotel-folio shape: ONE receipt printed over three pages, so the right answer is one group and the file is left whole. A grouper that splits a folio page by page files three children, and the extract stage then reads three receipts where the owner spent once.",
+  "document": "one_receipt_over_three_pages.pdf",
+  "text": "BLUEPOINT INN\nFOLIO 88213\nPAGE 1 OF 3\n2026-03-02   Room 214                118.00\n2026-03-02   Room tax                   9.44\n\fBLUEPOINT INN\nFOLIO 88213\nPAGE 2 OF 3\n2026-03-03   Room 214                118.00\n2026-03-03   Room tax                   9.44\n\fBLUEPOINT INN\nFOLIO 88213\nPAGE 3 OF 3\nBALANCE DUE                          254.88\nSETTLED TO CARD ON FILE 2026-03-04\n",
+  "expect": {
+    "groups": [
+      {
+        "pages": [
+          1,
+          2,
+          3
+        ]
+      }
+    ]
+  }
+}

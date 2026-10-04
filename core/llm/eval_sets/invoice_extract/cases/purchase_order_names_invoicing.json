@@ -1,0 +1,10 @@
+{
+  "name": "purchase_order_names_invoicing",
+  "note": "the house rule 'a purchase order is po even if it mentions invoicing'. A model that reads the word invoice and stops gets this wrong.",
+  "document": "purchase_order_names_invoicing.pdf",
+  "text": "PURCHASE ORDER\nPO Number: 77\nIssued To: Beta Supply Co\nOrder Date: 2026-06-02\nTerms: submit your invoice against this purchase order, net 30\nLine 1: gearbox housing, qty 2\nPO Total: $1,875.00\n",
+  "expect": {
+    "doc_type": "po",
+    "amount": "1875.00"
+  }
+}

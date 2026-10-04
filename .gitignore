@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual envs (.venv-* = a scratch environment, e.g. the no-SDK proof for row 7.15)
+.venv*/
+
+# Secrets never enter the repo (engine invariant; secrets resolve from env at runtime)
+.env
+.env.*
+*.pem
+*.key
+secrets/
+credentials.json
+
+# age identities (row 7.22). The ENCRYPTED tenant.secrets.enc.yaml is safe to
+# commit and is deliberately NOT ignored; the identity that opens it lives on
+# the box and nowhere else, so every shape it is usually written in is ignored
+# here whatever directory somebody runs age-keygen in.
+keys.txt
+*.agekey
+age/
+
+# Local ledger workspaces (per-deployment git repos live outside the code repo)
+.ledger/
+*.sqlite3
+*.sqlite3-journal
+
+# The auditor's own store (working memory, rebuildable by re-running the audit)
+.auditor/
+
+# The model seat's scratch directories (issue #265): one per call, swept when
+# the call returns, with scratch-log.jsonl the record that outlives them. Here
+# for the same reason .ledger/ and .auditor/ are: the freshness guard refuses a
+# checkout with untracked files, and the default root is beside the run.
+.llm-scratch/
+
+# Runner session transcripts (row 7.17), when nothing names a root: beside the
+# run, like .llm-scratch/ above. The triage lane names its own under the stage.
+.runner-transcripts/
+
+# Data trees `engine init` creates beside tenants/ (the demo's is demo-data/):
+# inboxes, filed documents, reports. Never part of the code repo.
+/*-data/
+
+# Claude Code tooling: agent worktrees live under .claude/worktrees/ inside the
+# repo; untracked, they made the 06:00 headless triage see a dirty dev tree and
+# skip every fire since it went live (2026-09-02 through 09-04; added 2026-09-04)
+.claude/
+
+# OS
+.DS_Store
+
+# coverage.py data (held 317 absolute paths when it was tracked; removed at extraction gate 2)
+.coverage
+.coverage.*
+
+# CI checks the private tenant token list out here (never committed)
+.private-tenant/

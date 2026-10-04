@@ -1,0 +1,21 @@
+{
+  "name": "a_terms_page_belongs_to_its_receipt",
+  "note": "The page a grouper is tempted to drop: page 2 is the back side of ticket 5512, carrying a return policy, no vendor header, and no total. It belongs to the receipt in front of it. A grouper that leaves it out returns pages [1, 3] of a 3-page scan, and validate_groups then holds the WHOLE scan with an anomaly rather than filing a receipt with a page missing. That refusal is this case's real failure mode, and it is the one thing a case file cannot state as an expectation.",
+  "document": "a_terms_page_belongs_to_its_receipt.pdf",
+  "text": "GREENFIELD MARKET\nTICKET 5512\n2026-03-09\nPaper towels                           8.95\nCleaning spray                         5.40\nTOTAL                                 14.35\nSee reverse for the return policy.\n\fRETURN POLICY\nUnopened items may be returned within 30 days\nwith the original receipt. Refunds are issued to\nthe original form of payment.\nTicket 5512 - keep this receipt for returns.\n\fCEDARWORKS LUMBER\nTICKET 771\n2026-03-09\nPine board 1x6, four lengths          19.20\nTOTAL                                 19.20\n",
+  "expect": {
+    "groups": [
+      {
+        "pages": [
+          1,
+          2
+        ]
+      },
+      {
+        "pages": [
+          3
+        ]
+      }
+    ]
+  }
+}

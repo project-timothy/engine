@@ -1,0 +1,12 @@
+{
+  "name": "hotel_folio",
+  "note": "a guest folio: still a receipt, category Lodging, and the total is the folio total.",
+  "document": "hotel_folio.pdf",
+  "text": "Lakeside Inn\nGUEST FOLIO\nRoom 214\nArrive 2026-06-09  Depart 2026-06-11\nRoom charge 2 nights 278.00\nOccupancy tax 34.75\nBALANCE DUE $312.75\n",
+  "expect": {
+    "doc_type": "receipt",
+    "vendor_name": "Lakeside Inn",
+    "amount": "312.75",
+    "category": "Lodging"
+  }
+}

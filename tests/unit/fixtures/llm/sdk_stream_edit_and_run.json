@@ -1,0 +1,43 @@
+[
+  {
+    "type": "assistant",
+    "text": "I will write the greeting file.",
+    "tool_uses": [
+      {"id": "toolu_01", "name": "Write", "input": {"file_path": "notes/hello.txt", "content": "hello\n"}}
+    ],
+    "usage": {"input_tokens": 100, "output_tokens": 30}
+  },
+  {"type": "tool_result", "tool_use_id": "toolu_01", "content": "File written", "is_error": false},
+  {
+    "type": "assistant",
+    "text": "Now the one command.",
+    "tool_uses": [
+      {"id": "toolu_02", "name": "Bash", "input": {"command": "echo ok"}}
+    ],
+    "usage": {"input_tokens": 100, "output_tokens": 30}
+  },
+  {"type": "tool_result", "tool_use_id": "toolu_02", "content": "ok", "is_error": false},
+  {
+    "type": "assistant",
+    "text": "Let me look something up on the web.",
+    "tool_uses": [
+      {"id": "toolu_03", "name": "WebFetch", "input": {"url": "https://example.invalid/"}}
+    ],
+    "usage": {"input_tokens": 100, "output_tokens": 30}
+  },
+  {
+    "type": "assistant",
+    "text": "# Session note\n\n## What changed\n\n- wrote notes/hello.txt\n- ran echo ok\n",
+    "tool_uses": [],
+    "usage": {"input_tokens": 100, "output_tokens": 30}
+  },
+  {
+    "type": "result",
+    "subtype": "success",
+    "is_error": false,
+    "num_turns": 4,
+    "total_cost_usd": 0.0123,
+    "usage": {"input_tokens": 400, "output_tokens": 120},
+    "result": "# Session note\n\n## What changed\n\n- wrote notes/hello.txt\n- ran echo ok\n"
+  }
+]

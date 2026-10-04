@@ -1,0 +1,30 @@
+# The proposal PR contract for the audit-triage skill (phase 7 row 7.18).
+# A proposal's design note IS the PR body, so one file answers to both: the
+# owner reads it in the PR and merges it into docs/proposals/ unchanged.
+# tests/skills/test_skill_contracts.py enforces it, and core/llm/tools.py
+# enforces the first two sections again at the gate, in Python.
+name = "audit-triage-proposal"
+
+# The sections of docs/proposals/YYYY-MM-DD-<slug>.md, in order. Design says
+# what the automation is; Failing eval says what the merged red eval asserts;
+# Issue carries the board row the owner files after merging.
+required_sections = ["Design", "Failing eval", "Issue"]
+
+# A proposal proposes. It never merges itself and never carries the work.
+banned_strings = [
+    "gh pr merge",
+    "git push origin main",
+    "git push --force",
+]
+
+first_line_never = ["preliminary"]
+
+# What SKILL.md must still say for the lane to exist at all.
+skill_must_mention = [
+    "Proposal PRs",
+    "eval budget",
+    "docs/proposals/",
+    "evals/proposals/",
+    "Candidate:",
+    "proposed once",
+]

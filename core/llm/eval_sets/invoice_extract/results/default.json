@@ -1,0 +1,118 @@
+{
+  "job": "invoice_extract",
+  "model_id": "default",
+  "adapter": "claude_agent_sdk",
+  "tier": "seat",
+  "seeded": false,
+  "ran_at": "2026-09-16T16:48:17.917062+00:00",
+  "engine_commit": "cae908cfd03b180767a6622aed48be61377220f7",
+  "provider_models": [
+    "claude-fable-5-1"
+  ],
+  "cases": 4,
+  "passed": 4,
+  "failed": 0,
+  "summary": "invoice_extract: 4 of 4 cases passed on model 'default' (adapter claude_agent_sdk, tier seat)",
+  "results": [
+    {
+      "case": "credit_memo_is_a_negative_invoice",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "-125.00",
+          "actual": "-125.00",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "invoice",
+          "actual": "invoice",
+          "passed": true
+        },
+        {
+          "field": "invoice_number",
+          "expected": "CM-204",
+          "actual": "CM-204",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "invoice_plain",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "450.00",
+          "actual": "450.00",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "invoice",
+          "actual": "invoice",
+          "passed": true
+        },
+        {
+          "field": "due_date",
+          "expected": "2026-07-01",
+          "actual": "2026-07-01",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-06-01",
+          "actual": "2026-06-01",
+          "passed": true
+        },
+        {
+          "field": "invoice_number",
+          "expected": "1001",
+          "actual": "1001",
+          "passed": true
+        },
+        {
+          "field": "vendor_name",
+          "expected": "Alpha Parts LLC",
+          "actual": "Alpha Parts LLC",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "purchase_order_names_invoicing",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1875.00",
+          "actual": "1875.00",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "po",
+          "actual": "po",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "quote_is_never_an_invoice",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "quote",
+          "actual": "quote",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

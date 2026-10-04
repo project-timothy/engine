@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-recorded-0002",
+  "object": "chat.completion",
+  "created": 1757635200,
+  "model": "recorded-openai-compatible-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Aging: Acme Fasteners A-100 sits at 41 days ($1,875.00); settle it before the month closes."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 280,
+    "completion_tokens": 28,
+    "total_tokens": 308
+  }
+}

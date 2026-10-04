@@ -1,0 +1,12 @@
+{
+  "name": "a_list_of_prices_is_not_a_receipt",
+  "note": "adversarial: a handwritten list carries merchant-ish words and dollar amounts but records no purchase.",
+  "document": "a_list_of_prices_is_not_a_receipt.pdf",
+  "text": "Saturday list\nmilk\neggs, two dozen\nbatteries about 9.00\ncall the dentist\n",
+  "expect": {
+    "receipt": false,
+    "vendor": "",
+    "amount": "",
+    "expense_date": ""
+  }
+}

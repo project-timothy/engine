@@ -1,0 +1,22 @@
+{
+  "name": "two_receipts_split_after_page_two",
+  "note": "Two multi-page receipts scanned together. The split falls between page 2 and page 3, where the second ticket's header starts; each ticket carries its own number on both of its pages, so neither boundary is a judgment call.",
+  "document": "two_receipts_split_after_page_two.pdf",
+  "text": "WEXLER TOOL RENTAL\nTICKET 4471\n2026-03-05\nCore drill, 2 day rate                96.00\nBit set                               14.50\n(continued on the next page)\n\fWEXLER TOOL RENTAL\nTICKET 4471 - CONTINUED\nDamage waiver                         11.00\nTOTAL                                121.50\nPAID BY CARD\n\fNORTHGATE SUPPLY\nINVOICE 20315\n2026-03-06\nConduit clamps 12 @ 0.85              10.20\nWire nuts, box                         6.40\n(continued on the next page)\n\fNORTHGATE SUPPLY\nINVOICE 20315 - CONTINUED\nSales tax                              1.42\nTOTAL                                 18.02\nPAID BY CARD\n",
+  "expect": {
+    "groups": [
+      {
+        "pages": [
+          1,
+          2
+        ]
+      },
+      {
+        "pages": [
+          3,
+          4
+        ]
+      }
+    ]
+  }
+}

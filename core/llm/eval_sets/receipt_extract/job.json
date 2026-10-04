@@ -1,0 +1,10 @@
+{
+  "job": "receipt_extract",
+  "output_model": "core.agents.ap.extraction:ExtractionReply",
+  "decimal_fields": [
+    "amount"
+  ],
+  "prompt_source": "the same module and the same prompt as invoice_extract: one extractor serves both jobs (core/agents/ap/extraction.py), the cases are what differ",
+  "system": "Reply with ONLY a JSON object (no prose, no code fences) with keys:\n  doc_type: one of invoice|po|quote|statement|receipt|proposal|reference|unknown\n  vendor_name: the issuing vendor's name as printed, or null\n  invoice_number: the invoice number, or null\n  amount: the total due as a decimal string (negative for credit memos), or null\n  invoice_date: ISO YYYY-MM-DD, or null\n  due_date: ISO YYYY-MM-DD, or null\n  confidence: 0.0-1.0 for the doc_type + field extraction overall\n  warnings: array of strings for anything ambiguous\n  needs_ocr: true only if the file is image-only with no extractable text\n  category: for a purchase receipt only, one expense category word\n    (Meals|Travel|Lodging|Fuel|Supplies|Other); null for anything else\nRules: a purchase order is \"po\" even if it mentions invoicing; a vendor\nproposal/quote is never an invoice; a photo of a machine or a screenshot is\n\"reference\". A credit memo is doc_type \"invoice\" with a negative amount, not a\ntype of its own. Do not guess an amount that is not printed in the document.\n",
+  "user": "Classify the attached document for an accounts-payable intake system. Its text layer is below; prefer what you can see in the file itself when the two disagree.\n\n-----BEGIN DOCUMENT TEXT-----\n{document_text}\n-----END DOCUMENT TEXT-----"
+}

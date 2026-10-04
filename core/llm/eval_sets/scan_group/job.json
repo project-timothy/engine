@@ -1,0 +1,8 @@
+{
+  "job": "scan_group",
+  "output_model": "core.agents.expenses.scan_split:GroupingReply",
+  "decimal_fields": [],
+  "prompt_source": "copied from core/agents/expenses/scan_split.py (_GROUP_SPEC, _GROUP_ASK) on 2026-09-16, the day row 7.11 put the grouper behind the gateway (PR #269). One edit: the site formats {pages} per scan, so the probe carries the harness token {page_count}, which is the pages of the case's own document. An eval set is a fixed probe (row 7.13 decision 5), so rewording either constant invalidates every results file under this job; tests/unit/test_scan_group_eval_set.py is the drift alarm that says so out loud.",
+  "system": "You are grouping the pages of a scanned receipt batch. The scan may contain one receipt or several receipts scanned together. Group the pages so each group is exactly one receipt (a multi-page receipt like a hotel folio is ONE group). Every page must appear in exactly one group. pages are 1-indexed page numbers; vendor, amount (e.g. 12.34), and date (YYYY-MM-DD) name the child file and may be empty when you cannot read them.",
+  "user": "Group the pages of the attached {page_count}-page scan, one group per receipt."
+}
