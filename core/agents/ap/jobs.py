@@ -31,6 +31,7 @@ from dataclasses import field as dataclasses_field
 from decimal import Decimal
 from pathlib import Path
 
+from ...engine.config import MissingFolderError
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.fileops import CannotVerify, CopyMismatch, place_copy, strip_collision_suffix
 from ...engine.guard import ProtectedSurfaceError, WriteGuard
@@ -92,7 +93,7 @@ def _extractor(ctx: JobContext) -> Extractor:
 def _candidates(ctx: JobContext) -> list[Path]:
     landing = _landing_dir(ctx)
     if not landing.is_dir():
-        raise FileNotFoundError(f"landing directory {landing} does not exist")
+        raise MissingFolderError(f"landing directory {landing} does not exist")
     since = ctx.params.get("since")  # ISO date; optional
     out: list[Path] = []
     for path in sorted(landing.iterdir()):
@@ -1349,7 +1350,7 @@ def _janitor_eligible(ctx: JobContext) -> list[tuple[Path, str]]:
 
     landing = _landing_dir(ctx)
     if not landing.is_dir():
-        raise FileNotFoundError(f"landing directory {landing} does not exist")
+        raise MissingFolderError(f"landing directory {landing} does not exist")
     cutoff = _time.time() - _janitor_days(ctx) * 86400
     in_flight = _janitor_in_flight_names(ctx)
     settled = _janitor_settled_md5s(ctx)

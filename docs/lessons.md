@@ -244,9 +244,16 @@ did, so it never cites a cutoff nothing crossed, and a sentence with no
 observation behind it is not printed at all. And a count is an observation with
 a time on it: where a detector reads state its own run will then change, the
 count it prints names the vintage it was read from rather than asserting the
-present, so a report can never contradict its own resolved list. Evals:
+present, so a report can never contradict its own resolved list. And "none"
+names the kind it counted: a detector that counts only live rows says "nothing
+recorded" about a stage with a dry run on file, and a stage built after the
+morning fire reads as dead until the next one. The alarm says what the ledger
+holds, and a fact that cannot yet have been otherwise waits one window of the
+detector's own before it pages, never longer and never where nothing is
+recorded at all. Evals:
 `auditor/evals/test_host.py`, `core/agents/ap/evals/test_janitor.py`,
-`auditor/evals/test_recurrence.py`, `auditor/evals/test_advisory.py`.
+`auditor/evals/test_recurrence.py`, `auditor/evals/test_advisory.py`,
+`auditor/evals/test_heartbeat.py`.
 
 ## Two lists that must agree are pinned against each other
 

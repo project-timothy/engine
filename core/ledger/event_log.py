@@ -1,10 +1,14 @@
 """Append-only JSONL event log.
 
 The SQLite ``events`` table is the queryable mirror; this file is the
-human-diffable, git-friendly append-only record. One JSON object per line.
-The log is only ever appended to, never rewritten: idempotency is enforced
-upstream (the SQLite unique key decides whether a line is new), so this writer
-stays dumb on purpose.
+human-diffable, git-friendly record. One JSON object per line. Writers only
+append: idempotency is enforced upstream (the SQLite unique key decides
+whether a line is new), so this writer stays dumb on purpose.
+
+The one rewrite is ``repair_event_log``, under the run lock, after a crash
+(#136): it truncates the file at its first line that does not parse (a torn
+tail, or real corruption) and re-appends SQLite's rows from there.
+``event_log_is_whole`` is the cheap check that lets a healthy log skip it.
 """
 
 from __future__ import annotations
@@ -48,14 +52,29 @@ def read_event_lines(root: Path) -> list[dict[str, Any]]:
     return records
 
 
+def event_log_is_whole(root: Path, row_count: int) -> bool:
+    """True when every line parses and there are at least ``row_count`` of
+    them: exactly the state in which ``repair_event_log`` would change
+    nothing, so the caller can skip loading SQLite's rows (#14)."""
+    path = root / EVENT_LOG_FILENAME
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    for line in lines:
+        try:
+            json.loads(line)
+        except json.JSONDecodeError:
+            return False
+    return len(lines) >= row_count
+
+
 def repair_event_log(root: Path, rows: list[dict[str, Any]]) -> None:
     """Converge the JSONL file onto ``rows`` (SQLite's authoritative events).
 
     Two crash shapes (#136): a torn trailing fragment (append died mid-
     write) is truncated away; missing tail lines (commit landed, append
-    never ran) are re-appended from SQLite. Interior lines are never
-    rewritten — the log stays append-only apart from tearing off a
-    fragment that was never a record. Call only under the run lock.
+    never ran) are re-appended from SQLite. A line that does not parse
+    anywhere else is truncated the same way, and SQLite's rows are
+    re-appended from that point. Call only under the run lock.
     """
     path = root / EVENT_LOG_FILENAME
     text = path.read_text(encoding="utf-8") if path.exists() else ""

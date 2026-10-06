@@ -6,10 +6,13 @@ Thank you for considering a contribution.
 
 The engine is licensed under the GNU Affero General Public License,
 version 3 (AGPL-3.0), with an additional permission under AGPL-3.0
-section 7 (see [LICENSE](LICENSE)). The plug shapes in `core/contracts/`
-are Apache-2.0 (its own LICENSE), so an adapter built against them can be
-kept private. The section 7 permission lets the project accept your code
-without a separate Contributor License Agreement.
+section 7 (see [LICENSE](LICENSE)). The one exception is
+`core/contracts/`, the plug shapes an adapter is built against: it is
+Apache-2.0 under [its own license](core/contracts/LICENSE), so an adapter
+built against those shapes can be kept private. The mail shape is there
+today; the job contracts in `core/engine/contracts.py` are still AGPL and
+move into the package later. The section 7 permission lets the project
+accept your code without a separate Contributor License Agreement.
 
 Add this three-line header to the top of each new or substantially modified
 source file:
@@ -35,8 +38,9 @@ is still distributed downstream under AGPL-3.0.
   incident's eval lands in the same PR as its fix. The rule it taught goes
   into [docs/lessons.md](docs/lessons.md).
 - Nothing under `core/` or `auditor/` names a business, and no business's
-  folder ships under `tenants/`: only `demo/` and `_templates/`. CI runs the
-  bleed-through lint and a boundary test on every pull request.
+  folder ships under `tenants/`: only `tenants/demo/` and
+  `tenants/_templates/`. CI runs the bleed-through lint and a boundary test
+  on every pull request.
 - The gates before a merge: `uv run pytest`, `uv run ruff check .`,
   `uv run ruff format --check .`, and the two lints named in CLAUDE.md.
 - The maintainers are listed in [.github/CODEOWNERS](.github/CODEOWNERS).

@@ -229,6 +229,25 @@ def test_a_folder_the_tenant_names_but_nobody_created_is_missing(world):
     assert "does not exist" in _named(report, "folder acme-data/nowhere").detail
 
 
+def test_doctor_never_creates_a_folder_unless_asked(world):
+    tmp_path, root = world
+    _edit(root, {'landing_dir = "acme-data/inbox"': 'landing_dir = "acme-data/nowhere"'})
+    _report(world)
+    assert not (tmp_path / "acme-data" / "nowhere").exists()
+
+
+def test_create_folders_makes_every_missing_folder_and_says_so(world):
+    # Issue #3 (2026-10-06): a plain checkout had no tree and no way to get
+    # one short of hand mkdirs; doctor already knows the list.
+    tmp_path, root = world
+    _edit(root, {'landing_dir = "acme-data/inbox"': 'landing_dir = "acme-data/nowhere"'})
+    report = run_doctor("acme", tenants_root=root, create_folders=True)
+    assert (tmp_path / "acme-data" / "nowhere").is_dir()
+    check = _named(report, "folder acme-data/nowhere")
+    assert check.status == "ok"
+    assert "created" in check.detail
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores the mode bits")
 def test_a_folder_that_cannot_be_written_is_missing(world):
     tmp_path, _ = world
@@ -357,3 +376,10 @@ def test_the_cli_reports_an_unloadable_tenant_as_a_missing_item(world, capsys):
     _edit(root, {'model = "fixture-model"': 'model = "unproven-model"'})
     assert main(["doctor", "acme", "--root", str(root)]) == 1
     assert "MISSING" in capsys.readouterr().out
+
+
+def test_the_cli_names_create_folders_when_a_folder_is_missing(world, capsys):
+    tmp_path, root = world
+    _edit(root, {'landing_dir = "acme-data/inbox"': 'landing_dir = "acme-data/nowhere"'})
+    assert main(["doctor", "acme"]) == 1
+    assert "engine doctor acme --create-folders" in capsys.readouterr().err

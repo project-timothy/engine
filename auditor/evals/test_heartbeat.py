@@ -78,6 +78,52 @@ def test_shadow_runs_do_not_prove_liveness(tmp_path):
         assert _conditions(heartbeat.check_engine_liveness(ctx)) == ["stale"]
 
 
+def test_a_stage_built_since_the_last_fire_is_awaiting_not_dead(tmp_path):
+    # A stage merges in the afternoon with its config line, and is dry-run once
+    # (a shadow row). The audit runs before the next scheduled fire, so "no run
+    # recorded at all" is false (one is) and CRITICAL is a page about a stage
+    # that has not yet had a chance to run. Inside one daily window the finding
+    # says what was measured and is not a page.
+    conn = make_ledger(tmp_path)
+    add_run(conn, agent="brief", job="weekly", status="ok", shadow=1, created_at=FRESH)
+    ctx = make_context(tmp_path, expected_daily_jobs=[("brief", "weekly")])
+    with ctx.ledger:
+        findings = heartbeat.check_daily_runs(ctx)
+    assert _conditions(findings) == ["awaiting-first-run"]
+    assert findings[0].severity == "INFO"
+    assert "no run recorded at all" not in findings[0].detail
+    assert "shadow" in findings[0].detail
+
+
+def test_a_stage_with_only_shadow_runs_past_a_window_is_still_critical(tmp_path):
+    # The grace is one daily window, the lens's own knob: a fire has come and
+    # gone since the first dry run and the stage is still not live, which is
+    # the wiring error this check exists for. The text no longer says "no run
+    # recorded at all" about a stage that has shadow rows.
+    conn = make_ledger(tmp_path)
+    add_run(conn, agent="brief", job="weekly", status="ok", shadow=1, created_at=STALE)
+    add_run(conn, agent="ap", job="intake", status="ok", created_at=FRESH)
+    ctx = make_context(tmp_path, expected_daily_jobs=[("brief", "weekly")])
+    with ctx.ledger:
+        findings = heartbeat.check_daily_runs(ctx)
+    assert _conditions(findings) == ["never-ran"]
+    assert findings[0].severity == "CRITICAL"
+    assert "shadow" in findings[0].detail
+    assert "no run recorded at all" not in findings[0].detail
+
+
+def test_a_stage_with_no_row_of_any_kind_is_still_critical(tmp_path):
+    # The fence: nothing recorded cannot be told from a stage never wired, so
+    # the grace never applies to it.
+    make_ledger(tmp_path)
+    ctx = make_context(tmp_path, expected_daily_jobs=[("brief", "weekly")])
+    with ctx.ledger:
+        findings = heartbeat.check_daily_runs(ctx)
+    assert _conditions(findings) == ["never-ran"]
+    assert findings[0].severity == "CRITICAL"
+    assert "no run recorded at all" in findings[0].detail
+
+
 def test_tenant_without_daily_jobs_expects_no_pulse(tmp_path):
     make_ledger(tmp_path)
     ctx = make_context(tmp_path, expected_daily_jobs=[])

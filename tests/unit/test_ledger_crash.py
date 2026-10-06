@@ -78,6 +78,47 @@ def test_missing_jsonl_tail_backfills_from_sqlite(tmp_path):
     assert restored["payload"] == {"i": 2}
 
 
+def _forbid_full_load(monkeypatch):
+    def _boom(self):
+        raise AssertionError("a healthy log must not load every event row")
+
+    monkeypatch.setattr(Ledger, "_event_rows", _boom)
+
+
+def test_a_healthy_log_is_not_reloaded_on_open(tmp_path, monkeypatch):
+    # Issue #14 (2026-10-06): every locked open ran SELECT * FROM events to
+    # compare against the file, a cost that grows with ledger age and that
+    # the 15- and 30-minute jobs pay. A log that already matches is a count.
+    root = _seeded(tmp_path)
+    _forbid_full_load(monkeypatch)
+    with Ledger.open(root, repair_event_log=True) as ledger:
+        records = ledger.read_event_log()
+    assert [r["idempotency_key"] for r in records] == ["evt-0", "evt-1", "evt-2"]
+
+
+def test_an_unhealthy_log_still_loads_the_rows_to_repair(tmp_path, monkeypatch):
+    root = _seeded(tmp_path)
+    log = root / EVENT_LOG_FILENAME
+    lines = log.read_text(encoding="utf-8").splitlines()
+    log.write_text("\n".join(lines[:-1]) + "\n", encoding="utf-8")
+    _forbid_full_load(monkeypatch)
+    with pytest.raises(AssertionError, match="must not load"):
+        Ledger.open(root, repair_event_log=True)
+
+
+def test_a_malformed_interior_line_is_rewritten_from_sqlite(tmp_path):
+    # Pins today's behaviour so the fast path cannot skip it: a bad line in
+    # the middle truncates the file there and SQLite's rows are re-appended.
+    root = _seeded(tmp_path)
+    log = root / EVENT_LOG_FILENAME
+    lines = log.read_text(encoding="utf-8").splitlines()
+    lines[1] = '{"broken'
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    with Ledger.open(root, repair_event_log=True) as ledger:
+        records = ledger.read_event_log()
+    assert [r["idempotency_key"] for r in records] == ["evt-0", "evt-1", "evt-2"]
+
+
 def test_reader_tolerates_a_torn_final_line_without_repair(tmp_path):
     root = _seeded(tmp_path)
     log = root / EVENT_LOG_FILENAME

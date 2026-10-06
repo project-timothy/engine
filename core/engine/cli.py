@@ -687,7 +687,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     from .doctor import run_doctor
 
     try:
-        report = run_doctor(args.tenant, tenants_root=args.root)
+        report = run_doctor(args.tenant, tenants_root=args.root, create_folders=args.create_folders)
     except (TenantNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -701,6 +701,11 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
         f"tenants/{args.tenant}/tenant.toml, then run this again",
         file=sys.stderr,
     )
+    if any(c.name.startswith("folder ") and "does not exist" in c.detail for c in report.missing):
+        print(
+            f"missing folders: `engine doctor {args.tenant} --create-folders` creates them",
+            file=sys.stderr,
+        )
     return 1
 
 
@@ -1071,6 +1076,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor_p.add_argument("tenant")
     doctor_p.add_argument("--root", default=None, help="tenants directory (default: ./tenants)")
+    doctor_p.add_argument(
+        "--create-folders",
+        action="store_true",
+        help="create every folder the tenant names that does not exist yet, then report",
+    )
 
     schedule_p = sub.add_parser(
         "schedule",

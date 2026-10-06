@@ -11,6 +11,7 @@ import errno
 import hashlib
 from pathlib import Path
 
+from ...engine.config import MissingFolderError
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.fileops import CannotVerify, CopyMismatch, place_copy
 from ...engine.result import Anomaly
@@ -55,7 +56,7 @@ def _md5(path: Path) -> str | None:
 def _candidates(ctx: JobContext) -> list[Path]:
     landing = _landing_dir(ctx)
     if not landing.is_dir():
-        raise FileNotFoundError(f"landing directory {landing} does not exist")
+        raise MissingFolderError(f"landing directory {landing} does not exist")
     return [p for p in sorted(landing.iterdir()) if p.is_file() and is_timesheet_name(p.name)]
 
 
