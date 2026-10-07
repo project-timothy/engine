@@ -2,7 +2,7 @@
 
 Status: BUILT 2026-07-20 (steps 1-5; PRs #63-#66); ADVISORY VOICE +
 OWNER TRIAGE built 2026-07-21 (#73) — the output contract is complete.
-Nineteen lenses live (lens 9, context, added 2026-07-22; lens 10, host, added 2026-08-18; lens 11, po-watch, 2026-08-24; lens 12, vendor-1099, 2026-08-26; lenses 13-18, the 2026-09-04 catch-up from the retired bookkeeper-auditor's inventory; lens 19, recurrence, 2026-09-10: the auditor re-reads its own store for repeats and names the automation that would retire each, the first piece of the engine's self-improvement loop),
+Twenty lenses live (lens 9, context, added 2026-07-22; lens 10, host, added 2026-08-18; lens 11, po-watch, 2026-08-24; lens 12, vendor-1099, 2026-08-26; lenses 13-18, the 2026-09-04 catch-up from the retired bookkeeper-auditor's inventory; lens 19, recurrence, 2026-09-10: the auditor re-reads its own store for repeats and names the automation that would retire each, the first piece of the engine's self-improvement loop; lens 20, provenance, 2026-10-06, #356),
 The host's nightly job runs it at 02:00; the
 report carries the Advisory section (model counsel over lens-computed
 facts, deterministic fallback voice, year-end-CPA appendix) and
@@ -80,7 +80,9 @@ shared bug passes both. So independence here is structural, not aspirational:
 6. **Approval hygiene.** Pending cards older than N days; approved
    `ap.qbo_push_batch` coverage fully consumed (each covered row has a
    bill id or a parked mapping/duplicate card); resolved cards whose
-   follow-through never happened.
+   follow-through never happened; and a card stamped human-only (#356)
+   resolved without the queue's `decided_via=terminal` record is
+   `human-only-decided-by-agent` (CRITICAL).
 7. **QBO consistency.** With its own fetch: every stored `qbo_bill_id`
    exists in QBO with the row's amount; every reconcile-flipped row's
    evidence transaction still exists; engine-authored records match what
@@ -213,6 +215,12 @@ while the path is unset.
    string that resolves to nothing is `unresolved-project` (INFO). PN
    identity is the money boundary: per-project COGS drives the profit
    share and the year-end picture.
+20. **Provenance** (#356, shadow stage). AP intake records a sender verdict
+   per invoice (`ap.provenance.recorded`). In the last 7 days, a `mismatch`
+   (sender is not the vendor's domain, not a listed address, not the
+   business) is `sender-mismatch` and an invoicing platform's shared mailer
+   is `sender-platform`, both INFO, naming the sender. INFO until the owner
+   turns on enforcement; the fortnight of verdicts is the false-hold count.
 
 ## Output contract: the checklist, not the alarm
 

@@ -17,6 +17,7 @@ the network or the keychain; the live client has its own unit tests.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import shutil
@@ -85,6 +86,22 @@ def test_allowed_attachment_lands_in_the_folder_with_provenance(tmp_path):
     with Ledger.open(root) as ledger:
         (ev,) = [e for e in ledger.read_event_log() if e["event_type"] == "mail.attachment_saved"]
     assert ev["payload"]["file"] == "invoice-4471.pdf"
+    assert ev["payload"]["sender_domain"] == "acmetooling.com"
+    # #356: AP intake binds the invoice to this record by content hash and
+    # judges the full address, so both ride in the payload.
+    assert ev["payload"]["sender"] == "billing@acmetooling.com"
+    assert ev["payload"]["sha256"] == hashlib.sha256(b"pdf-bytes").hexdigest()
+
+
+def test_a_display_name_sender_records_the_bare_address(tmp_path):
+    messages = _messages_file(
+        tmp_path, _msg("m1", "Acme Billing <Billing@AcmeTooling.com>", ("inv.pdf", b"x"))
+    )
+    _run(tmp_path, messages)
+    root = resolve_ledger_root("demo", tmp_path / "data")
+    with Ledger.open(root) as ledger:
+        (ev,) = [e for e in ledger.read_event_log() if e["event_type"] == "mail.attachment_saved"]
+    assert ev["payload"]["sender"] == "billing@acmetooling.com"
     assert ev["payload"]["sender_domain"] == "acmetooling.com"
 
 

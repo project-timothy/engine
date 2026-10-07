@@ -39,11 +39,12 @@ class LensSpec:
 
 # Lens modules import AuditContext from this package, so they are imported
 # after it is defined; registration order is report order within a night.
-# Eighteen lenses are live: the eight design lenses, the context lens added
+# Twenty lenses are live: the eight design lenses, the context lens added
 # 2026-07-22, the host lens added 2026-08-18, po-watch 2026-08-24, vendor-1099
-# 2026-08-26, and the six catch-up lenses of 2026-09-04 (materiality,
+# 2026-08-26, the six catch-up lenses of 2026-09-04 (materiality,
 # check-gaps, reconcile, triage, registry, projects; the checks the retired
-# bookkeeper-auditor had that this one lacked). The advisory voice is a
+# bookkeeper-auditor had that this one lacked), recurrence 2026-09-10, and
+# provenance 2026-10-06. The advisory voice is a
 # report section, not a lens.
 from . import (  # noqa: E402
     approvals,
@@ -57,6 +58,7 @@ from . import (  # noqa: E402
     materiality,
     po_watch,
     projects,
+    provenance,
     qbo,
     reconcile,
     recurrence,
@@ -94,6 +96,9 @@ LENSES: list[LensSpec] = [
     LensSpec(name="triage", check=triage_lens.check),
     LensSpec(name="registry", check=registry.check),
     LensSpec(name="projects", check=projects.check),
+    # Lens 20 (2026-10-06, #356 shadow stage): the sender verdict AP intake
+    # records per invoice, INFO only until enforcement.
+    LensSpec(name="provenance", check=provenance.check),
     # Lens 19 (2026-09-10): the auditor's own store re-read for repeats, each
     # naming the automation that would retire it. Runs last so the night's
     # other lenses are on the report above it; it reads prior nights only.

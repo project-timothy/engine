@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -277,7 +278,7 @@ def _ledger_checks(cfg: TenantConfig, slug: str, env: dict[str, str]) -> list[Ch
         return [
             Check("ledger", MISSING, f"{root} is not a repository: the ledger is not backed up")
         ]
-    checks = [Check("ledger", OK, str(root))]
+    checks = [Check("ledger", OK, str(root)), _ledger_size(root)]
     scheduled = cfg.host.schedule.ledger_backup
     if not scheduled:
         checks.append(
@@ -295,6 +296,37 @@ def _ledger_checks(cfg: TenantConfig, slug: str, env: dict[str, str]) -> list[Ch
             )
         )
     return checks
+
+
+def _ledger_size(root: Path) -> Check:
+    """How big the ledger repository is, and how much of it is unpacked
+    (public #13). The database is committed on every run, so the repository
+    grows with the run count; the 23:00 job packs it after the push. The
+    commit count is there for a restore: a clone that checked out nothing
+    reads 0. Informational; size alone fails nothing."""
+    git_dir = root / ".git"
+    total = sum(p.stat().st_size for p in git_dir.rglob("*") if p.is_file())
+    loose = sum(
+        p.stat().st_size
+        for d in (git_dir / "objects").glob("[0-9a-f][0-9a-f]")
+        for p in d.iterdir()
+        if p.is_file()
+    )
+    count = subprocess.run(
+        ["git", "rev-list", "--count", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.strip()
+    commits = int(count) if count.isdigit() else 0
+    mb = 1024 * 1024
+    return Check(
+        "ledger size",
+        OK,
+        f"{commits} commit{'' if commits == 1 else 's'}, {total / mb:.1f} MB in .git "
+        f"({loose / mb:.1f} MB loose; the nightly push packs it)",
+    )
 
 
 def _dead_man_check(cfg: TenantConfig, env: dict[str, str]) -> Check:

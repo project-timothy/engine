@@ -46,6 +46,8 @@ note() { echo "[preflight:$JOB] $1"; }
 repo_git() { git -C "$GUARDED" "$@"; }
 
 sanitize() { # strip characters that would break the hand-built JSON
+  # The set is a double quote and a backslash, single-quoted on purpose.
+  # shellcheck disable=SC1003
   printf '%s' "$1" | tr -d '"\\' | tr '\n' ' '
 }
 

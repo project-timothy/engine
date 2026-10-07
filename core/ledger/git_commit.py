@@ -51,11 +51,6 @@ def ensure_repo(root: Path) -> None:
     _run_git(root, "config", "user.email", ENGINE_COMMITTER_EMAIL)
 
 
-def has_uncommitted_changes(root: Path) -> bool:
-    status = _run_git(root, "status", "--porcelain")
-    return bool(status.stdout.strip())
-
-
 def commit_all(root: Path, message: str) -> str | None:
     """Stage and commit everything under ``root``.
 

@@ -71,6 +71,16 @@ def load_approval_checks(agent: str) -> dict[str, ApprovalCheck]:
     return dict(checks) if isinstance(checks, dict) else {}
 
 
+def load_human_only(agent: str) -> frozenset[str]:
+    """The agent's human-only card types (``HUMAN_ONLY`` in its jobs.py): cards
+    the queue refuses to resolve without a person at a terminal (#356)."""
+    if not (agent_dir(agent) / "jobs.py").exists():
+        return frozenset()
+    module = importlib.import_module(f"{AGENTS_PACKAGE}.{agent}.jobs")
+    declared = getattr(module, "HUMAN_ONLY", None)
+    return frozenset(declared) if isinstance(declared, set | frozenset) else frozenset()
+
+
 def get_job(agent: str, job: str) -> JobHandler:
     jobs = load_agent_jobs(agent)
     if job not in jobs:

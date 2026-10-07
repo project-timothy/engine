@@ -1,9 +1,11 @@
 """Lens 6 — approval hygiene: the queue is a checkpoint, not a parking lot.
 
-Three conditions, from the auditor's own SQL over ``approval_queue`` and the
+Four conditions, from the auditor's own SQL over ``approval_queue`` and the
 engine's event record:
 
 - a pending card older than the staleness window is a decision nobody made;
+- a card stamped ``human_only`` (#356) resolved without the queue's record
+  that a person at a terminal decided it is a decision an agent made;
 - an APPROVED bills batch must be fully consumed — every covered row either
   carries a bill id, sits behind a parked mapping/duplicate card, or has
   SETTLED since approval (settlement closes the AP question by another route:
@@ -193,9 +195,40 @@ def check_swallowed_asks(ctx: AuditContext) -> list[Finding]:
     return findings
 
 
+def check_human_only(ctx: AuditContext) -> list[Finding]:
+    """A card stamped human-only (#356) and resolved without the queue's
+    record that a person at a terminal decided it. The queue CLI refuses
+    that route, so a hit means the decision came some other way: a faked
+    terminal, a direct write to the queue, or a bug in the gate. CRITICAL:
+    the stamp exists because no agent may make this decision."""
+    findings: list[Finding] = []
+    for row in ctx.ledger.query(
+        "SELECT * FROM approval_queue WHERE tenant = ? "
+        "AND status IN ('approved', 'rejected') ORDER BY id",
+        (ctx.tenant.slug,),
+    ):
+        params = _params(row)
+        if params.get("human_only") != "true" or params.get("decided_via") == "terminal":
+            continue
+        about = params.get("extracted_vendor") or params.get("file") or "?"
+        findings.append(
+            Finding(
+                lens=LENS,
+                subject=f"approval #{row['id']} {row['action_type']}",
+                condition="human-only-decided-by-agent",
+                severity="CRITICAL",
+                detail=f"human-only card ({about}) was {row['status']} on "
+                f"{str(row['resolved_at'])[:10]} with no record that a person decided "
+                "it at a terminal; re-open the decision with the owner",
+            )
+        )
+    return findings
+
+
 def check(ctx: AuditContext) -> list[Finding]:
     return [
         *check_stale_pending(ctx),
+        *check_human_only(ctx),
         *check_approved_batches_consumed(ctx),
         *check_swallowed_asks(ctx),
     ]

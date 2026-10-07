@@ -66,6 +66,38 @@ class WorkbookColumn(BaseModel):
     field: str = ""
 
 
+# Free-mail domains: anyone can hold an address there, so a sender on one
+# binds a vendor only through an exact address in vendors.toml ``senders``.
+DEFAULT_FREEMAIL_DOMAINS = [
+    "gmail.com",
+    "googlemail.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "yahoo.com",
+    "icloud.com",
+    "me.com",
+    "aol.com",
+    "proton.me",
+    "protonmail.com",
+]
+
+
+class ProvenanceSettings(BaseModel):
+    """Sender provenance at AP intake (#356, shadow stage).
+
+    ``internal_sender_domains`` are the tenant's own domains: a forward from
+    one is someone at the business vouching for the file.
+    ``platform_sender_domains`` are invoicing platforms' shared mailers: any
+    account holder sends from them under any name, so they bind nothing.
+    ``freemail_domains`` defaults to the common free-mail hosts.
+    """
+
+    internal_sender_domains: list[str] = Field(default_factory=list)
+    platform_sender_domains: list[str] = Field(default_factory=list)
+    freemail_domains: list[str] = Field(default_factory=lambda: list(DEFAULT_FREEMAIL_DOMAINS))
+
+
 class ApSettings(BaseModel):
     """AP-domain settings: where documents land, where the legacy ledger is.
 
@@ -94,6 +126,7 @@ class ApSettings(BaseModel):
     filing_month_template: str = "{month}"
     workbook_path: str = ""
     workbook_columns: list[WorkbookColumn] = Field(default_factory=list)
+    provenance: ProvenanceSettings = Field(default_factory=ProvenanceSettings)
 
 
 class TimesheetsSettings(BaseModel):

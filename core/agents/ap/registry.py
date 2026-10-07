@@ -35,6 +35,11 @@ class VendorEntry(BaseModel):
     gl_account: str = ""
     cost_type: str = ""
     subject_aliases: list[str] = Field(default_factory=list)
+    # Exact sender addresses that speak for this vendor when its mail does not
+    # come from a domain of its own (a free-mail address, a bookkeeper's
+    # mailbox). Sender provenance (#356) binds these exactly; a free-mail
+    # domain never binds a vendor by itself.
+    senders: list[str] = Field(default_factory=list)
     # Alternate spellings other systems use for this same vendor, e.g. the
     # legacy ledger may write a fuller or abbreviated name than the engine
     # files. Matched exactly (never guessed) so identity cannot drift
