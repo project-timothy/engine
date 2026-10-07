@@ -63,6 +63,7 @@ uv run engine schedule <tenant>                # render this host's crontab from
 uv run engine status-page <tenant>             # the read-only status page (row 7.24)
 uv run engine mcp <tenant>                     # read-only tools over MCP on stdio, for a chat client (core/tools)
 uv run auditor run <tenant> [--local-only]     # the independent nightly audit
+scripts/check.sh                               # every CI gate, locally; lists each failure
 uv run pytest                                  # unit tests + evals
 uv run ruff check . && uv run ruff format --check .
 uv run python -m core.evals.bleedthrough_lint  # tenant-boundary lint

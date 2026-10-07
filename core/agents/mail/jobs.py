@@ -19,6 +19,7 @@ from .schema import (
     DEFAULT_ALLOWED_EXTENSIONS,
     MailMessage,
     extension_allowed,
+    sender_address,
     sender_domain,
     sender_is_denied,
 )
@@ -291,9 +292,13 @@ def _fetch_run(ctx: JobContext) -> JobOutput:
                     EventSpec(
                         key=f"mailatt:{digest}",
                         event_type=SAVED_EVENT,
+                        # sender + sha256 let AP intake bind the invoice to
+                        # the mail that delivered it (#356 provenance).
                         payload={
                             "file": dest.name,
+                            "sender": sender_address(message.sender),
                             "sender_domain": sender_domain(message.sender),
+                            "sha256": digest,
                             "message_date": message.date,
                         },
                     )

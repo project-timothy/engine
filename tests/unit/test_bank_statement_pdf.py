@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import minimal_pdf
+from conftest import minimal_pdf, unreadable
 from core.adapters.bank_csv import BankCsvFormat
 from core.adapters.bank_statement_pdf import (
     BankStatementError,
@@ -305,12 +305,8 @@ def test_an_unreadable_folder_is_an_error_never_an_empty_answer(tmp_path):
     d = tmp_path / "Statements"
     d.mkdir()
     (d / "Demo checking X1234 - 2026-08-31.pdf").write_bytes(minimal_pdf(AUGUST))
-    d.chmod(0o311)
-    try:
-        with pytest.raises(OSError):
-            statement_files(d, _fmt())
-    finally:
-        d.chmod(0o755)
+    with unreadable(d), pytest.raises(OSError):
+        statement_files(d, _fmt())
 
 
 def test_a_missing_folder_is_an_error_too(tmp_path):

@@ -25,6 +25,7 @@ from .registry import (
     list_agents,
     load_agent_jobs,
     load_approval_checks,
+    load_human_only,
 )
 from .runner import (
     LOCK_ANOMALY,
@@ -34,6 +35,7 @@ from .runner import (
     resume_due,
     run,
 )
+from .version import VersionAction, describe
 
 
 def _parse_params(pairs: list[str]) -> dict:
@@ -159,6 +161,39 @@ def _refuse_locked(exc: LedgerLocked) -> int:
     return 2
 
 
+# Card params the queue writes itself on a human-only card (#356); an
+# override naming one is refused, so nobody types their way past the gate.
+GATE_PARAMS = frozenset({"human_only", "decided_via"})
+
+
+def _operator_at_terminal() -> bool:
+    """A person is at a terminal: stdin is a TTY. Headless lanes and agent
+    shells run with stdin not a terminal, so this is false for every one of
+    them. It stops the honest lanes and accidents; a shell that fakes a TTY
+    is the sandbox's job (#353/#359), and the auditor still sees the card."""
+    try:
+        return sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        return False
+
+
+def _human_only_refusal(row: dict, verb: str, overrides: dict) -> str | None:
+    """Why this decision may not proceed, or None. Confirms with the person
+    at the terminal by having them type the card number back."""
+    if not _operator_at_terminal():
+        return (
+            f"approval #{row['id']} ({row['action_type']}) is a human-only card: "
+            f"a person decides it at a terminal (`engine queue {verb} ... --id {row['id']}`)"
+        )
+    typed = input(
+        f"#{row['id']} {row['action_type']} is human-only. Type {row['id']} to {verb} it: "
+    )
+    if typed.strip() != str(row["id"]):
+        return f"approval #{row['id']}: confirmation did not match; nothing decided"
+    overrides["decided_via"] = "terminal"
+    return None
+
+
 def _cmd_queue(args: argparse.Namespace) -> int:
     from ..ledger import Ledger
     from .runner import resolve_ledger_root
@@ -189,6 +224,27 @@ def _cmd_queue(args: argparse.Namespace) -> int:
 
             try:
                 overrides = _parse_params(getattr(args, "param", []) or [])
+                gate_fields = sorted(GATE_PARAMS & set(overrides))
+                if gate_fields:
+                    raise ValueError(
+                        f"approval #{args.id}: {', '.join(gate_fields)} is set by the queue, "
+                        "never by --param"
+                    )
+                row = next(
+                    (r for r in ledger.list_approvals(args.tenant) if r["id"] == args.id),
+                    None,
+                )
+                if (
+                    row is not None
+                    and row["status"] == "pending"
+                    and (
+                        row["action_type"] in load_human_only(str(row["agent"]))
+                        or row["params"].get("human_only") == "true"
+                    )
+                ):
+                    refusal = _human_only_refusal(row, args.queue_command, overrides)
+                    if refusal:
+                        raise ValueError(refusal)
                 result = ledger.resolve_approval(
                     args.tenant,
                     args.id,
@@ -691,6 +747,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     except (TenantNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    print(describe("engine"))
     for line in report.lines():
         print(line)
     if report.ok:
@@ -840,6 +897,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="engine",
         description="Back-office agent engine: idempotent jobs against a git-backed ledger.",
+    )
+    parser.add_argument(
+        "--version", action=VersionAction, help="print the version and commit, then exit"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

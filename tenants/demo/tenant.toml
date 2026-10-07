@@ -40,6 +40,15 @@ workbook_columns = [
     {label = "Status", field = "status"},
 ]
 
+[ap.provenance]
+# Who mailed each invoice (shadow: a verdict, never a hold). Your own domains
+# (a forward from inside the business vouches for the file) and any invoicing
+# platform's shared mailer (anyone can send from it, so it binds no vendor).
+# Free-mail hosts default to the common ones; a vendor that bills from one
+# lists its exact address under `senders` in vendors.toml.
+internal_sender_domains = []
+platform_sender_domains = []
+
 [timesheets]
 # Timesheet submissions land in the same inbox as invoices; filed copies go
 # to their own tree by month.

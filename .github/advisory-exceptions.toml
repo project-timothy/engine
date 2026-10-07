@@ -1,0 +1,10 @@
+# Accepted dependency advisories (public issue #12). The CI advisory scan
+# fails on any published advisory against the lock except the ones below.
+# Every entry needs an id (as pip-audit reports it), the package, the reason
+# it cannot be fixed today, and a review_by date; a lapsed date fails CI.
+#
+# [[exception]]
+# id = "GHSA-xxxx-xxxx-xxxx"
+# package = "example"
+# reason = "no fixed release yet; the engine never calls the vulnerable path"
+# review_by = 2026-11-01

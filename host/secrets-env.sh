@@ -1,4 +1,7 @@
 # shellcheck shell=bash
+# SECRET_RESULT is this library's output, read by the caller that sources it
+# (host/entrypoint.sh), so it looks unused when the file is checked alone.
+# shellcheck disable=SC2034
 # One line of a secrets file into the environment, as data (security review
 # 2026-10-03, #390). Sourced by host/entrypoint.sh for both secret sources:
 #

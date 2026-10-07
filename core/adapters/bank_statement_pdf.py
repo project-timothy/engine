@@ -122,7 +122,6 @@ _PERIOD_LINE = re.compile(
 )
 _NAME_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})\s*$")
 
-UNREAD_CHECK_NUMBER = "0000"
 CHECK_DESCRIPTION = "CHECK"
 UNREAD_CHECK_DESCRIPTION = "CHECK (number not read by bank)"
 

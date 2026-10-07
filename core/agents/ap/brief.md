@@ -35,6 +35,18 @@ resurfaces.
   the registry flip; the approved card's execution copies the form into
   the tenant's W-9 folder and emits the registry diff as an event — the
   engine never writes the vendor registry (w9-1099-design.md build 3).
+  Every invoice that resolves to a vendor also gets a sender verdict
+  (`ap.provenance.recorded`, issue #356): the mail fetch's saved record is
+  joined by content hash, and the sender is judged against the vendor's
+  domain-shaped registry keys, its exact `senders` addresses, and the
+  tenant's `[ap.provenance]` internal, platform, and free-mail domains
+  (`match`, `owner_drop`, `internal_forward`, `platform`, `mismatch`).
+  Shadow stage: the verdict holds nothing and changes no invoice; the
+  auditor's provenance lens surfaces the unbound ones.
+- **Human-only cards.** `ap.new_vendor_decision` is in `HUMAN_ONLY`: the
+  queue refuses to approve or reject it unless a person at a terminal types
+  the card number back, and records `decided_via=terminal`. No lane decides
+  it; the auditor flags one resolved any other way as CRITICAL.
 - `verify-payment`: deterministic three-way verification (AP rows, cleared
   bank register, bill-pay queue snapshot). Engine code, never judgment
   (invariant 4). Emits payment recommendations into the approval queue.

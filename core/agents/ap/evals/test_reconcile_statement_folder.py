@@ -32,7 +32,7 @@ import os
 from decimal import Decimal
 from pathlib import Path
 
-from conftest import minimal_pdf
+from conftest import minimal_pdf, unreadable
 from core.agents.ap import store
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
@@ -252,12 +252,9 @@ def test_an_unreadable_folder_is_an_anomaly_and_never_replays(tmp_path):
     to look at', and the next run must ask again rather than replay."""
     d, root = _engine_check(tmp_path)
     folder = _folder(tmp_path, checks=(("9058", "09/16", "125.00"),))
-    folder.chmod(0o311)
-    try:
+    with unreadable(folder):
         first = _run(d, _evidence_file(tmp_path), folder)
         second = _run(d, _evidence_file(tmp_path), folder)
-    finally:
-        folder.chmod(0o755)
 
     assert [a.code for a in first.anomalies] == ["ap.reconcile.statement_unreadable"]
     assert [a.code for a in second.anomalies] == ["ap.reconcile.statement_unreadable"]

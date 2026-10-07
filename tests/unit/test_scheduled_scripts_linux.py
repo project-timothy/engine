@@ -267,6 +267,29 @@ def test_ledger_backup_runs_under_bash(runtime, tmp_path):
     assert _git(ledger_origin, "rev-parse", "main") == _git(ledger, "rev-parse", "HEAD")
 
 
+def test_ledger_backup_packs_the_ledger_after_the_push(runtime, tmp_path):
+    """The ledger commits its database on every run and nothing packed it:
+    the live one carried 23 MB of loose objects beside a 1.3 MB pack (public
+    #13, 2026-10-06). ``git gc --auto`` waits for 6,700 loose objects, so the
+    job runs a plain ``gc`` after the push."""
+    ledger_origin = tmp_path / "ledger-origin.git"
+    ledger_origin.mkdir()
+    _git(ledger_origin, "init", "--bare", "-b", "main", ".")
+    ledger = tmp_path / "ledger" / "demo"
+    ledger.mkdir(parents=True)
+    _git(ledger, "init", "-b", "main", ".")
+    for n in range(3):
+        (ledger / "ledger.jsonl").write_text(f'{{"n": {n}}}\n')
+        _git(ledger, "add", ".")
+        _git(ledger, "commit", "-m", f"row {n}")
+    _git(ledger, "remote", "add", "origin", str(ledger_origin))
+    assert "count: 0" not in _git(ledger, "count-objects", "-v")
+    result = _run("ledger-backup.sh", runtime, tmp_path, ENGINE_TENANT="demo")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(ledger_origin, "rev-parse", "main") == _git(ledger, "rev-parse", "HEAD")
+    assert "count: 0" in _git(ledger, "count-objects", "-v").splitlines()
+
+
 def test_a_statement_dir_the_config_cannot_name_fails_the_run_loudly(runtime, tmp_path):
     """The statement tier is the clearing evidence (row 7.4). An empty answer
     from the config read is rc 3 and a non-zero run, not a silent skip."""

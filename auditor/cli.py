@@ -14,6 +14,7 @@ from .config import AuditorConfigError, load_auditor_tenant
 from .lenses import LENSES
 from .runner import AuditorReportDirError, resolve_store_root, run_audit
 from .store import AuditorStore
+from .version import VersionAction
 
 
 def _add_dirs(parser: argparse.ArgumentParser) -> None:
@@ -98,6 +99,9 @@ def build_parser() -> argparse.ArgumentParser:
             "Independent auditor for the back-office engine: recomputes truth "
             "from ground sources and keeps a running checklist for the owner."
         ),
+    )
+    parser.add_argument(
+        "--version", action=VersionAction, help="print the version and commit, then exit"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
