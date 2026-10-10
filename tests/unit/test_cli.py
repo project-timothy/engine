@@ -126,3 +126,26 @@ def test_close_preflight_packet_ok_keeps_the_verdict_exit(tmp_path, capsys, monk
     out = capsys.readouterr().out
     assert code == 1
     assert "packet rendered" in out
+
+
+def test_unknown_tenant_lists_the_known_ones_and_names_init(tmp_path, capsys):
+    # Issue #6 (2026-10-06): the bare path left a newcomer with nowhere to go.
+    code = main(["run", "nosuch", "demo", "ingest", "--ledger-dir", str(tmp_path)])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "known tenants: demo" in err
+    assert "engine init nosuch" in err
+
+
+def test_a_missing_landing_folder_names_engine_doctor(tmp_path, capsys, monkeypatch):
+    # Issue #6: the summary was a raw "FileNotFoundError: landing directory
+    # ... does not exist", though `engine doctor` already knows that folder.
+    monkeypatch.chdir(tmp_path)
+    code = main(
+        ["run", "demo", "ap", "intake", "--ledger-dir", str(tmp_path / "ledger"), "--shadow"]
+    )
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "landing directory demo-data/inbox does not exist" in out
+    assert "engine doctor demo" in out
+    assert "FileNotFoundError" not in out

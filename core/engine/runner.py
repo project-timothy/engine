@@ -44,7 +44,7 @@ from pathlib import Path
 from ..ledger import Ledger
 from ..llm import telemetry
 from ..redact import env_values, redact, redact_text
-from .config import TenantConfig, load_tenant
+from .config import MissingFolderError, TenantConfig, load_tenant
 from .contracts import JobContext, JobOutput, RetryPolicy
 from .guard import ProtectedSurfaceError, WriteGuard
 from .registry import UnknownAgentError, UnknownJobError, agent_dir, get_job
@@ -350,7 +350,11 @@ def _error_result(
         shadow=shadow,
         idempotency_key=idempotency_key,
         anomalies=[Anomaly(code="job.exception", detail=f"{type(exc).__name__}: {exc}")],
-        summary=f"job failed: {type(exc).__name__}: {exc}",
+        summary=(
+            f"job failed: {exc}; run `engine doctor {tenant_slug}` for what this host is missing"
+            if isinstance(exc, MissingFolderError)
+            else f"job failed: {type(exc).__name__}: {exc}"
+        ),
     )
 
 

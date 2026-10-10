@@ -248,11 +248,14 @@ def _mail_check(cfg: TenantConfig) -> Check:
     )
 
 
-def _folder_checks(cfg: TenantConfig, raw: dict) -> list[Check]:
+def _folder_checks(cfg: TenantConfig, raw: dict, *, create: bool = False) -> list[Check]:
     checks = []
     for folder in folders_for(cfg, raw):
         path = Path(folder).expanduser()
-        if not path.is_dir():
+        if create and not path.exists():
+            path.mkdir(parents=True)
+            checks.append(Check(f"folder {folder}", OK, f"{path} created"))
+        elif not path.is_dir():
             checks.append(Check(f"folder {folder}", MISSING, f"{path} does not exist"))
         elif not _writable(path):
             checks.append(Check(f"folder {folder}", MISSING, f"{path} is not writable"))
@@ -369,8 +372,12 @@ def run_doctor(
     tenants_root: str | Path | None = None,
     env: dict[str, str] | None = None,
     repo: str | Path | None = None,
+    create_folders: bool = False,
 ) -> DoctorReport:
-    """Every check for ``slug`` on this host. Reads; writes nothing."""
+    """Every check for ``slug`` on this host. Reads; writes nothing, except
+    that ``create_folders`` makes each configured folder that does not exist
+    yet (a plain checkout of the demo has none, issue #3). It never touches
+    a path that exists, folder or not."""
     environment = dict(os.environ if env is None else env)
     root = Path(tenants_root) if tenants_root is not None else None
     code = Path(repo) if repo is not None else Path(__file__).resolve().parents[2]
@@ -398,7 +405,7 @@ def run_doctor(
     checks += _tier_checks(cfg, environment)
     checks.append(_qbo_check(cfg))
     checks.append(_mail_check(cfg))
-    checks += _folder_checks(cfg, raw)
+    checks += _folder_checks(cfg, raw, create=create_folders)
     checks += _ledger_checks(cfg, slug, environment)
     checks.append(_dead_man_check(cfg, environment))
     checks += _scheduler_checks(cfg, environment, code)

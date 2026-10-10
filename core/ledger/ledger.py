@@ -23,7 +23,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .event_log import append_event_line, read_event_lines, repair_event_log
+from .event_log import (
+    append_event_line,
+    event_log_is_whole,
+    read_event_lines,
+    repair_event_log,
+)
 from .git_commit import commit_all, ensure_repo, structured_message
 from .migrations import migrate
 
@@ -88,22 +93,27 @@ class Ledger:
         return ledger
 
     def _repair_event_log(self) -> None:
+        # A whole log is the common case on every scheduled run; a count and
+        # a parse of the file prove it without loading the table (#14).
+        (count,) = self._conn.execute("SELECT COUNT(*) FROM events").fetchone()
+        if event_log_is_whole(self._root, count):
+            return
+        repair_event_log(self._root, self._event_rows())
+
+    def _event_rows(self) -> list[dict[str, Any]]:
         rows = self._conn.execute("SELECT * FROM events ORDER BY id").fetchall()
-        repair_event_log(
-            self._root,
-            [
-                {
-                    "idempotency_key": r["idempotency_key"],
-                    "run_id": r["run_id"],
-                    "tenant": r["tenant"],
-                    "agent": r["agent"],
-                    "event_type": r["event_type"],
-                    "payload": json.loads(r["payload_json"]),
-                    "created_at": r["created_at"],
-                }
-                for r in rows
-            ],
-        )
+        return [
+            {
+                "idempotency_key": r["idempotency_key"],
+                "run_id": r["run_id"],
+                "tenant": r["tenant"],
+                "agent": r["agent"],
+                "event_type": r["event_type"],
+                "payload": json.loads(r["payload_json"]),
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
 
     def atomic(self):
         """All writes inside commit together or not at all (#136).

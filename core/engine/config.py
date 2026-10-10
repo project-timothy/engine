@@ -612,6 +612,14 @@ class TenantNotFoundError(FileNotFoundError):
     pass
 
 
+class MissingFolderError(FileNotFoundError):
+    """A folder the tenant config names does not exist on this host.
+
+    The runner's failure summary names ``engine doctor <tenant>`` for this
+    one, because doctor already checks every configured folder (issue #6).
+    """
+
+
 def load_tenant(
     slug: str, *, tenants_root: Path | None = None, check_evals: bool = True
 ) -> TenantConfig:
@@ -628,7 +636,15 @@ def load_tenant(
     root = tenants_root or default_tenants_root()
     path = root / slug / "tenant.toml"
     if not path.exists():
-        raise TenantNotFoundError(f"no tenant config at {path}")
+        known = (
+            sorted(d.name for d in root.iterdir() if (d / "tenant.toml").is_file())
+            if root.is_dir()
+            else []
+        )
+        raise TenantNotFoundError(
+            f"no tenant config at {path}; known tenants: {', '.join(known) or 'none'}; "
+            f"create it with `engine init {slug}`"
+        )
     with path.open("rb") as handle:
         data = tomllib.load(handle)
     config = TenantConfig.model_validate(data)

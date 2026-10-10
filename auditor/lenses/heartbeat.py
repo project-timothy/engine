@@ -88,6 +88,54 @@ def check_engine_liveness(ctx: AuditContext) -> list[Finding]:
     ]
 
 
+def _never_live(ctx: AuditContext, agent: str, job: str, subject: str) -> Finding:
+    """An expected stage with no live run. Say what the ledger holds: a dry run
+    (shadow row) is a run, so "no run recorded at all" is only true of a stage
+    with no row of any kind. A stage whose first dry run is younger than one
+    daily window has not had a scheduled fire since it was built (it merges
+    after the morning fire and the audit runs before the next), so that is a
+    fact awaiting its first fire, not a page. One window is the lens's own
+    ``daily_run_max_age_hours``; past it the stage is the wiring error this
+    check exists for. A stage with no row of any kind is never graced: nothing
+    recorded cannot be told from a stage never wired."""
+    shadow = ctx.ledger.query(
+        "SELECT COUNT(*) AS n, MIN(created_at) AS first FROM runs "
+        "WHERE tenant = ? AND agent = ? AND job = ? AND shadow = 1",
+        (ctx.tenant.slug, agent, job),
+    )[0]
+    if not shadow["n"]:
+        return Finding(
+            lens=LENS,
+            subject=subject,
+            condition="never-ran",
+            severity="CRITICAL",
+            detail="no run recorded at all for this daily stage; the stage is "
+            "expected in config but has never executed",
+        )
+    age = _hours_between(shadow["first"], ctx.now)
+    seen = (
+        f"only {shadow['n']} shadow (dry) run(s) recorded, the first {age:.0f}h ago; "
+        "no live run yet"
+    )
+    if age <= ctx.tenant.daily_run_max_age_hours:
+        return Finding(
+            lens=LENS,
+            subject=subject,
+            condition="awaiting-first-run",
+            severity="INFO",
+            detail=f"{seen}; inside one daily window, so the first scheduled fire has "
+            "not come round yet",
+        )
+    return Finding(
+        lens=LENS,
+        subject=subject,
+        condition="never-ran",
+        severity="CRITICAL",
+        detail=f"{seen}; the stage is expected in config and a full daily window has "
+        "passed without it going live",
+    )
+
+
 def check_daily_runs(ctx: AuditContext) -> list[Finding]:
     """Per-stage wiring and error checks. No staleness here — replay
     semantics make a stale timestamp healthy (see module docstring)."""
@@ -101,16 +149,7 @@ def check_daily_runs(ctx: AuditContext) -> list[Finding]:
         )
         subject = f"daily run {agent}/{job}"
         if not rows:
-            findings.append(
-                Finding(
-                    lens=LENS,
-                    subject=subject,
-                    condition="never-ran",
-                    severity="CRITICAL",
-                    detail="no run recorded at all for this daily stage; the stage is "
-                    "expected in config but has never executed",
-                )
-            )
+            findings.append(_never_live(ctx, agent, job, subject))
         elif rows[0]["status"] == "error":
             findings.append(
                 Finding(
