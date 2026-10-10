@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ..ledger.ledger import LedgerRestoreError
 from ..llm import runner_cli
 from .config import TenantNotFoundError
 from .kit import SHAPES
@@ -75,7 +76,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
             params=params,
             ledger_dir=args.ledger_dir,
         )
-    except (TenantNotFoundError, UnknownAgentError, UnknownJobError, ValueError) as exc:
+    except (
+        TenantNotFoundError,
+        UnknownAgentError,
+        UnknownJobError,
+        ValueError,
+        LedgerRestoreError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -644,7 +651,13 @@ def _cmd_close_preflight(args: argparse.Namespace) -> int:
         params["statement_balance"] = args.statement_balance
     try:
         result = run(args.tenant, "close", "preflight", params=params, ledger_dir=args.ledger_dir)
-    except (TenantNotFoundError, UnknownAgentError, UnknownJobError, ValueError) as exc:
+    except (
+        TenantNotFoundError,
+        UnknownAgentError,
+        UnknownJobError,
+        ValueError,
+        LedgerRestoreError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     print(result.summary)
@@ -683,7 +696,13 @@ def _cmd_dismiss(args: argparse.Namespace) -> int:
             params={"file": args.file or "", "all": args.all},
             ledger_dir=args.ledger_dir,
         )
-    except (TenantNotFoundError, UnknownAgentError, UnknownJobError, ValueError) as exc:
+    except (
+        TenantNotFoundError,
+        UnknownAgentError,
+        UnknownJobError,
+        ValueError,
+        LedgerRestoreError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if result.status == "error":
@@ -704,7 +723,13 @@ def _cmd_identify(args: argparse.Namespace) -> int:
         result = run(
             args.tenant, "ap", "identify", shadow=True, params=params, ledger_dir=args.ledger_dir
         )
-    except (TenantNotFoundError, UnknownAgentError, UnknownJobError, ValueError) as exc:
+    except (
+        TenantNotFoundError,
+        UnknownAgentError,
+        UnknownJobError,
+        ValueError,
+        LedgerRestoreError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if result.status == "error":
@@ -724,13 +749,11 @@ def _cmd_mail_consent(args: argparse.Namespace) -> int:
     carries the URL, the code, the signed-in account, and the expiry;
     never a token.
     """
+    import os
     from datetime import UTC, datetime, timedelta
 
-    from ..adapters.graph_mail import (
-        GraphAuthError,
-        device_code_consent,
-        keychain_token_provider,
-    )
+    from ..adapters.mail import PROVIDERS
+    from ..contracts.mail import MailAuthError
     from .config import load_tenant
 
     try:
@@ -739,11 +762,20 @@ def _cmd_mail_consent(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     mail = tenant.mail
-    missing = [
-        name
-        for name in ("client_id", "tenant_id", "keychain_service", "keychain_account")
-        if not getattr(mail, name)
-    ]
+    provider = mail.provider.strip().lower()
+    if provider not in PROVIDERS:
+        print(
+            f"error: [mail].provider for tenant {args.tenant!r} is {mail.provider!r}; "
+            f"set it to one of {', '.join(PROVIDERS)} in tenant.toml (the engine ships no default)",
+            file=sys.stderr,
+        )
+        return 2
+    required = (
+        ("client_id", "tenant_id", "keychain_service", "keychain_account")
+        if provider == "graph"
+        else ("client_id", "client_secret_env", "keychain_service", "keychain_account")
+    )
+    missing = [name for name in required if not getattr(mail, name)]
     if missing:
         print(
             f"error: [mail] config incomplete for tenant {args.tenant!r}: "
@@ -752,26 +784,59 @@ def _cmd_mail_consent(args: argparse.Namespace) -> int:
         )
         return 2
     extra = [x for x in getattr(args, "scope", []) if x not in mail.scopes]
-    names = {
-        "client_id": mail.client_id,
-        "tenant_id": mail.tenant_id,
-        "scopes": list(mail.scopes) + extra,
-        "keychain_service": mail.keychain_service,
-        "keychain_account": mail.keychain_account,
-    }
+    scopes = list(mail.scopes) + extra
 
-    def prompt(verification_uri: str, user_code: str, expires_in: int) -> None:
-        print(f"Open {verification_uri} and enter the code {user_code}")
-        print(
-            f"(the code is good for {max(expires_in // 60, 1)} minutes; "
-            f"sign in as {mail.keychain_account}; waiting for the sign-in to complete)"
-        )
-        sys.stdout.flush()
+    def graph_consent():
+        from ..adapters.graph_mail import device_code_consent, keychain_token_provider
+
+        names = {
+            "client_id": mail.client_id,
+            "tenant_id": mail.tenant_id,
+            "scopes": scopes,
+            "keychain_service": mail.keychain_service,
+            "keychain_account": mail.keychain_account,
+        }
+
+        def prompt(verification_uri: str, user_code: str, expires_in: int) -> None:
+            print(f"Open {verification_uri} and enter the code {user_code}")
+            print(
+                f"(the code is good for {max(expires_in // 60, 1)} minutes; "
+                f"sign in as {mail.keychain_account}; waiting for the sign-in to complete)"
+            )
+            sys.stdout.flush()
+
+        return device_code_consent(prompt=prompt, **names), keychain_token_provider(**names)
+
+    def gmail_consent():
+        from ..adapters.gmail import loopback_consent, refresh_token_provider
+
+        secret = os.environ.get(mail.client_secret_env, "")
+        if not secret:
+            raise MailAuthError(
+                f"[mail].client_secret_env {mail.client_secret_env} is not set in this shell"
+            )
+        names = {
+            "client_id": mail.client_id,
+            "client_secret": secret,
+            "keychain_service": mail.keychain_service,
+            "keychain_account": mail.keychain_account,
+        }
+
+        def prompt(auth_url: str) -> None:
+            print(f"Open {auth_url}")
+            print(
+                f"(sign in as {mail.keychain_account} and allow the mailbox scopes; "
+                "waiting for Google to send the browser back here)"
+            )
+            sys.stdout.flush()
+
+        consent = loopback_consent(prompt=prompt, scopes=scopes, **names)
+        return consent, refresh_token_provider(**names)
 
     started = datetime.now(UTC)
     try:
-        consent = device_code_consent(prompt=prompt, **names)
-    except GraphAuthError as exc:
+        consent, verify = graph_consent() if provider == "graph" else gmail_consent()
+    except MailAuthError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     expires_at = (started + timedelta(seconds=consent.expires_in)).replace(microsecond=0)
@@ -783,8 +848,8 @@ def _cmd_mail_consent(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     try:
-        keychain_token_provider(**names)()
-    except GraphAuthError as exc:
+        verify()
+    except MailAuthError as exc:
         print(
             f"error: consent stored but the engine cannot use it yet: {exc}",
             file=sys.stderr,

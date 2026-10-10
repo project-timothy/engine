@@ -129,6 +129,7 @@ def tenants_root(tmp_path, monkeypatch):
                 'slug = "acme"',
                 "",
                 "[mail]",
+                'provider = "graph"',
                 'client_id = "11111111-2222-3333-4444-555555555555"',
                 'tenant_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"',
                 'scopes = ["Mail.ReadWrite", "Mail.Send"]',
@@ -141,6 +142,45 @@ def tenants_root(tmp_path, monkeypatch):
     (root / "bare").mkdir()
     (root / "bare" / "tenant.toml").write_text(
         '[identity]\nlegal_name = "Bare LLC"\nslug = "bare"\n'
+    )
+    # A Google shop (the mail seam, 2026-09-22): same command, the loopback
+    # consent instead of the device code, the client secret from the env.
+    (root / "gshop").mkdir()
+    (root / "gshop" / "tenant.toml").write_text(
+        "\n".join(
+            [
+                "[identity]",
+                'legal_name = "G Shop LLC"',
+                'slug = "gshop"',
+                "",
+                "[mail]",
+                'provider = "gmail"',
+                'client_id = "999.apps.googleusercontent.com"',
+                'client_secret_env = "GSHOP_MAIL_SECRET"',
+                'scopes = ["https://www.googleapis.com/auth/gmail.readonly"]',
+                'keychain_service = "svc.test.gmail"',
+                f'keychain_account = "{USERNAME}"',
+                "",
+            ]
+        )
+    )
+    # An adopter that skipped the choice: refused by name, never defaulted.
+    (root / "undecided").mkdir()
+    (root / "undecided" / "tenant.toml").write_text(
+        "\n".join(
+            [
+                "[identity]",
+                'legal_name = "Undecided LLC"',
+                'slug = "undecided"',
+                "",
+                "[mail]",
+                'client_id = "11111111-2222-3333-4444-555555555555"',
+                'tenant_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"',
+                'keychain_service = "svc.test.mailbox"',
+                f'keychain_account = "{USERNAME}"',
+                "",
+            ]
+        )
     )
     monkeypatch.setenv("ENGINE_TENANTS_ROOT", str(root))
     return root
@@ -278,6 +318,67 @@ def test_provider_error_names_the_engine_command(monkeypatch):
     )
     with pytest.raises(GraphAuthError, match="engine mail consent"):
         provider()
+
+
+# ---- the mail seam (2026-09-22): one command, the provider picks the flow ------
+
+
+def test_consent_refuses_a_tenant_that_named_no_provider(tenants_root, monkeypatch, capsys):
+    install_fakes(monkeypatch, device_result=SUCCESS)
+    code = main(["mail", "consent", "undecided"])
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "[mail].provider" in captured.err and "graph, gmail" in captured.err
+    assert "initiate" not in str(captured.out)
+
+
+def test_gmail_consent_runs_the_loopback_flow_stores_the_refresh_token_and_verifies(
+    tenants_root, monkeypatch, capsys
+):
+    from core.adapters import gmail as gmail_adapter
+
+    log = install_fakes(monkeypatch, device_result=SUCCESS)  # the fake keyring
+    monkeypatch.setenv("GSHOP_MAIL_SECRET", "client-secret-XYZ")
+    seen: dict = {}
+
+    def fake_consent(**kwargs):
+        seen.update(kwargs)
+        kwargs["prompt"]("https://accounts.google.com/o/oauth2/v2/auth?client_id=999")
+        import keyring
+
+        keyring.set_password(
+            kwargs["keychain_service"],
+            kwargs["keychain_account"],
+            '{"refresh_token": "REFRESH-GOOGLE-SECRET"}',
+        )
+        return gmail_adapter.ConsentResult(username=USERNAME, expires_in=3599)
+
+    def fake_provider(**kwargs):
+        seen["provider_kwargs"] = kwargs
+        return lambda: "ACCESS-GOOGLE-SECRET"
+
+    monkeypatch.setattr(gmail_adapter, "loopback_consent", fake_consent)
+    monkeypatch.setattr(gmail_adapter, "refresh_token_provider", fake_provider)
+    code = main(["mail", "consent", "gshop"])
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    assert "accounts.google.com" in captured.out
+    assert USERNAME in captured.out and "verified" in captured.out
+    assert seen["client_secret"] == "client-secret-XYZ"
+    assert seen["scopes"] == ["https://www.googleapis.com/auth/gmail.readonly"]
+    assert seen["provider_kwargs"]["keychain_service"] == "svc.test.gmail"
+    assert list(log["store"]) == [("svc.test.gmail", USERNAME)]
+    for secret in ("client-secret-XYZ", "REFRESH-GOOGLE-SECRET", "ACCESS-GOOGLE-SECRET"):
+        assert secret not in captured.out + captured.err
+
+
+def test_gmail_consent_needs_the_client_secret_in_the_shell(tenants_root, monkeypatch, capsys):
+    install_fakes(monkeypatch, device_result=SUCCESS)
+    monkeypatch.delenv("GSHOP_MAIL_SECRET", raising=False)
+    code = main(["mail", "consent", "gshop"])
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "GSHOP_MAIL_SECRET" in captured.err
 
 
 def test_an_extra_scope_rides_the_same_sign_in_and_mail_scopes_stay(

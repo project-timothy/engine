@@ -259,7 +259,8 @@ def test_anthropic_adapter_sends_schema_messages_attachments_and_parses_usage(
     body = json.loads(request.data)
     assert body["model"] == "policy-chosen-model"
     assert body["max_tokens"] == 2048
-    assert body["temperature"] == 0
+    # Current Opus and Sonnet reject any non-default temperature with a 400.
+    assert "temperature" not in body
     # The system turn travels in the top-level system field, not as a message.
     assert "classify documents" in body["system"]
     assert [m["role"] for m in body["messages"]] == ["user"]
@@ -403,6 +404,43 @@ class _FakeChatClient:
                 completion_tokens=r["usage"]["completion_tokens"],
             ),
         )
+
+
+def _recorded_with(**changes) -> bytes:
+    payload = json.loads((FIXTURES / "anthropic_messages_response.json").read_text())
+    payload.update(changes)
+    return json.dumps(payload).encode("utf-8")
+
+
+def test_anthropic_adapter_leaves_room_for_thinking_by_default(monkeypatch):
+    """Opus 5.5 and Sonnet 5.5 always think, and thinking counts against
+    max_tokens; 4096 left an extraction little room past the reasoning."""
+    sent: list = []
+
+    def fake_urlopen(request, timeout=None):
+        sent.append(json.loads(request.data))
+        return _FakeHTTPResponse(_recorded_with())
+
+    monkeypatch.setattr(anthropic_messages, "urlopen", fake_urlopen)
+    monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test-not-a-real-key")
+    _call(AnthropicMessagesAdapter(api_key_env="TEST_ANTHROPIC_KEY"))
+    assert sent[0]["max_tokens"] == 16000
+
+
+def test_anthropic_adapter_a_reply_cut_off_at_max_tokens_is_refused(monkeypatch):
+    """A truncated reply is half a JSON document; it fails here by name
+    instead of downstream as a parse error that reads like the model's."""
+    monkeypatch.setattr(
+        anthropic_messages,
+        "urlopen",
+        lambda request, timeout=None: _FakeHTTPResponse(_recorded_with(stop_reason="max_tokens")),
+    )
+    monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test-not-a-real-key")
+    with pytest.raises(GatewayTransportError) as info:
+        _call(AnthropicMessagesAdapter(api_key_env="TEST_ANTHROPIC_KEY", max_tokens=2048))
+    assert info.value.cause == "max_tokens"
+    assert info.value.transient is False
+    assert "2048" in str(info.value)
 
 
 def test_openai_compat_adapter_sends_json_mode_schema_and_parses_usage(tmp_path, monkeypatch):

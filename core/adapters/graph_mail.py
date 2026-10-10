@@ -30,17 +30,19 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from ..contracts.mail import MailAttachmentRef, MailAuthError, MailError, MailSummary
+
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 Transport = Callable[..., Any]  # returns parsed JSON (dict) or raw bytes
 TokenProvider = Callable[[], str]
 
 
-class GraphMailError(RuntimeError):
+class GraphMailError(MailError):
     pass
 
 
-class GraphAuthError(GraphMailError):
+class GraphAuthError(GraphMailError, MailAuthError):
     """No silently-acquirable token: the cached consent is missing/expired."""
 
 
@@ -202,9 +204,9 @@ class GraphMailClient:
 
     def list_messages(
         self, *, since: str, with_attachments: bool = True, folder: str = "Inbox"
-    ) -> list[dict]:
+    ) -> list[MailSummary]:
         """Messages received on/after ``since``, oldest first, across all
-        pages.
+        pages, in the seam's shape (``core/contracts/mail.py``).
 
         ``with_attachments`` keeps only the attachment bearers, which is the
         AP feed's rule and the default; the AR remittance lane passes False,
@@ -227,13 +229,25 @@ class GraphMailClient:
         )
         scope = f"/me/mailFolders/{folder}/messages" if folder.strip() else "/me/messages"
         url: str | None = f"{GRAPH_BASE}{scope}?{params}"
-        messages: list[dict] = []
+        messages: list[MailSummary] = []
         while url:
             page = self._get(url)
-            messages.extend(
-                m for m in page.get("value", []) if m.get("hasAttachments") or not with_attachments
-            )
+            for m in page.get("value", []):
+                if not (m.get("hasAttachments") or not with_attachments):
+                    continue
+                sender = ((m.get("from") or {}).get("emailAddress") or {}).get("address", "")
+                messages.append(
+                    MailSummary(
+                        id=str(m["id"]),
+                        subject=str(m.get("subject", "")),
+                        sender=str(sender),
+                        received=str(m.get("receivedDateTime", "")),
+                    )
+                )
             url = page.get("@odata.nextLink")
+        # The seam promises oldest first; Graph's $orderby is asked for it,
+        # and the sort makes the promise the adapter's, not the server's.
+        messages.sort(key=lambda s: (s.received, s.id))
         return messages
 
     def get_body(self, message_id: str) -> tuple[str, str]:
@@ -249,11 +263,16 @@ class GraphMailClient:
         body = page.get("body") or {}
         return str(body.get("contentType", "")), str(body.get("content", ""))
 
-    def list_attachments(self, message_id: str) -> list[dict]:
+    def list_attachments(self, message_id: str) -> list[MailAttachmentRef]:
         """File attachments only; item/reference attachments are not files."""
         page = self._get(f"{GRAPH_BASE}/me/messages/{message_id}/attachments")
         return [
-            a
+            MailAttachmentRef(
+                id=str(a["id"]),
+                name=str(a.get("name", "attachment.bin")),
+                size=int(a.get("size", 0) or 0),
+                content_type=str(a.get("contentType", "")),
+            )
             for a in page.get("value", [])
             if a.get("@odata.type") == "#microsoft.graph.fileAttachment"
         ]

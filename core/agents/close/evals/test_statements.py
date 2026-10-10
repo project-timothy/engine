@@ -136,7 +136,7 @@ def _run(tmp_path, ledger, monkeypatch, *, sealed=True, ctx=None, mailer=None, m
     )
     mailer = mailer if mailer is not None else FakeMailer()
     monkeypatch.setattr(close_jobs, "_qbo_read_client", lambda c: qbo)
-    monkeypatch.setattr(close_jobs, "_graph_send_client", mailer_factory or (lambda c: mailer))
+    monkeypatch.setattr(close_jobs, "_mail_send_client", mailer_factory or (lambda c: mailer))
     monkeypatch.setenv("AUDITOR_STORE_ROOT", str(tmp_path / "aud"))
     ctx = ctx or _job_ctx(tmp_path, ledger)
     return close_jobs._statements_run(ctx), mailer

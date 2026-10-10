@@ -23,7 +23,9 @@ the engine filed. The last of those comes back only from a backup of the
 
    Type the token when git asks for a password. Keep `-b main`: a remote
    whose own default branch is not `main` gives a plain clone an empty
-   directory, and the engine would start a fresh ledger in it without a word.
+   directory. The engine refuses to open it ("has a ledger's git history but
+   no ledger.sqlite3") rather than start a fresh ledger there; re-clone with
+   `-b main`.
 
 3. Put your tenant file back:
 

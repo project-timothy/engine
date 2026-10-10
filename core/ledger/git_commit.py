@@ -51,6 +51,19 @@ def ensure_repo(root: Path) -> None:
     _run_git(root, "config", "user.email", ENGINE_COMMITTER_EMAIL)
 
 
+def has_history(root: Path) -> bool:
+    """True when ``root`` already carries a ledger's history: a local commit,
+    or a remote-tracking branch a clone or fetch brought in. A remote that is
+    only named (``git remote add`` before the first run) has no branches yet,
+    so a fresh install reads as no history."""
+    if not (root / ".git").exists():
+        return False
+    if _run_git(root, "rev-parse", "--verify", "-q", "HEAD").returncode == 0:
+        return True
+    refs = _run_git(root, "for-each-ref", "--count=1", "refs/remotes")
+    return bool(refs.stdout.strip())
+
+
 def commit_all(root: Path, message: str) -> str | None:
     """Stage and commit everything under ``root``.
 

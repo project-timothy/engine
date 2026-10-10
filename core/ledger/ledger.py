@@ -29,7 +29,7 @@ from .event_log import (
     read_event_lines,
     repair_event_log,
 )
-from .git_commit import commit_all, ensure_repo, structured_message
+from .git_commit import commit_all, ensure_repo, has_history, structured_message
 from .migrations import migrate
 
 DB_FILENAME = "ledger.sqlite3"
@@ -65,6 +65,12 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+class LedgerRestoreError(RuntimeError):
+    """The directory holds a ledger's history but not its database: a
+    restore that checked out nothing, or a deleted file. Opening it would
+    build an empty ledger in its place, so the engine refuses (#421)."""
+
+
 class Ledger:
     """Git-backed SQLite + JSONL ledger for one deployment."""
 
@@ -83,6 +89,12 @@ class Ledger:
         file alone; read_event_lines tolerates the torn tail meanwhile."""
         root = Path(root)
         ensure_repo(root)
+        if not (root / DB_FILENAME).exists() and has_history(root):
+            raise LedgerRestoreError(
+                f"{root} has a ledger's git history but no {DB_FILENAME}; refusing to "
+                "start a fresh ledger over it. A restore that checked out nothing: "
+                "re-clone with `git clone -b main <remote>` (docs/recovery.md)."
+            )
         conn = sqlite3.connect(str(root / DB_FILENAME))
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")

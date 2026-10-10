@@ -114,7 +114,7 @@ class AnthropicMessagesAdapter:
         *,
         api_key_env: str,
         endpoint: str = DEFAULT_ENDPOINT,
-        max_tokens: int = 4096,
+        max_tokens: int = 16000,
     ) -> None:
         self._api_key_env = api_key_env
         self._endpoint = endpoint
@@ -131,7 +131,9 @@ class AnthropicMessagesAdapter:
         body = {
             "model": bundle.model,
             "max_tokens": self._max_tokens,
-            "temperature": 0,
+            # No temperature: current Opus and Sonnet reject any non-default
+            # value with a 400. Determinism comes from the schema and from
+            # code doing every computation (invariant 2), not from sampling.
             "system": bundle.system_text(),
             "messages": _messages(bundle),
             "output_config": {
@@ -169,6 +171,13 @@ class AnthropicMessagesAdapter:
             raise GatewayTransportError(
                 "the model declined the request (stop_reason refusal)",
                 cause="refusal",
+                transient=False,
+            )
+        if payload.get("stop_reason") == "max_tokens":
+            raise GatewayTransportError(
+                f"the reply was cut off at max_tokens={self._max_tokens} "
+                "(thinking counts against it); raise the adapter's max_tokens",
+                cause="max_tokens",
                 transient=False,
             )
         text = "".join(

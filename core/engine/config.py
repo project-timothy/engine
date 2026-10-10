@@ -484,13 +484,23 @@ class CloseSettings(BaseModel):
 
 
 class MailSettings(BaseModel):
-    """Mailbox fetch. Azure app ids are identifiers, not secrets; the actual
-    credential is the MSAL cache in the OS keychain, named here and never in
-    the repo. ``denied_senders`` is the privacy boundary: matching mail is
-    counted and otherwise leaves no recorded trace."""
+    """Mailbox fetch. App ids are identifiers, not secrets; the actual
+    credential lives in the OS keychain (an MSAL cache for Graph, a refresh
+    token for Gmail), named here and never in the repo. ``denied_senders``
+    is the privacy boundary: matching mail is counted and otherwise leaves
+    no recorded trace.
 
+    ``provider`` picks the adapter (``core/adapters/mail.py``): ``graph`` or
+    ``gmail``. The engine ships neither as the default; a job that needs the
+    mailbox is refused by name while it is empty. ``tenant_id`` is Graph's;
+    ``client_secret_env`` names the environment variable carrying the OAuth
+    client secret Gmail's installed-app flow needs.
+    """
+
+    provider: str = ""
     client_id: str = ""
     tenant_id: str = ""
+    client_secret_env: str = ""
     scopes: list[str] = Field(default_factory=lambda: ["Mail.Read"])
     keychain_service: str = ""
     keychain_account: str = ""

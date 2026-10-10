@@ -61,7 +61,8 @@ def _allowed_extensions(ctx: JobContext) -> frozenset[str]:
 
 
 def _messages(ctx: JobContext) -> list[MailMessage]:
-    """Fixture file (evals, replay) or the live Graph adapter."""
+    """Fixture file (evals, replay) or the live mailbox through the seam
+    (``core/adapters/mail.py`` picks the provider from ``[mail].provider``)."""
     import json
 
     override = ctx.params.get("messages_file")
@@ -71,32 +72,22 @@ def _messages(ctx: JobContext) -> list[MailMessage]:
 
     from datetime import date, timedelta
 
-    from ...adapters.graph_mail import GraphMailClient, keychain_token_provider
+    from ...adapters.mail import client_for
 
     mail = ctx.tenant.mail
     if not mail.client_id:
         raise ValueError("no [mail] config: set client_id/tenant_id/keychain names in tenant.toml")
-    client = GraphMailClient(
-        token_provider=keychain_token_provider(
-            client_id=mail.client_id,
-            tenant_id=mail.tenant_id,
-            scopes=list(mail.scopes),
-            keychain_service=mail.keychain_service,
-            keychain_account=mail.keychain_account,
-        )
-    )
+    client = client_for(mail)
     since = ctx.params.get("since") or (date.today() - timedelta(days=mail.since_days)).isoformat()
     messages: list[MailMessage] = []
     for m in client.list_messages(since=since):
-        atts = client.list_attachments(m["id"])
+        atts = client.list_attachments(m.id)
         messages.append(
             MailMessage(
-                id=str(m["id"]),
-                sender=str(((m.get("from") or {}).get("emailAddress") or {}).get("address", "")),
-                date=str(m.get("receivedDateTime", "")),
-                attachments=[
-                    {"id": str(a["id"]), "name": str(a.get("name", "attachment.bin"))} for a in atts
-                ],
+                id=m.id,
+                sender=m.sender,
+                date=m.received,
+                attachments=[{"id": a.id, "name": a.name or "attachment.bin"} for a in atts],
             )
         )
     # Live attachments download lazily in run(); stash the client for it.

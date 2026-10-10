@@ -28,6 +28,11 @@ existing is renamed.
   SDK-free. Nothing schedules it yet; a tenant's wrapper runs it.
 - `engine --version`, `auditor --version`, and a version line at the top of
   `engine doctor` (public #7).
+- The engine refuses a ledger directory that has git history but no
+  `ledger.sqlite3` (a restore that checked out nothing, or a deleted file)
+  instead of starting a fresh, empty ledger over it; `engine run` exits 2 and
+  names the re-clone. A first install, even with its backup remote already
+  added, opens as before.
 - The ledger can be restored from its remote, and a test proves it;
   `docs/recovery.md` walks a new box through it. The 23:00 job now packs the
   ledger repository (`git gc`) after the push, and `engine doctor` reports
