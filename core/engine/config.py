@@ -80,10 +80,11 @@ class CostObject(BaseModel):
     """What every dollar is coded to: a project number for a business, a fund
     or unit code for a nonprofit (docs/tenant-kit-design.md, section 4).
     ``pattern`` is a regular expression whose groups make up the code and
-    ``canonical`` formats those groups (``"P{0}_{1}"``). Parsed and checked
-    here; the three sites that hard-code today's format move to it on an
-    owner coding day (#340), so nothing reads it yet. No pattern resolves no
-    text as a code."""
+    ``canonical`` formats those groups (``"P{0}_{1}"``). ``tag_pattern`` is
+    the looser form a person writes into a file or folder name (it defaults
+    to ``pattern``). Read by the AP hand-check hint and the expense lanes
+    (#340); the auditor parses the same table on its own. No pattern
+    resolves no text as a code: the engine ships no numbering scheme."""
 
     label: str = "project"
     pattern: str = ""
@@ -116,6 +117,16 @@ class CostObject(BaseModel):
         if not self.pattern:
             return []
         return [self.canonical.format(*m.groups()) for m in re.finditer(self.pattern, text)]
+
+    def tag(self, text: str) -> str:
+        """The first code written in a file or folder name, exactly as written
+        (``P2035`` stays ``P2035``), or ``""``. Matching the written form, not
+        the canonical one, lets a caller find it again in the same name."""
+        source = self.tag_pattern or self.pattern
+        if not source:
+            return ""
+        found = re.search(source, text)
+        return found.group(0) if found else ""
 
 
 class Fund(BaseModel):
@@ -689,6 +700,10 @@ class LlmTier(BaseModel):
     api_key_env: str = ""
     pricing: LlmPricing
     fallback: list[str] = Field(default_factory=list)
+    # What the provider has agreed to keep (#358): True = zero data retention
+    # under the tenant's agreement, False = it retains, None = not stated.
+    # Informational: engine doctor prints it beside [llm].document_tiers.
+    zero_data_retention: bool | None = None
 
     @model_validator(mode="after")
     def _known_adapter(self) -> LlmTier:
@@ -717,6 +732,12 @@ class LlmSettings(BaseModel):
     tiers: dict[str, LlmTier] = Field(default_factory=dict)
     jobs: dict[str, str] = Field(default_factory=dict)
     budget: LlmBudget = Field(default_factory=LlmBudget)
+    # The tiers that may receive a document (#358): a call that carries an
+    # attachment goes only to these, and any other tier, a fallback
+    # included, is refused before anything leaves the machine. None (the
+    # default) is no restriction. For a tenant whose documents carry
+    # donor or client PII.
+    document_tiers: list[str] | None = None
 
     @model_validator(mode="after")
     def _references_resolve(self) -> LlmSettings:
@@ -739,6 +760,12 @@ class LlmSettings(BaseModel):
                     f"[llm.jobs].{job} names tier {tier!r}, which is not in [llm.tiers] "
                     f"(tiers: {', '.join(sorted(self.tiers)) or 'none'}; "
                     f"or {LLM_DETERMINISTIC!r})"
+                )
+        for tier in self.document_tiers or []:
+            if tier not in self.tiers:
+                raise ValueError(
+                    f"[llm].document_tiers names {tier!r}, which is not in [llm.tiers] "
+                    f"(tiers: {', '.join(sorted(self.tiers)) or 'none'})"
                 )
         return self
 

@@ -26,6 +26,9 @@ REGISTRY = (
 
 def _world(tmp_path, *, registry=REGISTRY, **overrides):
     conn = make_ledger(tmp_path / "ledger")
+    # The first tenant's [books.cost_object] (#340): the scheme is tenant data.
+    overrides.setdefault("cost_object_pattern", r"(?i)p\s?n?\s?(\d{2})\s?_?\s?(\d{4})")
+    overrides.setdefault("cost_object_canonical", "P{0}_{1}")
     path = tmp_path / "project-registry.toml"
     if registry is not None:
         path.write_text(registry)

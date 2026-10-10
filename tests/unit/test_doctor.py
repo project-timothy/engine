@@ -516,3 +516,41 @@ def test_a_time_zone_that_is_not_a_zone_name_is_missing(world):
 
 def test_a_real_zone_name_is_ok(world):
     assert _named(_report(world), "time zone").status == "ok"
+
+
+# ---- which tiers may see documents (#358) --------------------------------------
+
+
+def test_no_document_list_is_a_skip_that_says_any_tier_may(world):
+    check = _named(_report(world), "documents")
+    assert check.status == "skip" and "any model tier" in check.detail
+
+
+def test_a_document_list_names_each_tier_and_what_its_provider_keeps(world):
+    _edit(
+        world[1],
+        {
+            "[llm.budget]": '[llm]\ndocument_tiers = ["fixture"]\n\n[llm.budget]',
+            'pricing = { input_usd_per_mtok = "1", output_usd_per_mtok = "5" } }': (
+                'pricing = { input_usd_per_mtok = "1", output_usd_per_mtok = "5" }, '
+                "zero_data_retention = true }"
+            ),
+        },
+    )
+    check = _named(_report(world), "documents")
+    assert check.status == "ok"
+    assert "fixture (fixture, zero data retention)" in check.detail
+
+
+def test_a_document_job_routed_off_the_list_is_missing_before_any_call(world):
+    _edit(
+        world[1],
+        {
+            "[llm.jobs]": f"{PROVIDER_TIER}\n\n[llm.jobs]",
+            "[llm.budget]": '[llm]\ndocument_tiers = ["strong"]\n\n[llm.budget]',
+        },
+    )
+    report = _report(world, ACME_MODEL_KEY="x")
+    # The rendered jobs route every document job to "fixture", off the list.
+    assert {"documents invoice_extract", "documents scan_group"} <= set(_missing(report))
+    assert "strong (" in _named(report, "documents").detail

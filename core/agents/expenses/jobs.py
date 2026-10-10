@@ -343,6 +343,7 @@ def _intake_key(ctx: JobContext) -> str:
     key.param("grouper")
     key.param("filing_dir")
     key.config("expenses")
+    key.config("books.cost_object")  # the project tag in file and folder names (#340)
     # Row 7.11: the split pass groups through the gateway, so the resolved
     # scan_group tier rides the key (docs/run-keys.md).
     key.config("llm")
@@ -596,7 +597,7 @@ def _split_pass(
             n += 1
         ctx.guard.check_write(archived)
         ctx.guard.check_write(path.parent / "split-probe.pdf")
-        children = split_pdf(path, groups)
+        children = split_pdf(path, groups, ctx.tenant.books.cost_object)
         child_payloads = [
             {"file": ch.path.name, "sha256": _sha256(ch.path), "pages": ch.pages} for ch in children
         ]
@@ -711,7 +712,7 @@ def _intake_run(ctx: JobContext) -> JobOutput:
             )
             dup += 1
             continue
-        tag = parse_project_tag(path.name)
+        tag = parse_project_tag(path.name, ctx.tenant.books.cost_object)
         project = folder_project or tag
         if not project:
             carded += 1
@@ -725,7 +726,11 @@ def _intake_run(ctx: JobContext) -> JobOutput:
                 )
             )
             continue
-        if folder_project and tag and parse_project_tag(folder_project) not in ("", tag):
+        if (
+            folder_project
+            and tag
+            and parse_project_tag(folder_project, ctx.tenant.books.cost_object) not in ("", tag)
+        ):
             anomalies.append(
                 Anomaly(
                     code="expenses.attribution_disagrees",
@@ -850,6 +855,7 @@ def _extract_key(ctx: JobContext) -> str:
     key.param("extractor")
     key.param("filing_dir")
     key.config("expenses")
+    key.config("books.cost_object")  # the project tag in file names (#340)
     # Row 7.10: the receipt pass runs through the same gateway extractor, so
     # the resolved tier rides the key (docs/run-keys.md).
     key.config("llm")
@@ -930,8 +936,10 @@ def _extract_run(ctx: JobContext) -> JobOutput:
             flags.append("amount taken from filename; no amount extracted")
         if amount_cents is None:
             flags.append("no amount found; the review card must resolve this line")
-        file_tag = parse_project_tag(path.name)
-        if file_tag and file_tag != parse_project_tag(str(payload.get("project", ""))):
+        file_tag = parse_project_tag(path.name, ctx.tenant.books.cost_object)
+        if file_tag and file_tag != parse_project_tag(
+            str(payload.get("project", "")), ctx.tenant.books.cost_object
+        ):
             flags.append(f"filename project tag {file_tag} vs attributed {payload.get('project')}")
         category = normalize_category(doc.category, path.name)
 

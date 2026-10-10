@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from pypdf import PdfReader, PdfWriter
 
 from core.agents.expenses.schema import parse_amount_tag
@@ -193,6 +194,7 @@ def test_grouper_failure_holds_the_scan_and_files_nothing(tmp_path):
     assert any(a.code == "expenses.scan_split_failed" for a in result.anomalies)
 
 
+@pytest.mark.usefixtures("demo_with_project_codes")
 def test_root_drop_scan_inherits_normalized_filename_tag(tmp_path):
     # The live 8/10 shape: one combined scan at the person-folder root,
     # project only in the filename, hyphen tag form.
@@ -296,11 +298,11 @@ def _crash_after_first_split(tmp_path, monkeypatch):
     real_split = exp_jobs.split_pdf
     calls = {"n": 0}
 
-    def exploding_split(path, groups):
+    def exploding_split(path, groups, code=None):
         calls["n"] += 1
         if calls["n"] == 2:
             raise RuntimeError("pypdf choked on the second scan")
-        return real_split(path, groups)
+        return real_split(path, groups, code)
 
     monkeypatch.setattr(exp_jobs, "split_pdf", exploding_split)
     crashed = _run("intake", tmp_path)
@@ -311,6 +313,7 @@ def _crash_after_first_split(tmp_path, monkeypatch):
     return first
 
 
+@pytest.mark.usefixtures("demo_with_project_codes")
 def test_archived_original_whose_run_died_is_healed_from_its_job_record(tmp_path, monkeypatch):
     """03-F9 (S3), closed 2026-09-10 (record-then-move). The split pass now
     writes a durable job record BEFORE the original moves, so the run that
@@ -330,6 +333,7 @@ def test_archived_original_whose_run_died_is_healed_from_its_job_record(tmp_path
     assert len(_events(tmp_path, "expense.receipt_landed")) == 6
 
 
+@pytest.mark.usefixtures("demo_with_project_codes")
 def test_archived_original_with_neither_record_nor_event_is_an_anomaly_not_silence(
     tmp_path, monkeypatch
 ):

@@ -16,13 +16,10 @@ import re
 
 from pydantic import BaseModel, Field
 
+from ...engine.config import CostObject
+
 # The one shared receipt-suffix set (design: "single shared definition").
 RECEIPT_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".heic"}
-
-# A project tag anywhere in a filename or folder name: P00_0102, PN00_0101,
-# P00-0101, or the short P2035 form the July live case used. Matched exactly,
-# never fuzzily; an unmatched name simply carries no tag.
-_PROJECT_TAG = re.compile(r"\bP N?(?:\d{2}[_-])?\d{4}\b".replace(" ", ""))
 
 # A dollar amount written into a filename: "$43.87", "$1,234.56".
 _AMOUNT_TAG = re.compile(r"\$(\d{1,3}(?:,\d{3})*|\d+)\.(\d{2})")
@@ -36,10 +33,11 @@ _ENTERTAINMENT_TAG = re.compile(r"(?:^|[\s_\-(\[])ENT(?:ERTAINMENT)?(?:$|[\s_\-)
 _MEAL_WORDS = {"meal", "meals", "food", "restaurant", "dining", "lunch", "dinner", "breakfast"}
 
 
-def parse_project_tag(name: str) -> str:
-    """The project tag written in a file or folder name, or ''."""
-    m = _PROJECT_TAG.search(name)
-    return m.group(0) if m else ""
+def parse_project_tag(name: str, code: CostObject) -> str:
+    """The project tag written in a file or folder name, or ''. The form is
+    the tenant's ([books.cost_object].tag_pattern, #340), matched exactly,
+    never fuzzily; an unmatched name simply carries no tag."""
+    return code.tag(name)
 
 
 def parse_amount_tag(name: str) -> int | None:

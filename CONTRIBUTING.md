@@ -9,9 +9,11 @@ version 3 (AGPL-3.0), with an additional permission under AGPL-3.0
 section 7 (see [LICENSE](LICENSE)). The one exception is
 `core/contracts/`, the plug shapes an adapter is built against: it is
 Apache-2.0 under [its own license](core/contracts/LICENSE), so an adapter
-built against those shapes can be kept private. The mail shape is there
-today; the job contracts in `core/engine/contracts.py` are still AGPL and
-move into the package later. The section 7 permission lets the project
+built against those shapes can be kept private. Two seams live there: a
+mailbox (`core/contracts/mail.py`) and a model provider
+(`core/contracts/llm.py`). Jobs and agent
+runners are engine code and stay AGPL ([why](docs/decisions/2026-10-10-jobs-and-runners-stay-engine-code.md)).
+The section 7 permission lets the project
 accept your code without a separate Contributor License Agreement.
 
 Add this three-line header to the top of each new or substantially modified

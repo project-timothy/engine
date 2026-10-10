@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import zlib
 from collections.abc import Iterator
 from pathlib import Path
@@ -243,5 +244,35 @@ def demo_without_authority(tmp_path_factory, monkeypatch) -> Path:
     root = tmp_path_factory.mktemp("tenants")
     shutil.copytree(Path(__file__).resolve().parent / "tenants" / "demo", root / "demo")
     (root / "demo" / "authority.toml").unlink()
+    monkeypatch.setenv("ENGINE_TENANTS_ROOT", str(root))
+    return root
+
+
+# The first tenant's project-code scheme, the one these tests speak (#340).
+FIRST_TENANT_CODES = {
+    "pattern": r"(?i)p\s?n?\s?(\d{2})\s?_?\s?(\d{4})",
+    "canonical": "P{0}_{1}",
+    "tag_pattern": r"\bPN?(?:(\d{2})[_-])?(\d{4})\b",
+}
+
+
+@pytest.fixture
+def demo_with_project_codes(tmp_path_factory, monkeypatch) -> Path:
+    """The demo tenant with a project-code scheme in [books.cost_object].
+    The engine ships none (#340), so a test of tag or hint parsing names the
+    scheme it relies on here."""
+    import json
+    import shutil
+
+    root = tmp_path_factory.mktemp("tenants")
+    shutil.copytree(Path(__file__).resolve().parent / "tenants" / "demo", root / "demo")
+    toml = root / "demo" / "tenant.toml"
+    text = toml.read_text()
+    for name, value in FIRST_TENANT_CODES.items():
+        line = f"{name} = {json.dumps(value)}"
+        text, n = re.subn(rf"^{name} = .*$", lambda _m, line=line: line, text, count=1, flags=re.M)
+        if not n:
+            text = text.replace("[books.cost_object]\n", f"[books.cost_object]\n{line}\n", 1)
+    toml.write_text(text)
     monkeypatch.setenv("ENGINE_TENANTS_ROOT", str(root))
     return root

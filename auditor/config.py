@@ -95,6 +95,11 @@ class AuditorTenantConfig:
     projects_enabled: bool = True
     projects_nicknames: dict = field(default_factory=dict)  # "rig 0101" -> "P00_0101"
     projects_overhead_tokens: list[str] = field(default_factory=list)
+    # [books.cost_object] (#340), read here on the auditor's own terms: the
+    # pattern whose groups make a project code and the canonical format.
+    # Empty = this tenant has no numbering scheme; nicknames still resolve.
+    cost_object_pattern: str = ""
+    cost_object_canonical: str = ""
     # Lens 19, recurrence (2026-09-10): the auditor's own store re-read for
     # repeats; candidates map "lens/condition" (or "lens") to the automation.
     recurrence_enabled: bool = True
@@ -169,6 +174,7 @@ def load_auditor_tenant(slug: str, *, tenants_dir: str | Path | None = None) -> 
     triage = auditor.get("triage", {})
     registry = auditor.get("registry", {})
     projects = auditor.get("projects", {})
+    cost_object = (raw.get("books", {}) or {}).get("cost_object", {}) or {}
     recurrence = auditor.get("recurrence", {})
 
     columns = [
@@ -238,6 +244,8 @@ def load_auditor_tenant(slug: str, *, tenants_dir: str | Path | None = None) -> 
             str(k): str(v) for k, v in (projects.get("nicknames", {}) or {}).items()
         },
         projects_overhead_tokens=[str(t) for t in projects.get("overhead_tokens", [])],
+        cost_object_pattern=str(cost_object.get("pattern", "")),
+        cost_object_canonical=str(cost_object.get("canonical", "")),
         recurrence_enabled=bool(recurrence.get("enabled", True)),
         recurrence_long_nights=int(recurrence.get("long_nights", 7)),
         recurrence_class_subjects=int(recurrence.get("class_subjects", 3)),

@@ -1639,6 +1639,7 @@ def _reconcile_key(ctx: JobContext) -> str:
     evidence = _reconcile_evidence(ctx)
     _RECONCILE_EVIDENCE[id(ctx)] = evidence
     key = RunKey(ctx, "reconcile")
+    key.config("books.cost_object")  # the hand-check card's project hint (#340)
     key.value("evidence", sorted(f"{e.qbo_id}:{e.amount_cents}" for e in evidence))
     key.value("rows", [f"{r['id']}:{r['status']}" for r in _reconcile_rows(ctx)])
     # Found by the #153 audit: the ignore list (config + --param) and the
@@ -2812,6 +2813,7 @@ class _DirectPaymentLane:
             cost_types=tuple(self.ctx.tenant.qbo.direct_payment_cost_types),
             account_patterns=tuple(self.ctx.tenant.qbo.direct_payment_account_patterns),
             floor_cents=self.floor_cents,
+            cost_object=self.ctx.tenant.books.cost_object,
         )
         if proposal is None:
             return
