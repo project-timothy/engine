@@ -209,6 +209,27 @@ def test_a_half_configured_mailbox_names_the_keys_it_still_needs(world):
     check = _named(_report(world), "mailbox")
     assert check.status == "missing"
     assert "keychain_service" in check.detail
+    # The seam (2026-09-22): the provider is owed first, by name, and the
+    # engine ships no default.
+    assert "provider (graph or gmail)" in check.detail
+
+
+def test_each_mail_provider_owes_its_own_names(world):
+    _edit(
+        world[1],
+        {
+            'client_id = ""': 'client_id = "11111111-2222-3333-4444-555555555555"',
+            'provider = ""': 'provider = "gmail"',
+            'keychain_service = ""': 'keychain_service = "svc"',
+            'keychain_account = ""': 'keychain_account = "owner@example.test"',
+        },
+    )
+    check = _named(_report(world), "mailbox")
+    assert check.status == "missing"
+    assert "client_secret_env" in check.detail and "tenant_id" not in check.detail
+    _edit(world[1], {'client_secret_env = ""': 'client_secret_env = "MAILBOX_SECRET"'})
+    check = _named(_report(world), "mailbox")
+    assert check.status == "ok" and check.detail.startswith("gmail app")
 
 
 # ---- folders ------------------------------------------------------------------

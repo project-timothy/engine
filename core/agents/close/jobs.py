@@ -404,27 +404,20 @@ STATEMENTS_SENT_EVENT = "close.statements_sent"
 _STATEMENTS_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-def _graph_send_client(ctx: JobContext):
+def _mail_send_client(ctx: JobContext):
     """Factory hook: evals monkeypatch this with a fake.
 
-    Acquires the token HERE, eagerly, rather than letting the client fetch
-    it lazily inside the transport call: the send path stamps send_started
-    on the card before the POST (issue #135), and a missing/expired MSAL
-    cache must surface BEFORE that stamp, or an auth failure is recorded as
-    a send whose outcome is unknown (honesty audit 2026-09-03, F11). A
-    ``GraphAuthError`` raised from here means nothing was attempted."""
-    from ...adapters.graph_mail import GraphMailClient, keychain_token_provider
+    Acquires the token HERE, eagerly (``client_for(..., eager=True)``),
+    rather than letting the client fetch it lazily inside the transport
+    call: the send path stamps send_started on the card before the POST
+    (issue #135), and a missing/expired consent must surface BEFORE that
+    stamp, or an auth failure is recorded as a send whose outcome is unknown
+    (honesty audit 2026-09-03, F11). A ``MailAuthError`` raised from here
+    means nothing was attempted. The provider comes from ``[mail].provider``
+    (the mail seam); this job never names one."""
+    from ...adapters.mail import client_for
 
-    mail = ctx.tenant.mail
-    provider = keychain_token_provider(
-        client_id=mail.client_id,
-        tenant_id=mail.tenant_id,
-        scopes=list(mail.scopes),
-        keychain_service=mail.keychain_service,
-        keychain_account=mail.keychain_account,
-    )
-    token = provider()  # raises GraphAuthError with no stamp on any card
-    return GraphMailClient(token_provider=lambda: token)
+    return client_for(ctx.tenant.mail, eager=True)
 
 
 def _reveal_in_finder(path) -> bool:
@@ -547,7 +540,7 @@ def _statements_run(ctx: JobContext) -> JobOutput:
     re-runs report "already sent"."""
     import calendar as _calendar
 
-    from ...adapters.graph_mail import GraphAuthError
+    from ...contracts.mail import MailAuthError
     from ...engine.contracts import ApprovalSpec
     from ...engine.result import Anomaly
     from .statements import render_statements
@@ -694,8 +687,8 @@ def _statements_run(ctx: JobContext) -> JobOutput:
         # sends normally. Everything after the stamp keeps the #135
         # at-most-once doctrine (a crash there is an unconfirmed send).
         try:
-            mailer = _graph_send_client(ctx)
-        except GraphAuthError as exc:
+            mailer = _mail_send_client(ctx)
+        except MailAuthError as exc:
             return JobOutput(
                 status="error",
                 summary=f"close statements {month}: rendered; send NOT attempted "

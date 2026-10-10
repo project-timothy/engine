@@ -209,17 +209,9 @@ def render(facts: dict, *, name: str) -> str:
 def _send_client(ctx: JobContext):
     """Factory hook (evals replace it). The token is fetched here, before any
     stamp, so an auth failure attempts nothing (the statements rule, #135)."""
-    from ...adapters.graph_mail import GraphMailClient, keychain_token_provider
+    from ...adapters.mail import client_for
 
-    mail = ctx.tenant.mail
-    token = keychain_token_provider(
-        client_id=mail.client_id,
-        tenant_id=mail.tenant_id,
-        scopes=list(mail.scopes),
-        keychain_service=mail.keychain_service,
-        keychain_account=mail.keychain_account,
-    )()
-    return GraphMailClient(token_provider=lambda: token)
+    return client_for(ctx.tenant.mail, eager=True)
 
 
 def _write(ctx: JobContext, path: Path, text: str) -> None:

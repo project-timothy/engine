@@ -238,17 +238,28 @@ def _qbo_check(cfg: TenantConfig) -> Check:
 def _mail_check(cfg: TenantConfig) -> Check:
     if not cfg.mail.client_id:
         return Check("mailbox", SKIP, "[mail].client_id is empty: the mail fetch is off")
-    owed = [
-        key
-        for key in ("tenant_id", "keychain_service", "keychain_account", "landing_dir")
-        if not getattr(cfg.mail, key)
-    ]
+    provider = cfg.mail.provider.strip().lower()
+    # The seam (core/adapters/mail.py): each provider owes its own names, and
+    # an empty provider owes the provider first. Neither is the default.
+    per_provider = {
+        "graph": ("tenant_id",),
+        "gmail": ("client_secret_env",),
+    }
+    keys: tuple[str, ...] = ("keychain_service", "keychain_account", "landing_dir")
+    owed: list[str] = []
+    if provider not in per_provider:
+        owed.append(
+            "provider (graph or gmail)" if not provider else f"provider ({provider!r} is unknown)"
+        )
+    else:
+        keys = per_provider[provider] + keys
+    owed.extend(key for key in keys if not getattr(cfg.mail, key))
     if owed:
         return Check("mailbox", MISSING, "[mail] is configured but empty: " + ", ".join(owed))
     return Check(
         "mailbox",
         OK,
-        f"app {cfg.mail.client_id} with a token cache at {cfg.mail.keychain_service}"
+        f"{provider} app {cfg.mail.client_id} with its credential at {cfg.mail.keychain_service}"
         " (run `engine mail consent` once per host)",
     )
 

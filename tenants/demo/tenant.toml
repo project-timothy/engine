@@ -164,12 +164,17 @@ dir = "demo-data/reports/brief"
 recipients = []
 
 [mail]
-# The tenant mailbox (Microsoft Graph). Fill in the app registration and the
-# keychain names, run `engine mail consent demo` once, then add
-# "mail/fetch" to [auditor].expected_daily_jobs so the heartbeat lens
-# watches it. Empty client_id disables the fetch.
+# The tenant mailbox. Pick a provider ("graph" for Microsoft 365, "gmail"
+# for Google Workspace; the engine ships neither as the default), fill in the
+# app registration and the keychain names, run `engine mail consent demo`
+# once, then add "mail/fetch" to [auditor].expected_daily_jobs so the
+# heartbeat lens watches it. Empty client_id disables the fetch. Graph needs
+# tenant_id; Gmail needs client_secret_env, the name of the environment
+# variable carrying the OAuth client secret (never the secret itself).
+provider = ""
 client_id = ""
 tenant_id = ""
+client_secret_env = ""
 keychain_service = ""
 keychain_account = ""
 landing_dir = "demo-data/inbox"

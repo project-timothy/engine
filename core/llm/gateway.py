@@ -193,7 +193,7 @@ class GatewayValidationError(GatewayError):
 class GatewayTransportError(GatewayError):
     """The provider could not be reached or would not answer. ``cause`` is a
     short label (``timeout`` / ``transport_error`` / ``no_api_key`` /
-    ``refusal``); ``transient`` says whether a redial could plausibly help,
+    ``refusal`` / ``max_tokens``); ``transient`` says whether a redial could plausibly help,
     the same taxonomy the AP extractor's retry wrapper already reads."""
 
     def __init__(self, message: str, *, cause: str = "transport_error", transient: bool = True):

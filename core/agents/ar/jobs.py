@@ -95,20 +95,12 @@ def _candidates(ctx: JobContext) -> list[RemittanceMessage]:
         raw = json.loads(Path(override).read_text())
         return [m for m in (RemittanceMessage(**item) for item in raw) if _matches(ctx, m)]
 
-    from ...adapters.graph_mail import GraphMailClient, keychain_token_provider
+    from ...adapters.mail import client_for
 
     mail = ctx.tenant.mail
     if not mail.client_id:
         return []
-    client = GraphMailClient(
-        token_provider=keychain_token_provider(
-            client_id=mail.client_id,
-            tenant_id=mail.tenant_id,
-            scopes=list(mail.scopes),
-            keychain_service=mail.keychain_service,
-            keychain_account=mail.keychain_account,
-        )
-    )
+    client = client_for(mail)
     since = (
         ctx.params.get("since")
         or (date.today() - timedelta(days=ctx.tenant.ar.since_days)).isoformat()
@@ -117,12 +109,12 @@ def _candidates(ctx: JobContext) -> list[RemittanceMessage]:
     listing = client.list_messages(
         since=since, with_attachments=False, folder=ctx.tenant.ar.mail_folder
     )
-    for raw in listing:
+    for summary in listing:
         message = RemittanceMessage(
-            id=str(raw["id"]),
-            sender=str(((raw.get("from") or {}).get("emailAddress") or {}).get("address", "")),
-            subject=str(raw.get("subject", "")),
-            date=str(raw.get("receivedDateTime", "")),
+            id=summary.id,
+            sender=summary.sender,
+            subject=summary.subject,
+            date=summary.received,
         )
         if not _matches(ctx, message):
             continue

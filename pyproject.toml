@@ -116,10 +116,9 @@ files = [
   "core/engine/contracts.py",
   "core/llm/gateway.py",
   "core/adapters",
-  # The bill push and its inputs (public issue #2). qbo_push_payments.py is
-  # not here yet: min() over optional dates fails the check, a typing fix
-  # left out of a move that changes nothing.
+  # The bill and payment pushes and their inputs (public issue #2).
   "core/agents/ap/qbo_push.py",
+  "core/agents/ap/qbo_push_payments.py",
   "core/agents/ap/inputs.py",
 ]
 follow_imports = "silent"

@@ -28,7 +28,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobOutput
@@ -731,7 +731,9 @@ def run(ctx: JobContext, client_factory: Callable[[], Any]) -> JobOutput:
             actions=actions,
         )
 
-    earliest = min(_to_date(g["payment_date"]) or _to_date(retry_day(ctx)) for g in batch)
+    # The run's own day (always ISO) stands in for a group with no date.
+    today = date.fromisoformat(retry_day(ctx))
+    earliest = min(_to_date(g["payment_date"]) or today for g in batch)
     recent = client.fetch_recent_payments(
         since=(earliest - timedelta(days=PAYMENT_DUP_WINDOW_DAYS)).isoformat()
     )

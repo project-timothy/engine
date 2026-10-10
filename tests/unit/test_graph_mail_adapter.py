@@ -76,14 +76,19 @@ def _client(responses):
 def test_list_messages_follows_pagination_and_keeps_only_attachment_bearers():
     client = _client([PAGE_1, PAGE_2])
     messages = client.list_messages(since="2026-07-13")
-    assert [m["id"] for m in messages] == ["msg-1", "msg-3"]  # msg-2 has no attachments
+    # msg-2 has no attachments; msg-3 (07-14) lists before msg-1 (07-15): the
+    # seam promises oldest first whatever order the pages arrived in.
+    assert [m.id for m in messages] == ["msg-3", "msg-1"]
+    assert messages[1].sender == "billing@acmetooling.com"
+    assert messages[1].received == "2026-07-15T12:00:00Z"
     assert len(client.calls) == 2  # followed @odata.nextLink
 
 
 def test_list_attachments_returns_file_attachments_only():
     client = _client([ATTACHMENTS])
     atts = client.list_attachments("msg-1")
-    assert [a["id"] for a in atts] == ["att-1"]
+    assert [a.id for a in atts] == ["att-1"]
+    assert atts[0].name == "invoice-4471.pdf" and atts[0].size == 12345
 
 
 def test_download_returns_raw_bytes():
@@ -132,7 +137,7 @@ def test_list_messages_can_keep_the_ones_with_no_attachment():
     body. The attachment filter is the AP feed's rule, not the mailbox's."""
     client = _client([PAGE_1, PAGE_2])
     messages = client.list_messages(since="2026-07-13", with_attachments=False)
-    assert [m["id"] for m in messages] == ["msg-1", "msg-2", "msg-3"]
+    assert [m.id for m in messages] == ["msg-3", "msg-1", "msg-2"]
 
 
 def test_list_messages_reads_the_inbox_by_default_and_the_whole_mailbox_when_asked():
