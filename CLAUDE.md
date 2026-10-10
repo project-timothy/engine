@@ -61,7 +61,8 @@ uv run engine run <tenant> <agent> <job> [--shadow]
 uv run engine doctor <tenant>                  # what this host still needs (row 7.21)
 uv run engine schedule <tenant>                # render this host's crontab from [host.schedule]
 uv run engine status-page <tenant>             # the read-only status page (row 7.24)
-uv run engine mcp <tenant>                     # read-only tools over MCP on stdio, for a chat client (core/tools)
+uv run engine mcp <tenant> [--as <person>]     # read-only tools over MCP on stdio; --as answers as one person under authority.toml (core/tools)
+uv run engine mcp --onboarding                 # the onboarding conversation over MCP, no tenant yet (core/onboarding/mcp.py)
 uv run auditor run <tenant> [--local-only]     # the independent nightly audit
 scripts/check.sh                               # every CI gate, locally; lists each failure
 uv run pytest                                  # unit tests + evals

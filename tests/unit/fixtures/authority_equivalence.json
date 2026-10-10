@@ -1,0 +1,718 @@
+{
+ "brief_card": {
+  "ledger": {
+   "cards": [
+    {
+     "action_type": "brief.send",
+     "agent": "brief",
+     "id": 1,
+     "idempotency_key": "apr:demo:brief:brief.send:brief:2026-W41",
+     "params_json": {
+      "path": "<base>/brief-card/briefs/brief-2026-W41.md",
+      "recipients": "owner@example.com",
+      "send_started": "<clock>",
+      "week": "2026-W41"
+     },
+     "status": "approved"
+    }
+   ],
+   "events": [
+    {
+     "agent": "brief",
+     "event_type": "brief.written",
+     "idempotency_key": "brief.weekly.<key>:evt:written:2026-W41",
+     "payload_json": {
+      "needs": 0,
+      "path": "<base>/brief-card/briefs/brief-2026-W41.md",
+      "week": "2026-W41"
+     }
+    },
+    {
+     "agent": "brief",
+     "event_type": "brief.sent",
+     "idempotency_key": "brief.weekly.<key>:evt:sent:2026-W41",
+     "payload_json": {
+      "card_id": 1,
+      "recipients": [
+       "owner@example.com"
+      ],
+      "week": "2026-W41"
+     }
+    }
+   ]
+  },
+  "runs": [
+   {
+    "actions": [
+     "brief written: brief-2026-W41.md"
+    ],
+    "agent": "brief",
+    "anomalies": [],
+    "approvals_needed": [
+     {
+      "action_type": "brief.send",
+      "params": {
+       "path": "<base>/brief-card/briefs/brief-2026-W41.md",
+       "recipients": "owner@example.com",
+       "week": "2026-W41"
+      },
+      "reason": "email this week's brief to owner@example.com"
+     }
+    ],
+    "commit": "<clock>",
+    "idempotency_key": "brief.weekly.<key>",
+    "job": "weekly",
+    "llm": {
+     "calls": 0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "usd": "0"
+    },
+    "rubric": {
+     "context_footprint": null,
+     "determinism": null,
+     "failure_modes": null,
+     "handoff_quality": null,
+     "human_gates": null,
+     "idempotency": null,
+     "input_contract": null,
+     "notes": "stub: automated rubric scoring lands in phase 5"
+    },
+    "shadow": false,
+    "status": "needs_approval",
+    "summary": "brief 2026-W41: written; send approval card parked",
+    "tenant": "demo"
+   },
+   {
+    "actions": [
+     "sent to owner@example.com"
+    ],
+    "agent": "brief",
+    "anomalies": [],
+    "approvals_needed": [],
+    "commit": "<clock>",
+    "idempotency_key": "brief.weekly.<key>",
+    "job": "weekly",
+    "llm": {
+     "calls": 0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "usd": "0"
+    },
+    "rubric": {
+     "context_footprint": null,
+     "determinism": null,
+     "failure_modes": null,
+     "handoff_quality": null,
+     "human_gates": null,
+     "idempotency": null,
+     "input_contract": null,
+     "notes": "stub: automated rubric scoring lands in phase 5"
+    },
+    "shadow": false,
+    "status": "ok",
+    "summary": "brief 2026-W41: unchanged; sent to owner@example.com",
+    "tenant": "demo"
+   }
+  ],
+  "sent": [
+   {
+    "body_lines": 21,
+    "subject": "Demo Tenant Inc.: your week, 6 Oct 2026",
+    "to": [
+     "owner@example.com"
+    ]
+   }
+  ],
+  "steps": [
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "view refreshed: the AP workbook matches the ledger again\n",
+    "out": "approval #1 approved (brief.send)\n",
+    "rc": 0
+   }
+  ]
+ },
+ "brief_unattended": {
+  "ledger": {
+   "cards": [],
+   "events": [
+    {
+     "agent": "brief",
+     "event_type": "brief.written",
+     "idempotency_key": "brief.weekly.<key>:evt:written:2026-W41",
+     "payload_json": {
+      "needs": 0,
+      "path": "<base>/brief-unattended/briefs/brief-2026-W41.md",
+      "week": "2026-W41"
+     }
+    },
+    {
+     "agent": "brief",
+     "event_type": "brief.sent",
+     "idempotency_key": "brief.weekly.<key>:evt:sent:2026-W41",
+     "payload_json": {
+      "card_id": null,
+      "recipients": [
+       "owner@example.com"
+      ],
+      "week": "2026-W41"
+     }
+    }
+   ]
+  },
+  "runs": [
+   {
+    "actions": [
+     "brief written: brief-2026-W41.md",
+     "sent to owner@example.com"
+    ],
+    "agent": "brief",
+    "anomalies": [],
+    "approvals_needed": [],
+    "commit": "<clock>",
+    "idempotency_key": "brief.weekly.<key>",
+    "job": "weekly",
+    "llm": {
+     "calls": 0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "usd": "0"
+    },
+    "rubric": {
+     "context_footprint": null,
+     "determinism": null,
+     "failure_modes": null,
+     "handoff_quality": null,
+     "human_gates": null,
+     "idempotency": null,
+     "input_contract": null,
+     "notes": "stub: automated rubric scoring lands in phase 5"
+    },
+    "shadow": false,
+    "status": "ok",
+    "summary": "brief 2026-W41: written; sent to owner@example.com",
+    "tenant": "demo"
+   }
+  ],
+  "sent": [
+   {
+    "body_lines": 21,
+    "subject": "Demo Tenant Inc.: your week, 5 Oct 2026",
+    "to": [
+     "owner@example.com"
+    ]
+   }
+  ],
+  "steps": []
+ },
+ "calendar_card": {
+  "calls": [
+   [
+    "create",
+    "Work permit renewal (Jane)",
+    "2026-11-20",
+    10080
+   ],
+   [
+    "create",
+    "Quarterly report",
+    "2026-12-31",
+    4320
+   ]
+  ],
+  "ledger": {
+   "cards": [
+    {
+     "action_type": "deadlines.calendar_sync",
+     "agent": "deadlines",
+     "id": 1,
+     "idempotency_key": "apr:demo:deadlines:deadlines.calendar_sync:calendar:0839367ac8fe5058",
+     "params_json": {
+      "changes": [
+       "create: Work permit renewal (Jane) 2026-11-20",
+       "create: Quarterly report 2026-12-31"
+      ],
+      "plan": "0839367ac8fe5058",
+      "provider": "graph"
+     },
+     "status": "approved"
+    }
+   ],
+   "events": [
+    {
+     "agent": "deadlines",
+     "event_type": "deadlines.calendar",
+     "idempotency_key": "deadlines.calendar.<key>:evt:cal:permit-20261120:created",
+     "payload_json": {
+      "event_id": "E1",
+      "fp": "2ad15c908198a3a6",
+      "op": "created",
+      "subject": "Work permit renewal (Jane)",
+      "uid": "permit-20261120"
+     }
+    },
+    {
+     "agent": "deadlines",
+     "event_type": "deadlines.calendar",
+     "idempotency_key": "deadlines.calendar.<key>:evt:cal:report-20261231:created",
+     "payload_json": {
+      "event_id": "E2",
+      "fp": "a3986ecc08bb637a",
+      "op": "created",
+      "subject": "Quarterly report",
+      "uid": "report-20261231"
+     }
+    }
+   ]
+  },
+  "runs": [
+   {
+    "actions": [],
+    "agent": "deadlines",
+    "anomalies": [],
+    "approvals_needed": [
+     {
+      "action_type": "deadlines.calendar_sync",
+      "params": {
+       "changes": [
+        "create: Work permit renewal (Jane) 2026-11-20",
+        "create: Quarterly report 2026-12-31"
+       ],
+       "plan": "0839367ac8fe5058",
+       "provider": "graph"
+      },
+      "reason": "write deadlines to your calendar (2 to create)"
+     }
+    ],
+    "commit": "<clock>",
+    "idempotency_key": "deadlines.calendar.<key>",
+    "job": "calendar",
+    "llm": {
+     "calls": 0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "usd": "0"
+    },
+    "rubric": {
+     "context_footprint": null,
+     "determinism": null,
+     "failure_modes": null,
+     "handoff_quality": null,
+     "human_gates": null,
+     "idempotency": null,
+     "input_contract": null,
+     "notes": "stub: automated rubric scoring lands in phase 5"
+    },
+    "shadow": false,
+    "status": "needs_approval",
+    "summary": "deadlines calendar: 2 to create; approval card parked",
+    "tenant": "demo"
+   },
+   {
+    "actions": [],
+    "agent": "deadlines",
+    "anomalies": [],
+    "approvals_needed": [],
+    "commit": "<clock>",
+    "idempotency_key": "deadlines.calendar.<key>",
+    "job": "calendar",
+    "llm": {
+     "calls": 0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "usd": "0"
+    },
+    "rubric": {
+     "context_footprint": null,
+     "determinism": null,
+     "failure_modes": null,
+     "handoff_quality": null,
+     "human_gates": null,
+     "idempotency": null,
+     "input_contract": null,
+     "notes": "stub: automated rubric scoring lands in phase 5"
+    },
+    "shadow": false,
+    "status": "ok",
+    "summary": "deadlines calendar: wrote 2 of 2 change(s) to graph",
+    "tenant": "demo"
+   }
+  ],
+  "steps": [
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "",
+    "out": "approval #1 approved (deadlines.calendar_sync)\n",
+    "rc": 0
+   }
+  ]
+ },
+ "calendar_unattended": {
+  "calls": [
+   [
+    "create",
+    "Work permit renewal (Jane)",
+    "2026-11-20",
+    10080
+   ],
+   [
+    "create",
+    "Quarterly report",
+    "2026-12-31",
+    4320
+   ]
+  ],
+  "ledger": {
+   "cards": [],
+   "events": [
+    {
+     "agent": "deadlines",
+     "event_type": "deadlines.calendar",
+     "idempotency_key": "deadlines.calendar.<key>:evt:cal:permit-20261120:created",
+     "payload_json": {
+      "event_id": "E1",
+      "fp": "2ad15c908198a3a6",
+      "op": "created",
+      "subject": "Work permit renewal (Jane)",
+      "uid": "permit-20261120"
+     }
+    },
+    {
+     "agent": "deadlines",
+     "event_type": "deadlines.calendar",
+     "idempotency_key": "deadlines.calendar.<key>:evt:cal:report-20261231:created",
+     "payload_json": {
+      "event_id": "E2",
+      "fp": "a3986ecc08bb637a",
+      "op": "created",
+      "subject": "Quarterly report",
+      "uid": "report-20261231"
+     }
+    }
+   ]
+  },
+  "runs": [
+   {
+    "actions": [],
+    "agent": "deadlines",
+    "anomalies": [],
+    "approvals_needed": [],
+    "commit": "<clock>",
+    "idempotency_key": "deadlines.calendar.<key>",
+    "job": "calendar",
+    "llm": {
+     "calls": 0,
+     "tokens_in": 0,
+     "tokens_out": 0,
+     "usd": "0"
+    },
+    "rubric": {
+     "context_footprint": null,
+     "determinism": null,
+     "failure_modes": null,
+     "handoff_quality": null,
+     "human_gates": null,
+     "idempotency": null,
+     "input_contract": null,
+     "notes": "stub: automated rubric scoring lands in phase 5"
+    },
+    "shadow": false,
+    "status": "ok",
+    "summary": "deadlines calendar: wrote 2 of 2 change(s) to graph",
+    "tenant": "demo"
+   }
+  ],
+  "steps": []
+ },
+ "queue": {
+  "ledger": {
+   "cards": [
+    {
+     "action_type": "ap.review_revised_invoice",
+     "agent": "ap",
+     "id": 1,
+     "idempotency_key": "apr:demo:ap:ap.review_revised_invoice:revised:ce0fe257410bca8969cb0ae3a8f6d65e",
+     "params_json": {
+      "file": "inv_alpha_1001_rev.pdf",
+      "invoice_number": "1001",
+      "new_amount": "475.00",
+      "vendor": "Alpha Parts"
+     },
+     "status": "approved"
+    },
+    {
+     "action_type": "ap.new_vendor_decision",
+     "agent": "ap",
+     "id": 2,
+     "idempotency_key": "apr:demo:ap:ap.new_vendor_decision:vendor:c4aa6271c5691cf09ca8a47ad2328a37",
+     "params_json": {
+      "decided_via": "terminal",
+      "extracted_vendor": "Mystery Co",
+      "file": "inv_mystery.pdf",
+      "human_only": "true"
+     },
+     "status": "approved"
+    },
+    {
+     "action_type": "ap.review_needs_ocr",
+     "agent": "ap",
+     "id": 3,
+     "idempotency_key": "apr:demo:ap:ap.review_needs_ocr:ocr:777fc75182c1921ee00fca113a675f49",
+     "params_json": {
+      "file": "scan_noocr.pdf"
+     },
+     "status": "rejected"
+    }
+   ],
+   "events": [
+    {
+     "agent": "ap",
+     "event_type": "ap.provenance.recorded",
+     "idempotency_key": "ap.intake.<key>:evt:prov:245ae0346d84a3baf9818dbd8816b11a",
+     "payload_json": {
+      "file": "inv_alpha_1001.pdf",
+      "reason": "",
+      "sender": null,
+      "sender_domain": null,
+      "vendor": "Alpha Parts",
+      "verdict": "owner_drop"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.invoice.recorded",
+     "idempotency_key": "ap.intake.<key>:evt:new:245ae0346d84a3baf9818dbd8816b11a",
+     "payload_json": {
+      "amount_cents": 45000,
+      "file": "inv_alpha_1001.pdf",
+      "invoice_id": 1,
+      "invoice_number": "1001",
+      "vendor": "Alpha Parts",
+      "would_file_to": "2026-06/Alpha Parts - Inv 1001 - $450.00.pdf"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.provenance.recorded",
+     "idempotency_key": "ap.intake.<key>:evt:prov:864d2f87793438252c8842085eaddfe6",
+     "payload_json": {
+      "file": "inv_alpha_1001_copy.pdf",
+      "reason": "",
+      "sender": null,
+      "sender_domain": null,
+      "vendor": "Alpha Parts",
+      "verdict": "owner_drop"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.invoice.duplicate",
+     "idempotency_key": "ap.intake.<key>:evt:duplicate:864d2f87793438252c8842085eaddfe6",
+     "payload_json": {
+      "file": "inv_alpha_1001_copy.pdf",
+      "invoice_number": "1001",
+      "vendor": "Alpha Parts"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.provenance.recorded",
+     "idempotency_key": "ap.intake.<key>:evt:prov:ce0fe257410bca8969cb0ae3a8f6d65e",
+     "payload_json": {
+      "file": "inv_alpha_1001_rev.pdf",
+      "reason": "",
+      "sender": null,
+      "sender_domain": null,
+      "vendor": "Alpha Parts",
+      "verdict": "owner_drop"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.invoice.revised_received",
+     "idempotency_key": "ap.intake.<key>:evt:revised:ce0fe257410bca8969cb0ae3a8f6d65e",
+     "payload_json": {
+      "file": "inv_alpha_1001_rev.pdf",
+      "invoice_number": "1001",
+      "vendor": "Alpha Parts"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.provenance.recorded",
+     "idempotency_key": "ap.intake.<key>:evt:prov:a02cfe91f636be9373972a461dc0e6c3",
+     "payload_json": {
+      "file": "inv_alpha_1002_big.pdf",
+      "reason": "",
+      "sender": null,
+      "sender_domain": null,
+      "vendor": "Alpha Parts",
+      "verdict": "owner_drop"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.invoice.recorded",
+     "idempotency_key": "ap.intake.<key>:evt:new:a02cfe91f636be9373972a461dc0e6c3",
+     "payload_json": {
+      "amount_cents": 520000,
+      "file": "inv_alpha_1002_big.pdf",
+      "invoice_id": 2,
+      "invoice_number": "1002",
+      "vendor": "Alpha Parts",
+      "would_file_to": "2026-06/Alpha Parts - Inv 1002 - $5200.00.pdf"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.intake.unknown_vendor",
+     "idempotency_key": "ap.intake.<key>:evt:vendor:c4aa6271c5691cf09ca8a47ad2328a37",
+     "payload_json": {
+      "extracted_vendor": "Mystery Co",
+      "file": "inv_mystery.pdf"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.intake.routed.reference",
+     "idempotency_key": "ap.intake.<key>:evt:route:1ad1cf0bbf3439ddc802eb18fa86ba16",
+     "payload_json": {
+      "confidence": 0.95,
+      "doc_type": "reference",
+      "file": "machine_photo.jpg",
+      "vendor": null
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.intake.skipped",
+     "idempotency_key": "ap.intake.<key>:evt:skip:part_model.STEP",
+     "payload_json": {
+      "file": "part_model.STEP",
+      "reason": "non-candidate suffix"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.intake.routed.po",
+     "idempotency_key": "ap.intake.<key>:evt:route:458d39b15b26b6dc42aacb36ed8e45e1",
+     "payload_json": {
+      "confidence": 0.88,
+      "doc_type": "po",
+      "file": "po_beta_77.pdf",
+      "vendor": "Beta Freight"
+     }
+    },
+    {
+     "agent": "ap",
+     "event_type": "ap.intake.needs_ocr",
+     "idempotency_key": "ap.intake.<key>:evt:ocr:777fc75182c1921ee00fca113a675f49",
+     "payload_json": {
+      "file": "scan_noocr.pdf"
+     }
+    }
+   ]
+  },
+  "steps": [
+   {
+    "argv": [
+     "run",
+     "demo",
+     "ap",
+     "intake"
+    ],
+    "err": "",
+    "out": "ap/intake @ demo [shadow]: needs_approval\n  intake: NEW 2, DUPLICATE 1, REVISED 1, FLAGGED 1, ROUTED 2, SKIPPED 1, NEEDS_OCR 1\n  actions: 2\n  approvals queued: 3\n  anomalies: 1\n  commit: <sha>\n",
+    "rc": 0
+   },
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "view refreshed: the AP workbook matches the ledger again\n",
+    "out": "approval #1 approved (ap.review_revised_invoice)\n",
+    "rc": 0
+   },
+   {
+    "argv": [
+     "queue",
+     "reject",
+     "demo",
+     "--id"
+    ],
+    "err": "",
+    "out": "approval #3 rejected (ap.review_needs_ocr)\n",
+    "rc": 0
+   },
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "error: approval #2 (ap.new_vendor_decision) is a human-only card: a person decides it at a terminal (`engine queue approve ... --id 2`)\n",
+    "out": "",
+    "rc": 2
+   },
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "error: approval #2: confirmation did not match; nothing decided\n",
+    "out": "",
+    "rc": 2
+   },
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "",
+    "out": "approval #2 approved (ap.new_vendor_decision) (decided_via=terminal)\n",
+    "rc": 0
+   },
+   {
+    "argv": [
+     "queue",
+     "approve",
+     "demo",
+     "--id"
+    ],
+    "err": "error: no approval #9999 for tenant 'demo'\n",
+    "out": "",
+    "rc": 2
+   },
+   {
+    "argv": [
+     "queue",
+     "list",
+     "demo",
+     "--ledger-dir"
+    ],
+    "err": "",
+    "out": "#1 [approved] ap.review_revised_invoice (file=inv_alpha_1001_rev.pdf, invoice_number=1001, new_amount=475.00, vendor=Alpha Parts)\n#2 [approved] ap.new_vendor_decision (extracted_vendor=Mystery Co, file=inv_mystery.pdf, human_only=true, decided_via=terminal)\n#3 [rejected] ap.review_needs_ocr (file=scan_noocr.pdf)\n",
+    "rc": 0
+   }
+  ]
+ }
+}

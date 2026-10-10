@@ -19,6 +19,7 @@ import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from ...authority import CardRule
 from ...engine import clock
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.fileops import CannotVerify, CopyMismatch, place_copy
@@ -2561,4 +2562,27 @@ JOBS: dict[str, JobHandler] = {
     "extract": JobHandler(key=_extract_key, run=_extract_run),
     "report": JobHandler(key=_report_key, run=_report_run),
     "match": JobHandler(key=_match_key, run=_match_run),
+}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    INBOX_FILE_CARD: CardRule("approve", "expense.report", money=False),
+    INBOX_SKIP_CARD: CardRule("approve", "expense.report", money=False),
+    REVIEW_CARD: CardRule(
+        "approve", "expense.report", amount="total_cents", cents=True, submitter="person"
+    ),
+    DRAFT_CARD: CardRule("approve", "expense.report", submitter="person"),
+    CONFIRM_CARD: CardRule(
+        "approve", "payment", amount="total_cents", cents=True, submitter="person"
+    ),
+    "expenses.duplicate_drop": CardRule("approve", "expense.report", money=False),
+    "expenses.attribute_receipt": CardRule("approve", "expense.report", money=False),
+    "expenses.unknown_person_folder": CardRule("approve", "expense.report", money=False),
+    "expenses.match_ambiguous": CardRule("approve", "expense.report", money=False),
+    "expenses.qbo_map_payee": CardRule("approve", "books", money=False),
+    "expenses.qbo_map_project_account": CardRule("approve", "books", money=False),
+    "expenses.qbo_map_category": CardRule("approve", "books", money=False),
+    "expenses.qbo_duplicate_review": CardRule("approve", "books", money=False),
 }

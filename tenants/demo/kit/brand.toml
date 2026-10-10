@@ -1,0 +1,21 @@
+# How Demo Tenant Inc. looks on everything it sends. Rendered by `engine init`;
+# the design is docs/tenant-kit-design.md, section 1. The legal name lives in
+# tenant.toml [identity] and nowhere else. Nothing renders from this file yet.
+
+# The name customers or supporters know, when it differs from the legal name.
+trading_name = ""
+tagline = ""
+# A file under kit/brand/.
+logo = ""
+
+[colors]
+primary = ""
+accent = ""
+
+[fonts]
+heading = ""
+body = ""
+
+[templates]
+# Which file under kit/brand/ renders which output, for example
+# letterhead = "letterhead.docx"

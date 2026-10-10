@@ -10,6 +10,10 @@ that iterates `tenants/*/tenant.toml` picks them up.
 | `tenant.toml.tmpl` | `tenants/<slug>/tenant.toml` | slug, legal_name, timezone, fiscal_year_start, data_root, env_prefix, and the archetype knobs |
 | `vendors.toml.tmpl` | `tenants/<slug>/vendors.toml` | slug, legal_name |
 | `secrets.ref.tmpl` | `tenants/<slug>/secrets.ref` | slug, env_prefix |
+| `obligations.toml.tmpl` | `tenants/<slug>/obligations.toml` | slug, legal_name |
+| `authority/<shape>.toml.tmpl` | `tenants/<slug>/authority.toml` | legal_name, shape (one template per shape: its safeguards, roles and agents) |
+| `kit/brand.toml.tmpl` | `tenants/<slug>/kit/brand.toml` | legal_name |
+| `kit/voice.toml.tmpl` | `tenants/<slug>/kit/voice.toml` | legal_name, voice_preset (from the shape's family) |
 | `archetypes.toml` | the knob values per archetype | (data, not a template) |
 
 Substitution is `string.Template` (`${name}`), so a literal dollar sign in a
@@ -23,8 +27,9 @@ after editing a template, from the repo root:
 
 ```
 uv run engine init demo --archetype A --legal-name "Demo Tenant Inc." \
-    --timezone America/Chicago --fiscal-year-start 7 --root /tmp/regen --no-audit
-cp /tmp/regen/demo/tenant.toml /tmp/regen/demo/vendors.toml /tmp/regen/demo/secrets.ref tenants/demo/
+    --timezone America/Chicago --fiscal-year-start 7 --root /tmp/regen --no-audit \
+    --data-root demo-data
+cp -R /tmp/regen/demo/. tenants/demo/
 ```
 
 Adding an archetype knob: add the key to every archetype in

@@ -377,20 +377,33 @@ def test_demo_tenant_is_the_rendered_archetype_a(tmp_path, monkeypatch):
     """Regenerate with, from the repo root:
     ``uv run engine init demo --archetype A --legal-name "Demo Tenant Inc."
     --timezone America/Chicago --fiscal-year-start 7 --root /tmp/t --no-audit``
-    and copy the three files over ``tenants/demo/``."""
+    and copy the rendered files (the kit included) over ``tenants/demo/``."""
     monkeypatch.chdir(REPO)
     files = render("demo", "A", data_root_rel="demo-data", **DEMO_RENDER)
-    assert set(files) == {"tenant.toml", "vendors.toml", "secrets.ref", "obligations.toml"}
+    assert set(files) == {
+        "tenant.toml",
+        "vendors.toml",
+        "secrets.ref",
+        "obligations.toml",
+        "authority.toml",
+        "kit/brand.toml",
+        "kit/voice.toml",
+    }
     for name, content in files.items():
         assert (DEMO_DIR / name).read_text(encoding="utf-8") == content, (
             f"tenants/demo/{name} drifted from the rendered archetype A; regenerate it"
         )
-    committed = sorted(p.name for p in DEMO_DIR.iterdir() if not p.name.startswith("."))
+    committed = sorted(
+        p.relative_to(DEMO_DIR).as_posix()
+        for p in DEMO_DIR.rglob("*")
+        if p.is_file() and not p.name.startswith(".")
+    )
     assert committed == sorted(files), "the demo carries only what the template renders"
 
 
 def test_init_into_a_temp_root_reproduces_the_demo_byte_for_byte(world):
     tmp, root = world
     result = _init(root, slug="demo", **DEMO_RENDER)
-    for name in ("tenant.toml", "vendors.toml", "secrets.ref", "obligations.toml"):
-        assert (result.tenant_dir / name).read_bytes() == (DEMO_DIR / name).read_bytes(), name
+    for path in result.files:
+        name = path.relative_to(result.tenant_dir).as_posix()
+        assert path.read_bytes() == (DEMO_DIR / name).read_bytes(), name

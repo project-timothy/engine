@@ -20,8 +20,13 @@ from __future__ import annotations
 import fcntl
 from pathlib import Path
 
+import pytest
+
 from core.engine.cli import main
 from core.engine.runner import resolve_ledger_root, run
+
+# Today's (no authority.toml) path; #435 adds the other.
+pytestmark = pytest.mark.usefixtures("demo_without_authority")
 
 LANDING = Path(__file__).resolve().parents[2] / "core/agents/ap/evals/fixtures/landing"
 

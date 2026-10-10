@@ -1,9 +1,11 @@
-"""``engine init <slug> [--archetype A|B|C]``: a tenant's first hour.
+"""``engine init <slug> [--archetype A|B|C] [--shape S]``: a tenant's first hour.
 
 Renders ``tenants/<slug>/`` (``tenant.toml``, ``vendors.toml``,
-``secrets.ref``) from ``tenants/_templates/`` with the archetype's knobs
-(``archetypes.toml``), creates the data tree the daily loop expects under a
-data root beside the tenants root, opens a fresh ledger (migrated to the
+``secrets.ref``, and the tenant kit: ``authority.toml``, ``kit/brand.toml``,
+``kit/voice.toml``) from ``tenants/_templates/`` with the archetype's knobs
+(``archetypes.toml``) and the shape's defaults (docs/tenant-kit-design.md),
+creates the data tree the daily loop expects under a data root beside the
+tenants root, opens a fresh ledger (migrated to the
 current schema, git-initialized, one first commit), and runs the first
 ``auditor run <slug> --local-only`` as a subprocess, so ``core/`` keeps
 importing nothing from ``auditor/`` and the owner sees the same command they
@@ -31,6 +33,7 @@ from string import Template
 
 from ..ledger import Ledger
 from .config import TenantConfig, default_tenants_root, load_tenant
+from .kit import DEFAULT_SHAPE, SHAPES, VOICE_PRESETS, family_of
 from .runner import resolve_ledger_root
 
 ARCHETYPES = ("A", "B", "C")
@@ -47,6 +50,9 @@ TEMPLATE_FILES = {
     "vendors.toml": "vendors.toml.tmpl",
     "secrets.ref": "secrets.ref.tmpl",
     "obligations.toml": "obligations.toml.tmpl",
+    "authority.toml": "authority/{shape}.toml.tmpl",
+    "kit/brand.toml": "kit/brand.toml.tmpl",
+    "kit/voice.toml": "kit/voice.toml.tmpl",
 }
 ARCHETYPES_FILE = "archetypes.toml"
 DEFAULT_TIMEZONE = "America/New_York"
@@ -60,6 +66,7 @@ class InitError(ValueError):
 class InitResult:
     slug: str
     archetype: str
+    shape: str
     tenant_dir: Path
     data_root: Path
     ledger_root: Path
@@ -88,13 +95,15 @@ def default_legal_name(slug: str) -> str:
     return " ".join(part.capitalize() for part in slug.split("-") if part) + " Inc."
 
 
-def _validate(slug: str, archetype: str) -> None:
+def _validate(slug: str, archetype: str, shape: str = DEFAULT_SHAPE) -> None:
     if not slug or not SLUG_RE.match(slug):
         raise InitError(
             f"slug {slug!r} is not a tenant slug: use lowercase letters, digits, and hyphens only"
         )
     if archetype not in ARCHETYPES:
         raise InitError(f"archetype {archetype!r} is not one of {', '.join(ARCHETYPES)}")
+    if shape not in SHAPES:
+        raise InitError(f"shape {shape!r} is not one of {', '.join(SHAPES)}")
 
 
 def load_archetypes() -> dict[str, dict]:
@@ -102,10 +111,23 @@ def load_archetypes() -> dict[str, dict]:
         return tomllib.load(handle)
 
 
+BOOKS_ENTITY = {"nonprofit-small": "church"}
+"""A nonprofit's default entity by shape: a small church is a church; a solo
+missionary's own nonprofit and a sending organization are public charities."""
+
+
+def _books_block(shape: str) -> str:
+    """The [books] tables for the shape's family (tenants/_templates/books/)."""
+    family = family_of(shape)
+    text = (templates_dir() / "books" / f"{family}.toml.tmpl").read_text(encoding="utf-8")
+    return Template(text).substitute(books_entity=BOOKS_ENTITY.get(shape, "public-charity"))
+
+
 def render(
     slug: str,
     archetype: str,
     *,
+    shape: str = DEFAULT_SHAPE,
     legal_name: str = "",
     timezone: str = DEFAULT_TIMEZONE,
     fiscal_year_start: int = 1,
@@ -116,7 +138,7 @@ def render(
     Pure: reads the templates, writes nothing. ``data_root_rel`` is the data
     root as the engine will see it from its working directory.
     """
-    _validate(slug, archetype)
+    _validate(slug, archetype, shape)
     knobs = load_archetypes()[archetype]
     categories = "\n".join(f'{cat} = "{acct}"' for cat, acct in knobs["category_accounts"].items())
     values = {
@@ -133,10 +155,15 @@ def render(
         "project_account_template": knobs["project_account_template"],
         "category_accounts": categories,
         "archetype_notes": str(knobs["notes"]).strip("\n") + "\n",
+        "shape": shape,
+        "voice_preset": VOICE_PRESETS[family_of(shape)],
     }
+    values["books"] = _books_block(shape)
     out: dict[str, str] = {}
     for name, template_name in TEMPLATE_FILES.items():
-        text = (templates_dir() / template_name).read_text(encoding="utf-8")
+        # authority.toml has one template per shape (tenants/_templates/authority/).
+        template_path = templates_dir() / template_name.format(shape=shape)
+        text = template_path.read_text(encoding="utf-8")
         out[name] = Template(text).substitute(values)
     return out
 
@@ -198,6 +225,7 @@ def init_tenant(
     slug: str,
     *,
     archetype: str = "A",
+    shape: str = DEFAULT_SHAPE,
     root: str | Path | None = None,
     data_root: str | Path | None = None,
     legal_name: str = "",
@@ -211,7 +239,7 @@ def init_tenant(
     first audit. Refuses, touching nothing, when the slug is malformed, the
     archetype unknown, or the tenant directory or its ledger already exists.
     """
-    _validate(slug, archetype)
+    _validate(slug, archetype, shape)
     tenants_root = Path(root) if root is not None else default_tenants_root()
     tenant_dir = tenants_root / slug
     if tenant_dir.exists():
@@ -227,6 +255,7 @@ def init_tenant(
     files = render(
         slug,
         archetype,
+        shape=shape,
         legal_name=legal_name,
         timezone=timezone,
         fiscal_year_start=fiscal_year_start,
@@ -236,6 +265,7 @@ def init_tenant(
     written: list[Path] = []
     for name, text in files.items():
         path = tenant_dir / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         written.append(path)
 
@@ -260,6 +290,7 @@ def init_tenant(
     result = InitResult(
         slug=slug,
         archetype=archetype,
+        shape=shape,
         tenant_dir=tenant_dir,
         data_root=data_dir,
         ledger_root=ledger_root,

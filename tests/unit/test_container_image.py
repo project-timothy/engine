@@ -143,7 +143,21 @@ def test_the_compose_file_carries_no_secret():
     assert "env_file" in text or "environment:" in text
 
 
-@pytest.mark.skipif(shutil.which("docker") is None, reason="no docker on this host")
+def _compose_plugin_present() -> bool:
+    """Ubuntu's `docker.io` package ships docker without the Compose plugin,
+    and `docker compose -f` then fails on the flag, not on the file (the
+    2026-09-27 clean-machine test, issue #363). That is a host without
+    Compose, not an invalid compose file."""
+    if shutil.which("docker") is None:
+        return False
+    probe = subprocess.run(["docker", "compose", "version"], capture_output=True, text=True)
+    return probe.returncode == 0
+
+
+@pytest.mark.skipif(
+    not _compose_plugin_present(),
+    reason="no docker compose on this host (Ubuntu: apt install docker-compose-v2)",
+)
 def test_the_compose_file_is_valid():
     result = subprocess.run(
         ["docker", "compose", "-f", str(COMPOSE), "config"],
@@ -451,10 +465,13 @@ def test_the_install_page_says_what_a_half_filled_secrets_file_does():
 # ---- security review 2026-10-03 (findings 2 and 3) ------------------------------
 
 
-def test_every_base_image_is_pinned_by_digest():
+@pytest.mark.parametrize("dockerfile", ["Dockerfile", "Dockerfile.lane"])
+def test_every_base_image_is_pinned_by_digest(dockerfile):
     """A tag moves; a digest does not. Two builds of one reviewed commit must
-    produce the same layers underneath (finding 3)."""
-    refs = re.findall(r"^\s*(?:FROM|COPY --from=)(\S+)", _dockerfile(), re.M)
+    produce the same layers underneath (finding 3). The agent lane's image
+    (issue #359) answers to the same rule."""
+    text = (REPO / dockerfile).read_text(encoding="utf-8")
+    refs = re.findall(r"^\s*(?:FROM|COPY --from=)(\S+)", text, re.M)
     assert refs, "no base image references found"
     for ref in refs:
         assert re.search(r"@sha256:[0-9a-f]{64}$", ref), f"{ref} is pinned by tag only"

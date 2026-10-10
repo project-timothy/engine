@@ -31,6 +31,7 @@ from dataclasses import field as dataclasses_field
 from decimal import Decimal
 from pathlib import Path
 
+from ...authority import CardRule
 from ...engine.config import MissingFolderError
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.fileops import CannotVerify, CopyMismatch, place_copy, strip_collision_suffix
@@ -4025,4 +4026,24 @@ JOBS: dict[str, JobHandler] = {
     "qbo-push": JobHandler(key=qbo_push.run_key, run=_qbo_push_run),
     "qbo-push-payments": JobHandler(key=qbo_push_payments.run_key, run=_qbo_push_payments_run),
     "sweep-cards": JobHandler(key=_sweep_cards_key, run=_sweep_cards_run),
+}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    "ap.review_needs_ocr": CardRule("approve", "ap.invoice"),
+    "ap.review_incomplete_extraction": CardRule("approve", "ap.invoice"),
+    "ap.review_revised_invoice": CardRule("approve", "ap.invoice", amount="new_amount"),
+    NEW_VENDOR_CARD: CardRule("approve", "vendor", money=False),
+    "ap.w9_file_and_flip": CardRule("approve", "vendor", money=False),
+    "ap.payment_recommendation": CardRule("approve", "payment", amount="amount"),
+    REVIEW_CARD: CardRule("approve", "payment", amount="amount"),
+    DIRECT_PAYMENT_CARD: CardRule("approve", "payment", amount="amount_cents", cents=True),
+    SWEEP_CARD: CardRule("approve", "books", amount="amount_cents", cents=True),
+    "ap.qbo_push_batch": CardRule("approve", "books"),
+    "ap.qbo_payment_batch": CardRule("approve", "books"),
+    "ap.qbo_map_vendor": CardRule("approve", "books", money=False),
+    "ap.qbo_map_account": CardRule("approve", "books", money=False),
+    "ap.qbo_duplicate_review": CardRule("approve", "books", money=False),
 }

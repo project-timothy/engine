@@ -1,0 +1,26 @@
+# How Demo Tenant Inc. sounds in anything drafted for it. Rendered by
+# `engine init`; the design is docs/tenant-kit-design.md, section 2. Nothing
+# checks against this file yet.
+
+# en-US or en-GB: the check flags the other variety's spellings.
+spelling = "en-US"
+# The frame a drafting model starts from. Tune it, or write your own and call
+# it "custom".
+preset = "plain-business"
+# Words and phrases that never appear in a draft (added to the preset's own).
+banned = []
+# Regular expressions for shapes that never appear, for example an em dash:
+# banned_patterns = ["\u2014"]
+banned_patterns = []
+
+[glossary]
+# Your term = the terms to avoid, for example
+# "invoice" = ["bill"]
+
+[registers.informal]
+# Notes to a person: contractions read as a person talking.
+contractions = true
+
+[registers.formal]
+# Anything on letterhead.
+contractions = false

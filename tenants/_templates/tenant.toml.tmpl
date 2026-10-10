@@ -10,10 +10,15 @@ slug = "${slug}"
 timezone = "${timezone}"
 # The design archetype this tenant was rendered from (docs/archetypes.md).
 archetype = "${archetype}"
+# The tenant's shape (docs/tenant-kit-design.md): commercial or nonprofit;
+# solo, small or organization. It picks the defaults in authority.toml and
+# kit/, the files beside this one.
+shape = "${shape}"
 
 [fiscal]
 year_start_month = ${fiscal_year_start}
 
+${books}
 [approval]
 # An invoice under this amount from a registered vendor files without a card;
 # everything else parks an approval card. 0 queues every invoice.

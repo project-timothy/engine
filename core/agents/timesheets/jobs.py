@@ -11,6 +11,7 @@ import errno
 import hashlib
 from pathlib import Path
 
+from ...authority import CardRule
 from ...engine.config import MissingFolderError
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.fileops import CannotVerify, CopyMismatch, place_copy
@@ -247,4 +248,11 @@ def _intake_run(ctx: JobContext) -> JobOutput:
 
 JOBS: dict[str, JobHandler] = {
     "intake": JobHandler(key=_intake_key, run=_intake_run),
+}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    "timesheets.payroll_hours": CardRule("approve", "books", money=False, submitter="person")
 }

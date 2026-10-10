@@ -18,6 +18,8 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
+from ...authority import CardRule
+from ...engine.authority_gate import lane_decision, waiting
 from ...engine.clock import local_today
 from ...engine.config import tenant_dir
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
@@ -104,6 +106,8 @@ def _key(ctx: JobContext) -> str:
     status, card_id, _ = _card(ctx, week)
     key.value("week", week)
     key.value("card", [status, card_id, _sent(ctx, week)])
+    if ctx.authority is not None:
+        key.value("authority", ctx.authority.sha256)
     return key.digest()
 
 
@@ -145,6 +149,15 @@ def render(facts: dict, *, name: str) -> str:
         for c in facts["cards"]
     ] + [_deadline_line(d) for d in urgent]
     out += needs or ["Nothing is waiting on you this week."]
+
+    if facts.get("waiting"):
+        # Under authority.toml with a process owner (#436): their page only.
+        out += ["", "## Waiting on others", ""]
+        out += [
+            f"- Card #{w['card']}: {w['action_type']}, {w['step']}, waiting on "
+            f"{', '.join(w['waiting_on']) or 'no one named'}, by {_day(w['due'])}"
+            for w in facts["waiting"]
+        ]
 
     out += ["", "## Coming up", ""]
     out += [_deadline_line(d) for d in later] or [
@@ -247,6 +260,17 @@ def _weekly_run(ctx: JobContext) -> JobOutput:
             lead_days=tuple(ctx.tenant.deadlines.lead_days),
         )
         facts = gather(tools)
+        if ctx.authority is not None and ctx.authority.policy.routing.owner:
+            facts["waiting"] = [
+                {k: w[k] for k in ("card", "action_type", "step", "waiting_on", "due")}
+                for w in waiting(
+                    ctx.authority.policy,
+                    ctx.ledger,
+                    ctx.tenant_slug,
+                    today=today,
+                    now=datetime.now(UTC).isoformat(),
+                )
+            ]
         page = render(facts, name=ctx.tenant.identity.legal_name)
         if not ctx.shadow:
             if path is not None:
@@ -283,7 +307,15 @@ def _weekly_run(ctx: JobContext) -> JobOutput:
                 )
             ],
         )
-    if status == "approved" or "send" in unattended:
+    send_now = "send" in unattended
+    granted = None
+    if ctx.authority is not None:
+        # authority.toml is the only source (#435): the lane's agent sends
+        # with no one asked only when it holds send:message, and never
+        # decides a card a person was already asked.
+        granted = lane_decision(ctx.authority.policy, "brief", "send", "message")
+        send_now = granted is not None and status == "none"
+    if status == "approved" or send_now:
         mailer = _send_client(ctx)
         if card_id is not None:
             _stamp(ctx, card_id, params)
@@ -299,11 +331,18 @@ def _weekly_run(ctx: JobContext) -> JobOutput:
                 payload={"week": week, "card_id": card_id, "recipients": recipients},
             )
         )
+        decided = []
+        if granted is not None and card_id is None:
+            agent, verdict = granted
+            decided = [
+                _send_card(week, path, recipients, decided_by=agent, decided_reason=verdict.reason)
+            ]
         return JobOutput(
             status="ok",
             summary=f"{summary}; sent to {', '.join(recipients)}",
             actions=[*actions, f"sent to {', '.join(recipients)}"],
             events=events,
+            approvals=decided,
         )
     if status in ("pending", "rejected"):
         return JobOutput(status="ok", summary=f"{summary}; send card {status}", events=events)
@@ -312,19 +351,27 @@ def _weekly_run(ctx: JobContext) -> JobOutput:
         summary=f"{summary}; send approval card parked",
         actions=actions,
         events=events,
-        approvals=[
-            ApprovalSpec(
-                key=f"brief:{week}",
-                action_type=SEND_ACTION,
-                params={
-                    "week": week,
-                    "path": str(path) if path else "",
-                    "recipients": ", ".join(recipients),
-                },
-                reason=f"email this week's brief to {', '.join(recipients)}",
-            )
-        ],
+        approvals=[_send_card(week, path, recipients)],
+    )
+
+
+def _send_card(week: str, path, recipients: list[str], **decided: str) -> ApprovalSpec:
+    return ApprovalSpec(
+        key=f"brief:{week}",
+        action_type=SEND_ACTION,
+        params={
+            "week": week,
+            "path": str(path) if path else "",
+            "recipients": ", ".join(recipients),
+        },
+        reason=f"email this week's brief to {', '.join(recipients)}",
+        **decided,
     )
 
 
 JOBS: dict[str, JobHandler] = {"weekly": JobHandler(key=_key, run=_weekly_run)}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {SEND_ACTION: CardRule("send", "message", money=False)}

@@ -1,0 +1,17 @@
+#!/bin/sh
+# The agent lane image's `uv` (issue #359; Dockerfile.lane).
+#
+# The runner hands a model's tool calls PATH and HOME and nothing else
+# (core/llm/tools.py, reduced_env), so an environment variable set in the
+# image never reaches `uv run pytest`. Left alone, uv would build a fresh
+# venv in the mounted clone from PyPI, which the egress proxy refuses. This
+# shim sits first on PATH and names the image's own venv, built from the
+# lockfile at image build: no sync, no network, no Python download. The code
+# under test is the clone in the working directory, never a copy in the venv
+# (the image installs the dependencies only).
+export UV_PROJECT_ENVIRONMENT=/opt/lane-venv
+export UV_NO_SYNC=1
+export UV_OFFLINE=1
+export UV_PYTHON_DOWNLOADS=never
+export UV_CACHE_DIR="${HOME:-/home/lane}/.cache/uv"
+exec /usr/local/libexec/uv "$@"

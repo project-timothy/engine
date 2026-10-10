@@ -22,11 +22,13 @@ encrypted secrets file and whether it covers what the tenant declares (row
 7.22); every model tier that calls a provider; the accounting connection; the
 mailbox; each folder the tenant names; the ledger and, when the nightly push
 is scheduled, its remote; the dead man; the scheduler and every command its
-crontab names.
+crontab names; the eval results; and that no other tenant's credentials are
+reachable by this OS user (private #359).
 """
 
 from __future__ import annotations
 
+import getpass
 import os
 import shutil
 import subprocess
@@ -38,10 +40,12 @@ from .config import (
     LLM_DETERMINISTIC,
     TenantConfig,
     TenantNotFoundError,
+    default_tenants_root,
     load_tenant,
     tenant_dir,
 )
 from .init import folders_for
+from .kit import KIT_FILES, KitError, load_part
 from .runner import resolve_ledger_root
 from .schedule import entries
 from .secrets import MISSING, OK, SECRETS_FILENAME, SKIP, SecretsProbe
@@ -398,6 +402,135 @@ def _eval_gate_check(cfg: TenantConfig) -> Check:
     return Check("eval results", OK, f"green results for {', '.join(gated)}")
 
 
+def _credentials_held(cfg: TenantConfig, secrets: SecretsProbe) -> list[str]:
+    """What this OS user can reach of the tenant's OWN credentials, by label.
+    Environment variables are not on the list: a host's model key is shared by
+    design, and a variable cannot say which tenant it belongs to. The mailbox
+    counts once configured, because its token cache lives in this user's
+    keychain whether or not consent has run yet."""
+    held = []
+    if cfg.qbo.token_file:
+        token = Path(cfg.qbo.token_file).expanduser()
+        if token.is_file() and os.access(token, os.R_OK):
+            held.append("accounting token file")
+    if cfg.mail.client_id and cfg.mail.keychain_service:
+        held.append("mailbox token cache")
+    if secrets.status == OK:
+        held.append(SECRETS_FILENAME)
+    return held
+
+
+def _one_tenant_check(
+    slug: str,
+    cfg: TenantConfig,
+    secrets: SecretsProbe,
+    root: Path | None,
+    env: dict[str, str],
+) -> Check:
+    """One credentialed tenant per OS user (private #359). Nothing isolates
+    one tenant's run from another's ledger and tokens when both run as the
+    same user, so a second tenant whose credentials this user can reach is a
+    missing item naming both. A neighbour that does not load cannot run
+    either and is not counted. Labels only: no path or value is printed."""
+    name = "one tenant per user"
+    held = _credentials_held(cfg, secrets)
+    if not held:
+        return Check(name, SKIP, "this tenant holds no credentials on this host")
+    tenants_root = root if root is not None else default_tenants_root()
+    neighbours = []
+    for directory in sorted(tenants_root.iterdir()) if tenants_root.is_dir() else []:
+        other = directory.name
+        if other == slug or not (directory / "tenant.toml").is_file():
+            continue
+        try:
+            other_cfg = load_tenant(other, tenants_root=root, check_evals=False)
+        except (ValueError, OSError):
+            continue
+        other_held = _credentials_held(other_cfg, probe_secrets(other, tenants_root=root, env=env))
+        if other_held:
+            neighbours.append(f"{other} ({', '.join(other_held)})")
+    if not neighbours:
+        return Check(name, OK, f"the only tenant holding credentials under {tenants_root}")
+    return Check(
+        name,
+        MISSING,
+        f"{slug} ({', '.join(held)}) shares OS user {getpass.getuser()} with "
+        f"{'; '.join(neighbours)}: nothing isolates one tenant's run from the "
+        "other's ledger and tokens. Run each tenant as its own OS user or in its "
+        "own container (docs/install.md)",
+    )
+
+
+def _books_check(cfg: TenantConfig) -> Check:
+    """[books] (docs/tenant-kit-design.md, section 4). Nothing reads it yet,
+    so an unset entity is `skip`; the section itself already loaded or the
+    tenant config line above would say so."""
+    books = cfg.books
+    if books.entity is None:
+        return Check("books", SKIP, "no [books].entity yet: the onboarding agent asks")
+    filed = f", files {books.tax_return}" if books.tax_return else ", files no Form 990"
+    code = books.cost_object
+    pattern = f" ({code.pattern})" if code.pattern else " (no pattern yet)"
+    return Check("books", OK, f"{books.system}, {books.entity}{filed}; {code.label} codes{pattern}")
+
+
+def _kit_checks(cfg: TenantConfig, directory: Path) -> list[Check]:
+    """The tenant kit (docs/tenant-kit-design.md). Nothing reads it yet, so an
+    absent part is `skip`; a part that is present must load, because a broken
+    file should be found now and not on the day a lane starts reading it."""
+    shape = cfg.identity.shape
+    checks = [
+        Check("kit shape", OK, shape)
+        if shape
+        else Check(
+            "kit shape",
+            SKIP,
+            "no [identity].shape: this tenant predates the kit (`engine init` renders one)",
+        )
+    ]
+    for part, name in KIT_FILES.items():
+        if not (directory / name).is_file():
+            checks.append(Check(f"kit {part}", SKIP, f"no {name}: nothing reads it yet"))
+            continue
+        try:
+            load_part(directory, part)
+        except KitError as exc:
+            checks.append(Check(f"kit {part}", MISSING, str(exc)))
+            continue
+        detail = f"{name} loads"
+        if part == "authority" and not (load_part(directory, part) or {}).get("people"):
+            detail += (
+                "; no one under [people] yet, so every card waits (`engine onboard` names them)"
+            )
+        if part == "authority" and cfg.approval.auto_file_under > 0:
+            # Read by no code; under authority.toml an agent grant says it (#435).
+            detail += (
+                f"; [approval].auto_file_under = {cfg.approval.auto_file_under:g} does nothing "
+                "here (a grant like approve:ap.invoice<=N on the intake agent's role says it)"
+            )
+        checks.append(Check(f"kit {part}", OK, detail))
+    return checks
+
+
+def _clock_check(cfg: TenantConfig) -> Check:
+    """The tenant's zone must be a real IANA name: every local date the engine
+    computes goes through it, and the read server dies on start without one
+    (Tim walkthrough 1, 2026-10-09: onboarding stored "nepal" as typed)."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    tz = cfg.identity.timezone
+    try:
+        ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        return Check(
+            "time zone",
+            MISSING,
+            f"[identity].timezone = {tz!r} is not a time zone name; use one such as "
+            "America/New_York or Asia/Kathmandu",
+        )
+    return Check("time zone", OK, tz)
+
+
 def run_doctor(
     slug: str,
     *,
@@ -429,12 +562,15 @@ def run_doctor(
     with path.open("rb") as handle:
         raw = tomllib.load(handle)
     checks = [Check("tenant config", OK, f"{path} loads ({cfg.identity.legal_name})")]
+    checks.append(_clock_check(cfg))
     # One probe, read by both: the per-secret lines say where each value comes
     # from, and the file's own two lines come after them (row 7.22).
     secrets = probe_secrets(slug, tenants_root=root, env=environment)
     checks += _secret_checks(cfg, environment, secrets.names)
     checks += _secrets_file_checks(cfg, environment, secrets)
     checks += _tier_checks(cfg, environment)
+    checks += _kit_checks(cfg, path.parent)
+    checks.append(_books_check(cfg))
     checks.append(_qbo_check(cfg))
     checks.append(_mail_check(cfg))
     checks += _folder_checks(cfg, raw, create=create_folders)
@@ -442,6 +578,7 @@ def run_doctor(
     checks.append(_dead_man_check(cfg, environment))
     checks += _scheduler_checks(cfg, environment, code)
     checks.append(_eval_gate_check(cfg))
+    checks.append(_one_tenant_check(slug, cfg, secrets, root, environment))
     return DoctorReport(tenant=slug, checks=checks)
 
 

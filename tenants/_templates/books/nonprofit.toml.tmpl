@@ -1,0 +1,24 @@
+[books]
+# The books (docs/tenant-kit-design.md, section 4). Nothing in the daily loop
+# reads this section yet; [fiscal], [qbo] and [expenses].category_accounts
+# stay where they are.
+system = "qbo"
+# public-charity (files a Form 990) or church (files none).
+entity = "${books_entity}"
+
+[books.cost_object]
+# What every gift and expense is coded to: a fund, or a missionary's unit.
+# pattern is a regular expression whose groups make up the code, and
+# canonical formats them. Empty resolves no text as a code.
+label = "fund"
+pattern = ""
+canonical = ""
+
+[books.nonprofit]
+# Reserved for the fund dimension, a separate build: nothing reads it yet.
+designated_gifts = true
+# A written acknowledgment for a single gift at or above this amount, and the
+# quid-pro-quo disclosure for a payment above this one.
+acknowledgment_at = 250
+quid_pro_quo_above = 75
+housing_allowance = false

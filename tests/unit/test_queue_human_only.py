@@ -21,6 +21,9 @@ from core.engine.cli import main
 from core.engine.runner import resolve_ledger_root
 from core.ledger import Ledger
 
+# Today's (no authority.toml) path; #435 adds the other.
+pytestmark = pytest.mark.usefixtures("demo_without_authority")
+
 LANDING = Path(__file__).resolve().parents[2] / "core/agents/ap/evals/fixtures/landing"
 
 
@@ -102,7 +105,10 @@ def test_the_wrong_number_typed_back_decides_nothing(tmp_path, at_terminal):
     assert _card(tmp_path, "ap.new_vendor_decision")["status"] == "pending"
 
 
-@pytest.mark.parametrize("param", ["human_only=false", "decided_via=terminal"])
+@pytest.mark.parametrize(
+    "param",
+    ["human_only=false", "decided_via=terminal", "decided_via=door", "witness={}", "witness_at=x"],
+)
 def test_no_one_can_write_the_gate_fields_by_hand(tmp_path, at_terminal, param):
     _seed(tmp_path)
     card = _card(tmp_path, "ap.new_vendor_decision")

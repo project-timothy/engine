@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from ...authority import CardRule
 from ...engine.contracts import EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.runkey import RunKey
 from . import checks as close_checks
@@ -775,4 +776,12 @@ JOBS: dict[str, JobHandler] = {
     "packet": JobHandler(key=_packet_key, run=_packet_run),
     "lock": JobHandler(key=_lock_key, run=_lock_run),
     "statements": JobHandler(key=_statements_key, run=_statements_run),
+}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    LOCK_ACTION: CardRule("approve", "books", money=False),
+    STATEMENTS_ACTION: CardRule("send", "message", money=False),
 }

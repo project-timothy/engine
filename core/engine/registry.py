@@ -81,6 +81,17 @@ def load_human_only(agent: str) -> frozenset[str]:
     return frozenset(declared) if isinstance(declared, set | frozenset) else frozenset()
 
 
+def load_card_authority(agent: str) -> dict:
+    """What deciding each of the agent's card types is (``CARD_AUTHORITY``
+    in its jobs.py: action type -> ``core.authority.CardRule``). Read only
+    for a tenant with authority.toml (#435); empty when none is declared."""
+    if not (agent_dir(agent) / "jobs.py").exists():
+        return {}
+    module = importlib.import_module(f"{AGENTS_PACKAGE}.{agent}.jobs")
+    declared = getattr(module, "CARD_AUTHORITY", None)
+    return dict(declared) if isinstance(declared, dict) else {}
+
+
 def get_job(agent: str, job: str) -> JobHandler:
     jobs = load_agent_jobs(agent)
     if job not in jobs:

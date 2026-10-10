@@ -38,6 +38,9 @@ from core.engine.config import load_tenant
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
 
+# Today's (no authority.toml) path; #435 adds the other.
+pytestmark = pytest.mark.usefixtures("demo_without_authority")
+
 VENDOR = "Acme Tooling"
 # Read from the tenant, never spelled out: the demo is rendered from the
 # archetype template (row 7.19), so a hardcoded name drifts on a re-render.

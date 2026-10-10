@@ -395,3 +395,103 @@ def test_the_cli_names_create_folders_when_a_folder_is_missing(world, capsys):
     _edit(root, {'landing_dir = "acme-data/inbox"': 'landing_dir = "acme-data/nowhere"'})
     assert main(["doctor", "acme"]) == 1
     assert "engine doctor acme --create-folders" in capsys.readouterr().err
+
+
+# ---- one credentialed tenant per OS user (private #359) -------------------------
+#
+# Nothing isolates one tenant's run from another's ledger and tokens when both
+# run as the same OS user. Doctor refuses the shape: a second tenant whose
+# credentials this user can reach is a missing item naming both.
+
+
+def _second_tenant(root: Path, slug: str = "beta") -> Path:
+    init_tenant(slug, archetype="A", root=root, run_audit=False)
+    return root / slug / "tenant.toml"
+
+
+def _give_a_token(path: Path, token: Path) -> None:
+    token.write_text("{}")
+    text = path.read_text()
+    assert 'token_file = ""' in text
+    path.write_text(text.replace('token_file = ""', f'token_file = "{token}"'))
+
+
+def test_a_tenant_holding_no_credentials_skips_the_check(world):
+    check = _named(_report(world), "one tenant per user")
+    assert check.status == "skip"
+
+
+def test_the_only_credentialed_tenant_passes(world, tmp_path):
+    _give_a_token(world[1] / "acme" / "tenant.toml", tmp_path / "acme-qbo.json")
+    _second_tenant(world[1])  # holds nothing: it does not count
+    check = _named(_report(world), "one tenant per user")
+    assert check.status == "ok"
+    assert "beta" not in check.detail
+
+
+def test_a_second_credentialed_tenant_under_this_user_is_refused(world, tmp_path):
+    _give_a_token(world[1] / "acme" / "tenant.toml", tmp_path / "acme-qbo.json")
+    _give_a_token(_second_tenant(world[1]), tmp_path / "beta-qbo.json")
+    report = _report(world)
+    assert "one tenant per user" in _missing(report)
+    detail = _named(report, "one tenant per user").detail
+    assert "acme" in detail and "beta" in detail
+    assert "container" in detail  # names the fix
+
+
+def test_a_configured_mailbox_is_a_credential(world, tmp_path):
+    _give_a_token(world[1] / "acme" / "tenant.toml", tmp_path / "acme-qbo.json")
+    path = _second_tenant(world[1])
+    text = path.read_text()
+    text = text.replace('client_id = ""', 'client_id = "11111111-2222-3333-4444-555555555555"')
+    text = text.replace('keychain_service = ""', 'keychain_service = "beta-mail"')
+    path.write_text(text)
+    assert "one tenant per user" in _missing(_report(world))
+
+
+def test_a_decryptable_secrets_file_is_a_credential(world, tmp_path, monkeypatch):
+    import core.engine.doctor as doctor
+    from core.engine.secrets import SecretsProbe
+
+    _give_a_token(world[1] / "acme" / "tenant.toml", tmp_path / "acme-qbo.json")
+    _second_tenant(world[1])
+    real = doctor.probe_secrets
+
+    def probe(slug, **kwargs):
+        if slug == "beta":
+            return SecretsProbe("ok", "decrypts", ("BETA_KEY",))
+        return real(slug, **kwargs)
+
+    monkeypatch.setattr(doctor, "probe_secrets", probe)
+    assert "one tenant per user" in _missing(_report(world))
+
+
+def test_a_neighbour_that_does_not_load_is_not_counted(world, tmp_path):
+    _give_a_token(world[1] / "acme" / "tenant.toml", tmp_path / "acme-qbo.json")
+    broken = world[1] / "broken"
+    broken.mkdir()
+    (broken / "tenant.toml").write_text("not = [valid")
+    assert _named(_report(world), "one tenant per user").status == "ok"
+
+
+def test_the_check_never_prints_a_credential_path_value(world, tmp_path):
+    _give_a_token(world[1] / "acme" / "tenant.toml", tmp_path / "acme-qbo.json")
+    _give_a_token(_second_tenant(world[1]), tmp_path / "beta-qbo.json")
+    (tmp_path / "beta-qbo.json").write_text('{"refresh_token": "SECRET-VALUE-XYZ"}')
+    assert "SECRET-VALUE-XYZ" not in "\n".join(_report(world).lines())
+
+
+# ---- the tenant's clock (Tim walkthrough 1, 2026-10-09) ---------------------------
+
+
+def test_a_time_zone_that_is_not_a_zone_name_is_missing(world):
+    """Onboarding once stored "nepal" as typed; doctor called the tenant ok and
+    the read server then died on start. Doctor names it instead."""
+    _edit(world[1], {'timezone = "America/New_York"': 'timezone = "nepal"'})
+    check = _named(_report(world), "time zone")
+    assert check.status == "missing"
+    assert "nepal" in check.detail
+
+
+def test_a_real_zone_name_is_ok(world):
+    assert _named(_report(world), "time zone").status == "ok"
