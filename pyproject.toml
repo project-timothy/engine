@@ -73,10 +73,12 @@ exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
 [tool.ruff.lint.mccabe]
 # New code is held at 18 (20 until 2026-09-21, when the _reconcile_run split
 # finished: 62 -> 42 on 09-18, then eight functions each under the ceiling).
-# The four functions above it carry an explicit `# noqa: C901` naming their
+# The three functions above it carry an explicit `# noqa: C901` naming their
 # number, so the debt is enumerated rather than hidden: _match_run 41,
-# _qbo_push_payments_run 28, _inbox_run 25, _run_locked 24. Ratchet this
-# down as they are split; the next notch is whatever the largest un-exempt
+# _inbox_run 25, _run_locked 24. (_qbo_push_payments_run, 28, was split into
+# core/agents/ap/qbo_push_payments.py on 2026-10-07, public issue #2; its
+# largest piece measures 9.) Ratchet this down as they are split; the next
+# notch is whatever the largest un-exempt
 # function measures (`ruff check --select C901 --ignore-noqa --config
 # 'lint.mccabe.max-complexity=1'` lists every number).
 max-complexity = 18
@@ -96,3 +98,28 @@ tmp_path_retention_count = 1
 markers = [
     "phase2: eval whose engine module lands in a later phase; skipped with fixture in place",
 ]
+
+[tool.mypy]
+# Public issue #1: the type check CI runs (mypy pinned in
+# ci.yml via uvx, so no new project dependency). The checked set is the
+# money and storage seams; other modules are read for their types but not
+# reported (follow_imports = silent), so the set grows deliberately.
+python_version = "3.12"
+files = [
+  "core/ledger",
+  "core/engine/contracts.py",
+  "core/llm/gateway.py",
+  "core/adapters",
+  # The bill push and its inputs (public issue #2). qbo_push_payments.py is
+  # not here yet: min() over optional dates fails the check, a typing fix
+  # left out of a move that changes nothing.
+  "core/agents/ap/qbo_push.py",
+  "core/agents/ap/inputs.py",
+]
+follow_imports = "silent"
+check_untyped_defs = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["msal", "msal.*"]
+ignore_missing_imports = true

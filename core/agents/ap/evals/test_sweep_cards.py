@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from conftest import unreadable
 from core.agents.ap import sweep_note
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
@@ -323,11 +324,8 @@ def test_an_unreadable_note_folder_is_an_anomaly_never_a_silence(tmp_path):
     d = tmp_path / "d"
     missing = tmp_path / "gone"
     missing.mkdir()
-    missing.chmod(0o000)
-    try:
+    with unreadable(missing, 0o000):
         result = _run(d, missing)
-    finally:
-        missing.chmod(0o755)
     assert any(a.code == "qbo.sweep.note_unreadable" for a in result.anomalies)
 
 

@@ -10,8 +10,11 @@ directory, so a suite run leaves nothing in the checkout it ran from.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import zlib
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
@@ -74,6 +77,30 @@ PAGE_BREAK = "\f"
 printer breaks a page on, ``pypdf`` round-trips it through nothing, and it
 keeps a multi-page case readable as ONE string in a JSON case file
 (``core/llm/eval_sets/scan_group``, row 7.13b)."""
+
+
+@contextlib.contextmanager
+def unreadable(folder: Path, mode: int = 0o311) -> Iterator[Path]:
+    """Make ``folder`` unlistable for the block, then restore it.
+
+    The 2026-09-13 regressions simulate macOS's silent per-program readdir
+    denial with ``chmod``. Root (or any process with CAP_DAC_OVERRIDE, as in
+    the product image) reads through it, so the helper first proves the
+    denial holds and skips with the reason when it does not (public issue
+    #9): the suite is green whichever user runs it, and a run that cannot
+    simulate the denial says so instead of passing or failing falsely.
+    """
+    folder.chmod(mode)
+    try:
+        try:
+            os.listdir(folder)
+        except PermissionError:
+            pass
+        else:
+            pytest.skip("this user ignores file permissions (root), so chmod cannot deny a read")
+        yield folder
+    finally:
+        folder.chmod(0o755)
 
 
 def minimal_pdf(text: str) -> bytes:

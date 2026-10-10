@@ -64,5 +64,14 @@ def extension_allowed(filename: str, allowed: frozenset[str] | set[str]) -> bool
     return ext in allowed
 
 
+def sender_address(sender: str) -> str:
+    """The bare, lower-cased address: ``"Name <a@b.com>"`` -> ``"a@b.com"``."""
+    s = sender.strip()
+    if "<" in s and s.endswith(">"):
+        s = s.rsplit("<", 1)[1][:-1]
+    return s.strip().lower()
+
+
 def sender_domain(sender: str) -> str:
-    return sender.rsplit("@", 1)[-1].lower() if "@" in sender else ""
+    address = sender_address(sender)
+    return address.rsplit("@", 1)[-1] if "@" in address else ""

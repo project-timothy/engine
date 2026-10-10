@@ -114,6 +114,7 @@ def test_the_cli_exits_zero_when_nothing_is_missing(world, capsys):
     assert main(["doctor", "acme", "--root", str(root)]) == 0
     out = capsys.readouterr().out
     assert "0 missing" in out
+    assert out.splitlines()[0].startswith("engine ")  # the version line comes first (public #7)
 
 
 def test_the_cli_exits_nonzero_and_names_each_missing_item(world, capsys):
@@ -285,6 +286,17 @@ def test_the_nightly_push_needs_a_remote(world):
 def test_a_ledger_with_a_remote_is_ok(world, tmp_path):
     _give_the_ledger_a_remote(tmp_path)
     assert _named(_report(world), "ledger remote").status == "ok"
+
+
+def test_doctor_reports_the_ledger_repository_size(world):
+    """The ledger commits its database on every run, so the repository grows
+    with the run count (public #13). Doctor says how big it is and how much of
+    that is unpacked, before it becomes a problem; size alone fails nothing."""
+    check = _named(_report(world), "ledger size")
+    assert check.status == "ok"
+    assert "MB" in check.detail
+    assert "loose" in check.detail
+    assert "1 commit" in check.detail  # a restore that checked out nothing reads 0
 
 
 def test_with_the_nightly_push_unscheduled_the_remote_is_out_of_scope(world):

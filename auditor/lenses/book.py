@@ -44,8 +44,6 @@ KNOWN_STATUSES = frozenset(
     }
 )
 
-COMPARED_FIELDS = ("amount_cents", "status", "payment_date", "check_ref")
-
 
 def dollars(cents: int) -> str:
     """The delivery contract's amount rendering, reimplemented."""

@@ -448,19 +448,6 @@ class Ledger:
         d["payload"] = json.loads(d.pop("payload_json"))
         return d
 
-    def events_for_run(self, run_id: int) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT * FROM events WHERE run_id = ? ORDER BY id", (run_id,)
-        ).fetchall()
-        return [
-            {
-                "idempotency_key": r["idempotency_key"],
-                "event_type": r["event_type"],
-                "payload": json.loads(r["payload_json"]),
-            }
-            for r in rows
-        ]
-
     def read_event_log(self) -> list[dict[str, Any]]:
         return read_event_lines(self._root)
 

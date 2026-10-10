@@ -136,22 +136,23 @@ boot, so editing the crontab on the volume has no effect.
     docker compose exec engine uv run engine queue list demo      # what needs a decision
     docker compose exec engine uv run engine queue approve demo 12
     docker compose exec engine uv run engine doctor demo          # what is missing
+    docker compose exec engine uv run engine --version            # what you run
     docker compose logs -f                                        # the scheduler
     docker compose down                                           # stop; the volume stays
 
 ## Upgrading
 
-    git pull
+    git pull                       # read CHANGELOG.md first: tenant-file and schema changes
     docker compose up -d --build
 
 The volume is untouched (tenant file, ledger, reports, logs); the new container renders the schedule again.
 From an image before 2026-10 (it ran as root): the new one stops at boot and prints the one `chown` to run.
 
-## Backups
+## Backups and recovery
 
-The ledger's nightly push is the first tier and covers the thing that matters
-most. For everything else, back up the `engine-data` volume on the host the
-way you back up anything else on that machine.
+The ledger's nightly push is the first tier. Back up the `engine-data` volume
+the way you back up anything else on the host: filed documents live only there.
+A new box restores the ledger from its remote: `docs/recovery.md`.
 
 Every step above was followed on a Linux host that is not the machine the
 engine was written on: `docs/non-mac-proof-2026-09-16.md` (a local VM) and

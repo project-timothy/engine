@@ -47,7 +47,7 @@ def _gateway_reachable() -> bool:
         return False
     req = urllib.request.Request(f"{GATEWAY}/models", headers={"Authorization": f"Bearer {key}"})
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 - localhost gateway
+        with urllib.request.urlopen(req, timeout=5) as resp:  # a localhost gateway
             return resp.status == 200
     except (urllib.error.URLError, TimeoutError, ConnectionError):
         return False

@@ -40,8 +40,6 @@ import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
-CONTRACT_FILENAME = "contract.toml"
-
 _MD_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 _BOLD_HEADING = re.compile(r"^\s*(?:\d+[.)]\s+)?\*\*(.+?)\*\*:?\s*$")
 
@@ -142,13 +140,6 @@ def check_skill(skill_text: str, contract: Contract) -> list[str]:
         if marker not in skill_text:
             violations.append(f"skill text no longer mentions {marker!r}")
     return violations
-
-
-def check_skill_dir(skill_dir: Path) -> list[str]:
-    """Convenience for a skill folder holding ``SKILL.md`` and ``contract.toml``."""
-    skill_dir = Path(skill_dir)
-    contract = load_contract(skill_dir / CONTRACT_FILENAME)
-    return check_skill((skill_dir / "SKILL.md").read_text(encoding="utf-8"), contract)
 
 
 # ---- whole-session replays (row 7.16) ---------------------------------------

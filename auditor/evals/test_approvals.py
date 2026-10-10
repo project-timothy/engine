@@ -214,3 +214,55 @@ def test_other_events_are_not_drops(tmp_path):
     conn = make_ledger(tmp_path)
     add_event(conn, event_type="ap.invoice.recorded", payload={"file": "x.pdf"}, created_at=FRESH)
     assert _conditions(tmp_path) == []
+
+
+# -- human-only cards (#356 check 2) -----------------------------------------
+
+
+def test_a_human_only_card_a_person_decided_is_quiet(tmp_path):
+    conn = make_ledger(tmp_path)
+    add_approval(
+        conn,
+        action_type="ap.new_vendor_decision",
+        params={"human_only": "true", "decided_via": "terminal"},
+        status="approved",
+        created_at=FRESH,
+        resolved_at=FRESH,
+    )
+    assert _conditions(tmp_path) == []
+
+
+def test_a_human_only_card_decided_without_a_person_is_critical(tmp_path):
+    conn = make_ledger(tmp_path)
+    add_approval(
+        conn,
+        action_type="ap.new_vendor_decision",
+        params={"human_only": "true", "extracted_vendor": "Look-Alike Co"},
+        status="rejected",
+        created_at=FRESH,
+        resolved_at=FRESH,
+    )
+    (finding,) = _findings(tmp_path)
+    assert finding.condition == "human-only-decided-by-agent"
+    assert finding.severity == "CRITICAL"
+    assert "Look-Alike Co" in finding.detail
+
+
+def test_an_unstamped_card_and_a_pending_one_are_not_judged(tmp_path):
+    conn = make_ledger(tmp_path)
+    # decided before the stamp existed: no claim was made, so none is broken
+    add_approval(
+        conn,
+        action_type="ap.new_vendor_decision",
+        params={"extracted_vendor": "Old Co"},
+        status="approved",
+        created_at=FRESH,
+        resolved_at=FRESH,
+    )
+    add_approval(
+        conn,
+        action_type="ap.new_vendor_decision",
+        params={"human_only": "true"},
+        created_at=FRESH,
+    )
+    assert _conditions(tmp_path) == []

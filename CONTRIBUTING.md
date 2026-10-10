@@ -41,8 +41,8 @@ is still distributed downstream under AGPL-3.0.
   folder ships under `tenants/`: only `tenants/demo/` and
   `tenants/_templates/`. CI runs the bleed-through lint and a boundary test
   on every pull request.
-- The gates before a merge: `uv run pytest`, `uv run ruff check .`,
-  `uv run ruff format --check .`, and the two lints named in CLAUDE.md.
+- The gates before a merge: `scripts/check.sh` runs every gate CI's `check`
+  job runs and lists each failure. A test keeps the two in step.
 - The maintainers are listed in [.github/CODEOWNERS](.github/CODEOWNERS).
   A maintainer reviews and merges every contributed PR. Automated agents
   help with review but never merge a PR they did not open. Never put a

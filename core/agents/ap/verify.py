@@ -32,8 +32,6 @@ from typing import Any
 from .registry import VendorRegistry, canonical_vendor
 from .status import is_committed, is_settled
 
-DEFAULT_MATCH_KEYS = ["payee", "invoice_or_check_ref", "ledger_status"]
-
 Row = dict[str, Any]
 
 

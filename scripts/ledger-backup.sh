@@ -42,6 +42,11 @@ echo "=== ledger-backup $(date) ==="
 out=$("$GIT" -C "$LEDGER_REPO" push origin main 2>&1)
 rc=$?
 printf '%s\n' "$out"
+# Pack the ledger (public #13): every run commits the database, so loose
+# objects pile up (23 MB of them beside a 1.3 MB pack on the first live
+# ledger), and `gc --auto` waits for 6,700 of them. A plain gc only packs and
+# prunes what nothing reaches; it never fails the push it follows.
+"$GIT" -C "$LEDGER_REPO" gc --quiet || echo "ledger gc failed (the push above stands)"
 summary="=== done: ledger push rc=$rc ($(printf '%s\n' "$out" | tail -1)) ==="
 echo "$summary"
 hc_ping "$HC_SLUG" "$rc" "$summary"

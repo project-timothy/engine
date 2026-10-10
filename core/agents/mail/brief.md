@@ -49,5 +49,6 @@ script that separately fetched, classified, and moved mail.
 Input: tenant config ``[mail]`` (azure ids, keychain names, landing_dir,
 since_days, allowed_extensions, denied_senders, max_bytes) or fixture
 ``--param messages_file`` for evals. Output: standard ``RunResult``;
-events ``mail.attachment_saved`` (file, sender_domain, message date, hash
-key). Shadow mode reports would-save lines and writes nothing.
+events ``mail.attachment_saved`` (file, sender, sender_domain, sha256,
+message date; the sha256 also ends the key). AP intake joins its sender
+verdict to this record (#356). Shadow mode reports would-save lines and writes nothing.

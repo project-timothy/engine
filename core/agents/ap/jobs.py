@@ -39,7 +39,7 @@ from ...engine.result import Anomaly
 from ...engine.runkey import RunKey
 from ..audit.bank_recon import orphan_checks, status_lag_anomalies
 from ..timesheets.schema import is_timesheet_name as _is_timesheet_name
-from . import store, w9
+from . import provenance, qbo_push, qbo_push_payments, store, w9
 from .extraction import (
     INVOICE_EXTRACT_JOB,
     ExtractionError,
@@ -47,7 +47,10 @@ from .extraction import (
     build_extractor,
     resolved_tier,
 )
-from .registry import VendorRegistry, load_vendor_registry
+from .inputs import retry_day as _retry_day
+from .inputs import vendors as _vendors
+from .qbo_push import earliest_iso_date as earliest_iso_date
+from .registry import VendorRegistry
 from .rubric import score_intake
 from .schema import AP_CANDIDATE_SUFFIXES, BillpayEntry, ExtractedDocument, amount_to_cents
 from .verify import classify_payable
@@ -67,16 +70,6 @@ def _landing_dir(ctx: JobContext) -> Path:
             "--param landing_dir=PATH"
         )
     return Path(configured)
-
-
-def _vendors(ctx: JobContext) -> VendorRegistry:
-    from ...engine.config import tenant_dir
-
-    override = ctx.params.get("vendors_toml")
-    path = Path(override) if override else tenant_dir(ctx.tenant_slug) / "vendors.toml"
-    if not path.exists():
-        return VendorRegistry()
-    return load_vendor_registry(path)
 
 
 def _extractor_kind(ctx: JobContext) -> str:
@@ -225,6 +218,48 @@ def _intake_key(ctx: JobContext) -> str:
 _RETRYABLE_FLAG_CAUSES = frozenset({"transport_error", "timeout"})
 
 
+# Cards no agent may decide (#356 check 2): the queue CLI refuses them unless
+# a person at a terminal types the card number back, and the auditor flags any
+# such card resolved without that. The stamp in the card's params is what the
+# auditor reads; the CLI gates by action type, so older cards are covered too.
+NEW_VENDOR_CARD = "ap.new_vendor_decision"
+HUMAN_ONLY = frozenset({NEW_VENDOR_CARD})
+
+
+def _provenance_event(
+    ctx: JobContext,
+    mail_index: tuple[dict, dict],
+    path: Path,
+    name: str,
+    md5: str,
+    vendor: str,
+    registry: VendorRegistry,
+) -> EventSpec:
+    by_hash, by_name = mail_index
+    origin = by_hash.get(hashlib.sha256(path.read_bytes()).hexdigest()) or by_name.get(name)
+    policy = ctx.tenant.ap.provenance
+    verdict = provenance.judge(
+        origin,
+        vendor,
+        registry,
+        internal_domains=policy.internal_sender_domains,
+        platform_domains=policy.platform_sender_domains,
+        freemail_domains=policy.freemail_domains,
+    )
+    return EventSpec(
+        key=f"prov:{md5}",
+        event_type=provenance.PROVENANCE_EVENT,
+        payload={
+            "file": name,
+            "vendor": vendor,
+            "verdict": verdict.verdict,
+            "reason": verdict.reason,
+            "sender": (origin.sender or None) if origin else None,
+            "sender_domain": origin.domain if origin else None,
+        },
+    )
+
+
 def _retryable_flagged_md5s(ctx: JobContext) -> set[str]:
     """md5s whose LATEST intake disposition is a retryable flag.
 
@@ -250,15 +285,6 @@ def _retryable_flagged_md5s(ctx: JobContext) -> set[str]:
         if event.get("event_type") == "ap.intake.flagged"
         and (event.get("payload") or {}).get("cause") in _RETRYABLE_FLAG_CAUSES
     }
-
-
-def _retry_day(ctx: JobContext) -> str:
-    """The tenant-local date. An intake-key input only while a retryable
-    flag names a landing candidate, so a transport failure is retried once
-    a day instead of replayed forever (the expenses ``_verify_day`` rule)."""
-    from ...engine.clock import local_today
-
-    return local_today(ctx.tenant.identity.timezone)
 
 
 def _approved_w9_cards(ctx: JobContext) -> list[dict]:
@@ -334,6 +360,10 @@ def _intake_run(ctx: JobContext) -> JobOutput:
     # Retryable-flagged files are extracted again below as if new (no skip
     # rule ever excluded them; the key is what used to replay the run).
     retrying = _retryable_flagged_md5s(ctx)
+    # Who mailed each landed file (#356): the mail fetch's saved records,
+    # indexed once per run by content hash and by name.
+    mail_index = provenance.mail_origins(ctx.ledger.read_event_log())
+    provenance_count = 0
 
     for path in _candidates(ctx):
         name = path.name
@@ -528,12 +558,22 @@ def _intake_run(ctx: JobContext) -> JobOutput:
             approvals.append(
                 ApprovalSpec(
                     key=f"vendor:{md5}",
-                    action_type="ap.new_vendor_decision",
-                    params={"file": name, "extracted_vendor": doc.vendor_name or ""},
+                    action_type=NEW_VENDOR_CARD,
+                    params={
+                        "file": name,
+                        "extracted_vendor": doc.vendor_name or "",
+                        "human_only": "true",
+                    },
                     reason="unknown vendor; onboarding is an owner decision",
                 )
             )
             continue
+
+        # Sender provenance (#356, shadow): did the mail that delivered this
+        # file come from the vendor it names? A verdict event only; nothing
+        # below reads it, so no invoice records differently because of it.
+        events.append(_provenance_event(ctx, mail_index, path, name, md5, entry.vendor, registry))
+        provenance_count += 1
 
         if doc.invoice_number is None or doc.amount is None:
             counts["FLAGGED"] += 1
@@ -681,8 +721,9 @@ def _intake_run(ctx: JobContext) -> JobOutput:
             money_actions_queued=0,
             # Handoff completeness: every counted disposition left an event.
             # W-9 execution events are actions on approved cards, not
-            # candidate dispositions, so they sit outside the count (02-F9).
-            summary_present=sum(counts.values()) == len(events) - len(w9_events),
+            # candidate dispositions, so they sit outside the count (02-F9);
+            # so do provenance verdicts, which ride beside a disposition (#356).
+            summary_present=sum(counts.values()) == len(events) - len(w9_events) - provenance_count,
         ),
     )
 
@@ -3696,7 +3737,11 @@ def _reconcile_run(ctx: JobContext) -> JobOutput:
     )
 
 
-# ---------- qbo-push: the engine records Bills (write side W1) --------------
+# ---------- qbo-push and qbo-push-payments (W1, W2) ---------------------
+#
+# Both jobs live in their own modules (public issue #2). Only the QuickBooks
+# client factory stays here: evals patch ``_qbo_write_client`` on THIS module,
+# so each run gets a callable that looks the name up when the write is due.
 
 
 def _qbo_write_client(ctx: JobContext):
@@ -3709,993 +3754,15 @@ def _qbo_write_client(ctx: JobContext):
     return QboClient(token_file)
 
 
-def _push_scope(ctx: JobContext) -> list[dict]:
-    """Rows whose Bill belongs in the accounting system: OPEN obligations the
-    engine recorded. Settled rows stay out (their money is already in QBO as
-    payments; a Bill would double the expense) and so does imported history
-    (design default: no backfill)."""
-    from .status import is_settled
-
-    rows = ctx.ledger.conn.execute(
-        "SELECT * FROM ap_invoices WHERE tenant = ? AND (qbo_bill_id IS NULL "
-        "OR qbo_bill_id = '') AND amount_cents > 0 ORDER BY id",
-        (ctx.tenant_slug,),
-    ).fetchall()
-    return [
-        dict(r)
-        for r in rows
-        if not is_settled(str(r["status"]))
-        and not str(r["notes"] or "").startswith("[legacy import")
-    ]
-
-
-def _push_approved_row_ids(ctx: JobContext) -> set[int]:
-    """Row ids covered by any approved (and not yet exhausted) batch card."""
-    covered: set[int] = set()
-    cards = ctx.ledger.conn.execute(
-        "SELECT params_json FROM approval_queue "
-        "WHERE tenant = ? AND action_type = 'ap.qbo_push_batch' AND status = 'approved'",
-        (ctx.tenant_slug,),
-    ).fetchall()
-    for card in cards:
-        ids = json.loads(card["params_json"]).get("row_ids", "")
-        covered.update(int(t) for t in str(ids).split(",") if t.strip().isdigit())
-    return covered
-
-
-def _qbo_push_key(ctx: JobContext) -> str:
-    """Re-runs when scope changes OR when an approval lands (the approved
-    coverage is part of the input state: same rows + new approval = the run
-    that executes)."""
-    scope = _push_scope(ctx)
-    approved = _push_approved_row_ids(ctx)
-    key = RunKey(ctx, "qbopush")
-    key.value("scope", [f"{r['id']}:{r['status']}" for r in scope])
-    key.value("approved", sorted(str(i) for i in approved))
-    # A vendors.toml change alters vendor mapping and so which rows can push;
-    # the registry is a run input so an alias fix re-runs instead of
-    # replaying the parked outcome (2026-07-20).
-    key.vendors(_vendors(ctx))
-    key.config("qbo")
-    return key.digest()
-
-
-def _bill_payload(row: dict, vendor_id: str, account_id: str, *, book_close: str = "") -> dict:
-    """Bill payload. A row dated inside the tenant's closed period posts to
-    the first open day (standard bookkeeping; QBO refuses closed-period
-    dates, code 6200 — 2026-07-20 incident) with the true invoice date kept
-    visible on the record."""
-    txn_date = str(row["invoice_date"] or "")
-    note = f"engine:{row['idempotency_key']}"
-    if txn_date and book_close and txn_date <= book_close:
-        from datetime import date, timedelta
-
-        first_open = (date.fromisoformat(book_close) + timedelta(days=1)).isoformat()
-        note += f" (invoice dated {txn_date}; posted to first open period)"
-        txn_date = first_open
-    return {
-        "VendorRef": {"value": vendor_id},
-        "TxnDate": txn_date or None,
-        "DueDate": row["due_date"],
-        "DocNumber": str(row["invoice_number"])[:21],
-        "PrivateNote": note,
-        "Line": [
-            {
-                "DetailType": "AccountBasedExpenseLineDetail",
-                "Amount": round(row["amount_cents"] / 100, 2),
-                "Description": str(row["invoice_number"]),
-                "AccountBasedExpenseLineDetail": {"AccountRef": {"value": account_id}},
-            }
-        ],
-    }
-
-
-def earliest_iso_date(rows, *, default: str) -> str:
-    """The earliest real ISO ``invoice_date`` among ``rows``, else ``default``.
-    The date is model-extracted text and becomes a query bound, so anything
-    that is not a date is skipped (security review 2026-10-03, #390)."""
-    from ...adapters.qbo import iso_since
-
-    dates = []
-    for r in rows:
-        try:
-            dates.append(iso_since(r["invoice_date"]))
-        except ValueError:
-            continue
-    return min(dates) if dates else default
-
-
-def _readback_bill(client, bill_id: str, amount_cents: int) -> tuple[bool, str]:
-    """Read a just-created Bill back and compare the total. Returns
-    (verified, note). Never raises: the Bill exists whatever the readback
-    does, and the caller has already remembered its id (honesty audit
-    2026-09-03, 02-F1)."""
-    expected = round(amount_cents / 100, 2)
-    try:
-        readback = client.get_bill(bill_id)
-    except Exception as exc:  # any transport failure, not only the API's own errors
-        return False, f"readback failed: {exc}"
-    got = readback.get("TotalAmt")
-    try:
-        if round(float(got), 2) == expected:
-            return True, "readback ok"
-    except (TypeError, ValueError):
-        pass
-    return False, f"readback {got!r}, expected {expected}"
-
-
 def _qbo_push_run(ctx: JobContext) -> JobOutput:
-    from .reconcile import DATE_SLACK, _to_date
-    from .registry import canonical_vendor as _canon
-
-    scope = _push_scope(ctx)
-    events: list[EventSpec] = []
-    approvals: list[ApprovalSpec] = []
-    anomalies: list[Anomaly] = []
-    actions: list[str] = []
-
-    if not scope:
-        return JobOutput(status="ok", summary="qbo-push: nothing to push")
-
-    if ctx.shadow:
-        for row in scope:
-            dollars = row["amount_cents"] / 100
-            actions.append(
-                f"would push {row['vendor']} / {row['invoice_number']} (${dollars:,.2f})"
-            )
-        return JobOutput(status="ok", summary=f"qbo-push: would push {len(scope)}", actions=actions)
-
-    covered = _push_approved_row_ids(ctx)
-    batch = [r for r in scope if r["id"] in covered]
-
-    if not batch:
-        # One card for the whole outstanding scope; nothing writes until the
-        # owner approves it (invariant 7's spirit for accounting records).
-        listing = "; ".join(
-            f"#{r['id']} {r['vendor']} {r['invoice_number']} ${r['amount_cents'] / 100:,.2f}"
-            for r in scope
-        )
-        approvals.append(
-            ApprovalSpec(
-                key=f"qbopush:{hashlib.sha256(listing.encode()).hexdigest()[:16]}",
-                action_type="ap.qbo_push_batch",
-                params={
-                    "count": str(len(scope)),
-                    "rows": listing,
-                    "row_ids": ",".join(str(r["id"]) for r in scope),
-                },
-                reason="bills ready to record in the accounting system",
-            )
-        )
-        return JobOutput(
-            status="ok",
-            summary=f"qbo-push: {len(scope)} awaiting approval",
-            approvals=approvals,
-        )
-
-    from ...adapters.qbo import QboApiError
-
-    client = _qbo_write_client(ctx)
-    registry = _vendors(ctx)
-    vendor_map = {_canon(v["display_name"], registry): v["id"] for v in client.fetch_vendors()}
-    account_map = {a["fully_qualified_name"]: a["id"] for a in client.fetch_accounts()}
-    book_close = client.fetch_book_close_date()
-    since = earliest_iso_date(batch, default="2026-01-01")
-    recent = client.fetch_recent_txns(since=since)
-
-    pushed = parked = unverified = 0
-    for row in batch:
-        vendor_token = _canon(str(row["vendor"]), registry)
-        vendor_id = vendor_map.get(vendor_token)
-        if vendor_id is None:
-            parked += 1
-            approvals.append(
-                ApprovalSpec(
-                    key=f"qbomap:v:{row['id']}",
-                    action_type="ap.qbo_map_vendor",
-                    params={"row_id": str(row["id"]), "vendor": str(row["vendor"])},
-                    reason="no accounting-system vendor matches this name; map or create it",
-                )
-            )
-            continue
-        account_id = account_map.get(str(row["gl_account"]))
-        if account_id is None:
-            parked += 1
-            approvals.append(
-                ApprovalSpec(
-                    key=f"qbomap:a:{row['id']}",
-                    action_type="ap.qbo_map_account",
-                    params={"row_id": str(row["id"]), "gl_account": str(row["gl_account"])},
-                    reason="no chart account matches this coding; the chart may have changed",
-                )
-            )
-            continue
-        row_date = _to_date(row["invoice_date"])
-        lookalike = None
-        for txn in recent:
-            if _canon(str(txn["vendor"]), registry) != vendor_token:
-                continue
-            if int(txn["amount_cents"]) != int(row["amount_cents"]):
-                continue
-            txn_date = _to_date(txn.get("date"))
-            if row_date and txn_date and abs(txn_date - row_date) > DATE_SLACK * 3:
-                continue
-            lookalike = txn
-            break
-        if lookalike is not None:
-            parked += 1
-            approvals.append(
-                ApprovalSpec(
-                    key=f"qbodup:{row['id']}",
-                    action_type="ap.qbo_duplicate_review",
-                    params={
-                        "row_id": str(row["id"]),
-                        "vendor": str(row["vendor"]),
-                        "invoice_number": str(row["invoice_number"]),
-                        "existing": str(lookalike["qbo_id"]),
-                    },
-                    reason="a similar record already exists; a human decides, never a write",
-                )
-            )
-            continue
-
-        try:
-            created = client.create_bill(
-                _bill_payload(row, vendor_id, account_id, book_close=book_close)
-            )
-        except QboApiError as exc:
-            # A per-row rejection parks THAT row and the batch keeps writing
-            # (2026-07-20 incident: one closed-period date aborted all nine).
-            parked += 1
-            anomalies.append(
-                Anomaly(
-                    code="ap.qbo.bill_rejected",
-                    detail=f"row #{row['id']} {row['vendor']} / {row['invoice_number']}: {exc}",
-                )
-            )
-            continue
-        # #314: .get(key, default) falls back only when the key is
-        # ABSENT; an explicit null Id would str() to the truthy "None".
-        bill_id = str(created.get("Id") or "")
-        label = f"row #{row['id']} {row['vendor']} / {row['invoice_number']}"
-        if not bill_id:
-            # A create that answered without an Id: nothing to remember and
-            # nothing safe to assume. Stop; the lookalike guard is the only
-            # barrier on the next run (honesty audit 2026-09-03, 02-F1).
-            anomalies.append(
-                Anomaly(
-                    code="ap.qbo.create_unconfirmed",
-                    detail=f"{label}: create returned no Id; batch stopped",
-                )
-            )
-            break
-        # Honesty audit 2026-09-03 (02-F1, S1): the Bill exists the instant
-        # create returns. Remember it BEFORE the readback, so a readback that
-        # raises (a socket timeout is not a QboApiError and used to escape the
-        # job with nothing recorded) or disagrees can never leave a Bill the
-        # ledger has forgotten and would create again. The row leaves the push
-        # scope now; the nightly qbo lens verifies the Bill externally.
-        store.record_qbo_ids(ctx.ledger, invoice_id=row["id"], bill_id=bill_id)
-        verified, readback_note = _readback_bill(client, bill_id, row["amount_cents"])
-        if not verified:
-            code = (
-                "ap.qbo.readback_failed"
-                if readback_note.startswith("readback failed")
-                else "ap.qbo.readback_mismatch"
-            )
-            anomalies.append(
-                Anomaly(
-                    code=code,
-                    detail=f"bill {bill_id} for {label}: {readback_note}; id kept on "
-                    "the row, verify in QBO; batch stopped",
-                )
-            )
-        events.append(
-            EventSpec(
-                key=f"qbobill:{row['idempotency_key']}",
-                event_type="ap.qbo.bill_created",
-                payload={
-                    "invoice_id": row["id"],
-                    "vendor": row["vendor"],
-                    "invoice_number": row["invoice_number"],
-                    "amount_cents": row["amount_cents"],
-                    "qbo_bill_id": bill_id,
-                    "verified": verified,
-                    "readback": readback_note,
-                },
-            )
-        )
-        if verified:
-            pushed += 1
-            actions.append(f"pushed {row['vendor']} / {row['invoice_number']} -> Bill {bill_id}")
-            continue
-        unverified += 1
-        actions.append(
-            f"pushed {row['vendor']} / {row['invoice_number']} -> Bill {bill_id} "
-            f"(UNVERIFIED: {readback_note})"
-        )
-        break  # the transport or the book is unhealthy; the rest of the batch waits
-
-    summary = f"qbo-push: pushed {pushed}, parked {parked}"
-    if unverified:
-        summary = f"qbo-push: pushed {pushed}, unverified {unverified}, parked {parked}"
-    return JobOutput(
-        status="ok",
-        summary=summary,
-        actions=actions,
-        events=events,
-        approvals=approvals,
-        anomalies=anomalies,
-    )
+    return qbo_push.run(ctx, lambda: _qbo_write_client(ctx))
 
 
-# ---------- qbo-push-payments: the engine records BillPayments (W2) ---------
-#
-# docs/w2-billpayment-design.md (phase 7 row 7.2, issue #211). When the ledger
-# knows a payment (a committed row wearing a check number), the engine records
-# the BillPayment in the accounting system so the bank-feed line arrives
-# pre-matched. One check paying N bills is ONE BillPayment applying to N bills.
-# Behind a card (invariant 7), provenance in PrivateNote (W1 rule 1),
-# duplicate-guarded (rule 2), read back, idempotent, and never a settle: Paid
-# comes from clearing evidence (rows 7.1 and 7.3), never from this job (rule 3).
-#
-# Record-then-call-then-record (honesty audit 2026-09-03, 03-F9): a started
-# record is committed BEFORE the create call and a done record the instant it
-# returns, so a death anywhere leaves a trail the next run heals from (its own
-# records first, then the engine:<key> note the accounting system holds)
-# instead of writing the same check twice.
-
-PAYMENT_CARD = "ap.qbo_payment_batch"
-PAYMENT_EVENT = "ap.qbo.payment_created"
-PAYMENT_WRITE_STARTED = "ap.qbo.payment_write.started"
-PAYMENT_WRITE_DONE = "ap.qbo.payment_write.done"
-# W1 rule 2's window for payments: a same-vendor, same-amount money-out
-# record this close to the scheduled date is the owner's own match-click or
-# hand entry, so the engine parks instead of writing.
-PAYMENT_DUP_WINDOW_DAYS = 14
+def _qbo_push_payments_run(ctx: JobContext) -> JobOutput:
+    return qbo_push_payments.run(ctx, lambda: _qbo_write_client(ctx))
 
 
-def _payment_engine_key(tenant: str, check: str) -> str:
-    """The write's idempotency key (design item 5) and, as ``engine:<key>``,
-    the PrivateNote provenance. ``check`` is the normalized reference, so
-    "Check 9058" and "9058" name one payment."""
-    return f"qbo-payment:{check}:{tenant}"
-
-
-def _payment_scope(ctx: JobContext) -> tuple[list[dict], list[dict]]:
-    """(checks to record, rows skipped) from the committed rows that carry a
-    check reference and no payment record yet.
-
-    A check is recorded whole or not at all: a row without a QBO bill (pre-W1
-    history) has nothing to apply a payment to, so its whole check is listed
-    as skipped; a reference that names more than one vendor cannot be one
-    BillPayment either. The payment date is the row's recorded date, else
-    the day the owner marked it Scheduled, else the tenant's today.
-    """
-    from .reconcile import norm_check_ref
-    from .registry import canonical_vendor as _canon
-    from .status import is_committed
-
-    rows = [
-        dict(r)
-        for r in ctx.ledger.conn.execute(
-            """
-            SELECT i.*,
-                   (SELECT MAX(h.created_at) FROM ap_status_history h
-                     WHERE h.invoice_id = i.id
-                       AND h.status_to IN ('Scheduled', 'Scheduled in bill pay')
-                       AND h.status_from != '(new row)') AS scheduled_at
-              FROM ap_invoices i
-             WHERE i.tenant = ? AND (i.qbo_payment_id IS NULL OR i.qbo_payment_id = '')
-               AND i.check_ref != '' AND i.amount_cents > 0
-             ORDER BY i.id
-            """,
-            (ctx.tenant_slug,),
-        ).fetchall()
-    ]
-    rows = [r for r in rows if is_committed(str(r["status"]))]
-    registry = _vendors(ctx)
-    by_check: dict[str, list[dict]] = {}
-    for row in rows:
-        by_check.setdefault(norm_check_ref(str(row["check_ref"])), []).append(row)
-
-    def _skip(members: list[dict], reason: str) -> None:
-        for r in members:
-            skipped.append(
-                {
-                    "row_id": r["id"],
-                    "vendor": str(r["vendor"]),
-                    "invoice_number": str(r["invoice_number"]),
-                    "check_ref": str(r["check_ref"]),
-                    "amount_cents": int(r["amount_cents"]),
-                    "reason": reason,
-                }
-            )
-
-    groups: list[dict] = []
-    skipped: list[dict] = []
-    for check, members in sorted(by_check.items()):
-        if not check:
-            _skip(members, "unusable check reference (nothing left after normalization)")
-            continue
-        missing = [r for r in members if not str(r["qbo_bill_id"] or "")]
-        if missing:
-            named = ", ".join(f"#{r['id']} {r['invoice_number']}" for r in missing)
-            _skip(
-                members,
-                f"no QBO bill for {named} (pre-W1 history): nothing to apply the "
-                "payment to, so the check is not recorded",
-            )
-            continue
-        if len({_canon(str(r["vendor"]), registry) for r in members}) > 1:
-            _skip(
-                members, "the check reference names more than one vendor; a payment has one payee"
-            )
-            continue
-        payment_date = max((str(r["payment_date"] or "")[:10] for r in members), default="")
-        if not payment_date:
-            payment_date = max((str(r["scheduled_at"] or "")[:10] for r in members), default="")
-        if not payment_date:
-            payment_date = _retry_day(ctx)
-        groups.append(
-            {
-                "check": check,
-                "check_ref": str(members[0]["check_ref"]),
-                "vendor": str(members[0]["vendor"]),
-                "row_ids": [int(r["id"]) for r in members],
-                "invoice_numbers": [str(r["invoice_number"]) for r in members],
-                "qbo_bill_ids": [str(r["qbo_bill_id"]) for r in members],
-                "amount_cents": sum(int(r["amount_cents"]) for r in members),
-                "payment_date": payment_date,
-                "engine_key": _payment_engine_key(ctx.tenant_slug, check),
-                "rows": members,
-            }
-        )
-    return groups, skipped
-
-
-def _payment_card_entry(group: dict) -> dict:
-    """The structured check entry a card carries (7.1's ``payments`` shape:
-    execution never re-parses display text)."""
-    return {k: v for k, v in group.items() if k != "rows"}
-
-
-def _payment_approved_checks(ctx: JobContext) -> dict[str, dict]:
-    """Normalized check -> the approved card's entry for it (plus card id)."""
-    covered: dict[str, dict] = {}
-    cards = ctx.ledger.conn.execute(
-        "SELECT id, params_json FROM approval_queue "
-        "WHERE tenant = ? AND action_type = ? AND status = 'approved' ORDER BY id",
-        (ctx.tenant_slug, PAYMENT_CARD),
-    ).fetchall()
-    for card in cards:
-        params = json.loads(card["params_json"])
-        for entry in params.get("checks") or []:
-            if isinstance(entry, dict) and entry.get("check"):
-                covered[str(entry["check"])] = {**entry, "card_id": int(card["id"])}
-    return covered
-
-
-def _payment_card_covers(entry: dict | None, group: dict) -> bool:
-    """An approval covers exactly the rows and amount the owner saw; a check
-    whose scope moved since (a row added, an amount changed) parks afresh."""
-    if entry is None:
-        return False
-    try:
-        same_rows = sorted(int(i) for i in entry.get("row_ids", [])) == sorted(group["row_ids"])
-        same_amount = int(entry.get("amount_cents", -1)) == int(group["amount_cents"])
-    except (TypeError, ValueError):
-        return False
-    return same_rows and same_amount
-
-
-def check_payment_batch(ledger, tenant: str, params: dict) -> str | None:
-    """Approval-time check (``APPROVAL_CHECKS``, the 7.1 shape): a card whose
-    every check has since been recorded or settled is refused at the queue,
-    never approved-and-stuck. Nothing else is asked of the owner."""
-    from .status import is_committed
-
-    checks = params.get("checks")
-    if not isinstance(checks, list) or not checks:
-        return "this card carries no check detail; reject it and let the next run park a fresh one"
-    for entry in checks:
-        for raw in (entry or {}).get("row_ids", []) or []:
-            row = ledger.conn.execute(
-                "SELECT status, qbo_payment_id FROM ap_invoices WHERE tenant = ? AND id = ?",
-                (tenant, int(raw)),
-            ).fetchone()
-            if row is not None and is_committed(str(row["status"])) and not row["qbo_payment_id"]:
-                return None
-    return (
-        "nothing on this card is still writable: every row is settled or already carries "
-        "a payment record; reject it"
-    )
-
-
-APPROVAL_CHECKS[PAYMENT_CARD] = check_payment_batch
-
-
-def _payment_open_writes(ctx: JobContext) -> set[str]:
-    """Engine keys with a started record and no done record: a run died
-    between the create call and its outcome."""
-    started = {r["payload"].get("engine_key", "") for r in ctx.records(PAYMENT_WRITE_STARTED)}
-    closed = {r["payload"].get("engine_key", "") for r in ctx.records(PAYMENT_WRITE_DONE)}
-    return {k for k in started - closed if k}
-
-
-def _payment_rejected_keys(ctx: JobContext) -> set[str]:
-    """Engine keys whose latest outcome is an API rejection (no id)."""
-    latest: dict[str, str] = {}
-    for rec in ctx.records(PAYMENT_WRITE_DONE):
-        key = str(rec["payload"].get("engine_key", ""))
-        latest[key] = str(rec["payload"].get("qbo_payment_id", "") or "")
-    return {k for k, pid in latest.items() if k and not pid}
-
-
-def _qbo_push_payments_key(ctx: JobContext) -> str:
-    """Re-runs when the scope changes OR when an approval lands (the W1
-    shape). A rejected check re-runs once a day (the intake ``_retry_day``
-    rule) instead of replaying its rejection forever."""
-    key = RunKey(ctx, "qbopushpayments")
-    key.config("qbo")
-    key.config("close.bank_account")  # the account every BillPayment is drawn on
-    key.config("identity.timezone")  # the payment-date fallback and the retry day
-    key.param("qbo_token_file")
-    key.vendors(_vendors(ctx))
-    if not ctx.tenant.qbo.payment_records:
-        return key.digest()
-    groups, skipped = _payment_scope(ctx)
-    key.value(
-        "scope",
-        [
-            f"{g['check']}:{','.join(str(i) for i in g['row_ids'])}:{g['amount_cents']}:"
-            f"{','.join(g['qbo_bill_ids'])}:{g['payment_date']}"
-            for g in groups
-        ],
-    )
-    key.value("skipped", sorted(str(s["row_id"]) for s in skipped))
-    approved = _payment_approved_checks(ctx)
-    key.value("approved", sorted(f"{c}:{e['card_id']}" for c, e in approved.items()))
-    rejected = _payment_rejected_keys(ctx)
-    if any(g["engine_key"] in rejected for g in groups):
-        key.value("retry_day", _retry_day(ctx))
-    return key.digest()
-
-
-def _bill_payment_payload(group: dict, vendor_id: str, bank_account_id: str) -> dict:
-    """One BillPayment by check: a Line per bill, each linked to its Bill,
-    the check number as DocNumber, the engine key as provenance."""
-    return {
-        "VendorRef": {"value": vendor_id},
-        "PayType": "Check",
-        "CheckPayment": {"BankAccountRef": {"value": bank_account_id}},
-        "TotalAmt": round(group["amount_cents"] / 100, 2),
-        "TxnDate": group["payment_date"],
-        "DocNumber": str(group["check_ref"])[:21],
-        "PrivateNote": f"engine:{group['engine_key']}",
-        "Line": [
-            {
-                "Amount": round(int(r["amount_cents"]) / 100, 2),
-                "LinkedTxn": [{"TxnId": str(r["qbo_bill_id"]), "TxnType": "Bill"}],
-            }
-            for r in group["rows"]
-        ],
-    }
-
-
-def _linked_bill_ids(obj: dict) -> list[str]:
-    return sorted(
-        {
-            str(t.get("TxnId", ""))
-            for line in obj.get("Line") or []
-            for t in line.get("LinkedTxn") or []
-            if str(t.get("TxnType", "")) == "Bill"
-        }
-    )
-
-
-def _readback_bill_payment(
-    client, payment_id: str, group: dict, vendor_id: str
-) -> tuple[bool, str]:
-    """Read a just-created BillPayment back and compare amount, vendor, and
-    the set of linked bills with what was sent. Never raises: the record
-    exists whatever the readback does, and the caller has already
-    remembered its id (02-F1)."""
-    try:
-        readback = client.get_bill_payment(payment_id)
-    except Exception as exc:  # any transport failure, not only the API's own errors
-        return False, f"readback failed: {exc}"
-    problems: list[str] = []
-    expected = round(group["amount_cents"] / 100, 2)
-    got = readback.get("TotalAmt")
-    try:
-        if round(float(got), 2) != expected:
-            problems.append(f"amount {got!r}, expected {expected}")
-    except (TypeError, ValueError):
-        problems.append(f"amount {got!r}, expected {expected}")
-    got_vendor = str((readback.get("VendorRef") or {}).get("value", ""))
-    if got_vendor != str(vendor_id):
-        problems.append(f"vendor {got_vendor!r}, expected {vendor_id!r}")
-    linked = _linked_bill_ids(readback)
-    if linked != sorted(group["qbo_bill_ids"]):
-        problems.append(f"linked bills {linked}, expected {sorted(group['qbo_bill_ids'])}")
-    if problems:
-        return False, "readback " + "; ".join(problems)
-    return True, "readback ok"
-
-
-def _qbo_push_payments_run(ctx: JobContext) -> JobOutput:  # noqa: C901  # complexity 28, tracked debt
-    from datetime import timedelta
-
-    from .reconcile import _to_date
-    from .registry import canonical_vendor as _canon
-
-    if not ctx.tenant.qbo.payment_records:
-        return JobOutput(
-            status="ok",
-            summary="qbo-push-payments: off ([qbo].payment_records = false); no card, no write",
-        )
-
-    groups, skipped = _payment_scope(ctx)
-    events: list[EventSpec] = []
-    approvals: list[ApprovalSpec] = []
-    anomalies: list[Anomaly] = []
-    actions: list[str] = []
-    for s in skipped:
-        actions.append(
-            f"skipped row #{s['row_id']} {s['vendor']} / {s['invoice_number']} "
-            f"(check {s['check_ref']}): {s['reason']}"
-        )
-    skip_note = f", skipped {len(skipped)}" if skipped else ""
-
-    def _label(g: dict) -> str:
-        return (
-            f"check {g['check_ref']} {g['vendor']} ${g['amount_cents'] / 100:,.2f} "
-            f"({len(g['row_ids'])} bill(s))"
-        )
-
-    if not groups:
-        return JobOutput(
-            status="ok", summary=f"qbo-push-payments: nothing to record{skip_note}", actions=actions
-        )
-
-    if ctx.shadow:
-        for g in groups:
-            actions.append(f"would record {_label(g)}")
-        return JobOutput(
-            status="ok",
-            summary=f"qbo-push-payments: would record {len(groups)}{skip_note}",
-            actions=actions,
-        )
-
-    covered = _payment_approved_checks(ctx)
-    batch = [g for g in groups if _payment_card_covers(covered.get(g["check"]), g)]
-
-    if not batch:
-        # One card for the whole outstanding scope; nothing writes until the
-        # owner approves it (invariant 7). Skipped rows ride the card so the
-        # owner sees the boundary (design: "skipped: no QBO bill").
-        listing = "; ".join(
-            f"check {g['check_ref']} {g['vendor']} ${g['amount_cents'] / 100:,.2f} "
-            f"-> {', '.join(g['invoice_numbers'])}"
-            for g in groups
-        )
-        fingerprint = "|".join(
-            f"{g['check']}:{','.join(str(i) for i in sorted(g['row_ids']))}:"
-            f"{g['amount_cents']}:{','.join(sorted(g['qbo_bill_ids']))}"
-            for g in groups
-        )
-        approvals.append(
-            ApprovalSpec(
-                key=f"qbopay:{hashlib.sha256(fingerprint.encode()).hexdigest()[:16]}",
-                action_type=PAYMENT_CARD,
-                params={
-                    "count": str(len(groups)),
-                    "checks": [_payment_card_entry(g) for g in groups],
-                    "listing": listing,
-                    "check_refs": ",".join(g["check_ref"] for g in groups),
-                    "skipped": skipped,
-                    "skipped_text": "; ".join(
-                        f"#{s['row_id']} {s['vendor']} {s['invoice_number']} "
-                        f"(check {s['check_ref']}): {s['reason']}"
-                        for s in skipped
-                    ),
-                },
-                reason="payment records ready to record in the accounting system",
-            )
-        )
-        return JobOutput(
-            status="ok",
-            summary=f"qbo-push-payments: {len(groups)} check(s) awaiting approval{skip_note}",
-            approvals=approvals,
-            actions=actions,
-        )
-
-    from ...adapters.qbo import QboApiError
-
-    client = _qbo_write_client(ctx)
-    registry = _vendors(ctx)
-    vendor_map = {_canon(v["display_name"], registry): v["id"] for v in client.fetch_vendors()}
-    bank_name = str(ctx.tenant.close.bank_account or "")
-    account_map = {a["fully_qualified_name"]: a["id"] for a in client.fetch_accounts()}
-    bank_id = account_map.get(bank_name) if bank_name else None
-    if bank_id is None:
-        approvals.append(
-            ApprovalSpec(
-                key="qbomap:a:bank",
-                action_type="ap.qbo_map_account",
-                params={
-                    "gl_account": bank_name or "(unset)",
-                    "role": "payment bank account ([close].bank_account)",
-                },
-                reason=(
-                    "no chart account matches the tenant's bank account; every payment "
-                    "record is drawn on it, so nothing writes"
-                ),
-            )
-        )
-        return JobOutput(
-            status="ok",
-            summary=f"qbo-push-payments: recorded 0, parked {len(batch)} "
-            f"(bank account unmapped){skip_note}",
-            approvals=approvals,
-            actions=actions,
-        )
-
-    earliest = min(_to_date(g["payment_date"]) or _to_date(_retry_day(ctx)) for g in batch)
-    recent = client.fetch_recent_payments(
-        since=(earliest - timedelta(days=PAYMENT_DUP_WINDOW_DAYS)).isoformat()
-    )
-    done_by_key = {
-        str(r["payload"].get("engine_key", "")): r["payload"]
-        for r in ctx.records(PAYMENT_WRITE_DONE)
-        if r["payload"].get("qbo_payment_id")
-    }
-    open_writes = _payment_open_writes(ctx)
-    window = timedelta(days=PAYMENT_DUP_WINDOW_DAYS)
-
-    recorded = healed = parked = unverified = 0
-    for g in batch:
-        label = _label(g)
-        key = g["engine_key"]
-        note = f"engine:{key}"
-        vendor_token = _canon(g["vendor"], registry)
-        vendor_id = vendor_map.get(vendor_token)
-        if vendor_id is None:
-            parked += 1
-            approvals.append(
-                ApprovalSpec(
-                    key=f"qbomap:v:pay:{g['check']}",
-                    action_type="ap.qbo_map_vendor",
-                    params={
-                        "check_ref": g["check_ref"],
-                        "vendor": g["vendor"],
-                        "row_ids": ",".join(str(i) for i in g["row_ids"]),
-                    },
-                    reason="no accounting-system vendor matches this name; map or create it",
-                )
-            )
-            continue
-
-        payment_id = ""
-        source = ""
-        verified: bool | None = None
-        readback_note = ""
-        # Heal 1: a done record names a payment the rows never received (a
-        # death between the record and the row update). Same rows, same
-        # amount, or it is not this write.
-        prior = done_by_key.get(key)
-        if prior is not None and _payment_card_covers(prior, g):
-            payment_id, source = str(prior["qbo_payment_id"]), "its job record"
-        else:
-            # Heal 2: the accounting system already holds the engine's key
-            # (a death between the create call and the record). The query
-            # row is the readback; a key match on a different vendor or
-            # amount is a reused check number, never adopted.
-            mine = next((t for t in recent if str(t.get("private_note", "")) == note), None)
-            if mine is not None:
-                if _canon(str(mine["vendor"]), registry) == vendor_token and int(
-                    mine["amount_cents"]
-                ) == int(g["amount_cents"]):
-                    payment_id, source = str(mine["qbo_id"]).split(":", 1)[-1], "the note"
-                    linked = sorted(str(b) for b in mine.get("linked_bill_ids") or [])
-                    verified = linked == sorted(g["qbo_bill_ids"])
-                    readback_note = (
-                        "readback ok"
-                        if verified
-                        else f"readback linked bills {linked}, expected {sorted(g['qbo_bill_ids'])}"
-                    )
-                    ctx.record_now(
-                        f"paywrite:{g['check']}:done",
-                        PAYMENT_WRITE_DONE,
-                        {
-                            "engine_key": key,
-                            "qbo_payment_id": payment_id,
-                            "check_ref": g["check_ref"],
-                            "row_ids": g["row_ids"],
-                            "amount_cents": g["amount_cents"],
-                            "healed": True,
-                        },
-                    )
-                else:
-                    parked += 1
-                    anomalies.append(
-                        Anomaly(
-                            code="ap.qbo.payment_key_collision",
-                            detail=(
-                                f"{label}: {mine['qbo_id']} already carries {note} for a "
-                                f"different vendor or amount (a reused check number); "
-                                "not adopted, not written; a human looks"
-                            ),
-                        )
-                    )
-                    continue
-
-        if not payment_id:
-            pay_date = _to_date(g["payment_date"])
-            lookalike = None
-            for txn in recent:
-                if _canon(str(txn["vendor"]), registry) != vendor_token:
-                    continue
-                if int(txn["amount_cents"]) != int(g["amount_cents"]):
-                    continue
-                txn_date = _to_date(txn.get("date"))
-                if pay_date and txn_date and abs(txn_date - pay_date) > window:
-                    continue
-                lookalike = txn
-                break
-            if lookalike is not None:
-                parked += 1
-                approvals.append(
-                    ApprovalSpec(
-                        key=f"qbopaydup:{g['check']}",
-                        action_type="ap.qbo_duplicate_review",
-                        params={
-                            "check_ref": g["check_ref"],
-                            "vendor": g["vendor"],
-                            "amount": f"${g['amount_cents'] / 100:,.2f}",
-                            "existing": str(lookalike["qbo_id"]),
-                            "row_ids": ",".join(str(i) for i in g["row_ids"]),
-                        },
-                        reason=(
-                            "a same-vendor, same-amount record already exists inside the "
-                            f"{PAYMENT_DUP_WINDOW_DAYS}-day window (the owner's own match or "
-                            "entry, most likely); a human decides, never a write"
-                        ),
-                    )
-                )
-                continue
-            if key in open_writes:
-                anomalies.append(
-                    Anomaly(
-                        code="ap.qbo.payment_write_retried",
-                        detail=(
-                            f"{label}: a prior run started this write and never recorded "
-                            f"its outcome; the accounting system holds nothing carrying "
-                            f"{note}, so the write is retried"
-                        ),
-                    )
-                )
-            # The record half, durable before the call (03-F9).
-            ctx.record_now(
-                f"paywrite:{g['check']}:started",
-                PAYMENT_WRITE_STARTED,
-                {
-                    "engine_key": key,
-                    "check_ref": g["check_ref"],
-                    "vendor": g["vendor"],
-                    "amount_cents": g["amount_cents"],
-                    "row_ids": g["row_ids"],
-                    "qbo_bill_ids": g["qbo_bill_ids"],
-                    "payment_date": g["payment_date"],
-                },
-            )
-            try:
-                created = client.create_bill_payment(_bill_payment_payload(g, vendor_id, bank_id))
-            except QboApiError as exc:
-                # A per-check rejection parks THAT check and the batch keeps
-                # writing (the 2026-07-20 lesson). The done record closes
-                # the started one so the next run retries plainly.
-                parked += 1
-                ctx.record_now(
-                    f"paywrite:{g['check']}:done",
-                    PAYMENT_WRITE_DONE,
-                    {"engine_key": key, "qbo_payment_id": "", "rejected": str(exc)},
-                )
-                anomalies.append(Anomaly(code="ap.qbo.payment_rejected", detail=f"{label}: {exc}"))
-                continue
-            # #314: same guard as the Bill/Purchase create paths.
-            # #314: same guard as the Bill/Purchase create paths.
-            payment_id = str(created.get("Id") or "")
-            if not payment_id:
-                # A create that answered without an Id: nothing safe to
-                # assume. The started record stands; the next run looks for
-                # the key in the accounting system before writing (02-F1).
-                anomalies.append(
-                    Anomaly(
-                        code="ap.qbo.payment_create_unconfirmed",
-                        detail=f"{label}: create returned no Id; batch stopped",
-                    )
-                )
-                break
-            # The record half after the call, BEFORE the readback and the
-            # row update: the BillPayment exists the instant create returns.
-            ctx.record_now(
-                f"paywrite:{g['check']}:done",
-                PAYMENT_WRITE_DONE,
-                {
-                    "engine_key": key,
-                    "qbo_payment_id": payment_id,
-                    "check_ref": g["check_ref"],
-                    "row_ids": g["row_ids"],
-                    "amount_cents": g["amount_cents"],
-                },
-            )
-
-        for rid in g["row_ids"]:
-            store.record_qbo_ids(ctx.ledger, invoice_id=rid, payment_id=f"BillPayment:{payment_id}")
-        if verified is None:
-            verified, readback_note = _readback_bill_payment(client, payment_id, g, vendor_id)
-        events.append(
-            EventSpec(
-                key=f"qbopay:{key}",
-                event_type=PAYMENT_EVENT,
-                payload={
-                    "check_ref": g["check_ref"],
-                    "vendor": g["vendor"],
-                    "amount_cents": g["amount_cents"],
-                    "qbo_payment_id": payment_id,
-                    "qbo_id": f"BillPayment:{payment_id}",
-                    "invoice_ids": g["row_ids"],
-                    "invoice_numbers": g["invoice_numbers"],
-                    "qbo_bill_ids": g["qbo_bill_ids"],
-                    "payment_date": g["payment_date"],
-                    "engine_key": key,
-                    "verified": verified,
-                    "readback": readback_note,
-                    "healed": bool(source),
-                },
-            )
-        )
-        if not verified:
-            code = (
-                "ap.qbo.payment_readback_failed"
-                if readback_note.startswith("readback failed")
-                else "ap.qbo.payment_readback_mismatch"
-            )
-            anomalies.append(
-                Anomaly(
-                    code=code,
-                    detail=f"BillPayment {payment_id} for {label}: {readback_note}; id kept on "
-                    "every covered row, verify in the accounting system; batch stopped",
-                )
-            )
-            unverified += 1
-            actions.append(
-                f"recorded {label} -> BillPayment {payment_id} (UNVERIFIED: {readback_note})"
-            )
-            break  # the transport or the book is unhealthy; the rest waits
-        if source:
-            healed += 1
-            actions.append(f"healed {label} -> BillPayment {payment_id} (adopted from {source})")
-        else:
-            recorded += 1
-            actions.append(f"recorded {label} -> BillPayment {payment_id}")
-
-    summary = f"qbo-push-payments: recorded {recorded}, healed {healed}, parked {parked}"
-    if unverified:
-        summary = (
-            f"qbo-push-payments: recorded {recorded}, healed {healed}, "
-            f"unverified {unverified}, parked {parked}"
-        )
-    return JobOutput(
-        status="ok",
-        summary=summary + skip_note,
-        actions=actions,
-        events=events,
-        approvals=approvals,
-        anomalies=anomalies,
-    )
+APPROVAL_CHECKS[qbo_push_payments.PAYMENT_CARD] = qbo_push_payments.check_payment_batch
 
 
 # ---- the sweep lane (phase 7 row 7.4, issue #213) --------------------------
@@ -4955,7 +4022,7 @@ JOBS: dict[str, JobHandler] = {
     "identify": JobHandler(key=_identify_key, run=_identify_run),
     "janitor": JobHandler(key=_janitor_key, run=_janitor_run),
     "reconcile": JobHandler(key=_reconcile_key, run=_reconcile_run),
-    "qbo-push": JobHandler(key=_qbo_push_key, run=_qbo_push_run),
-    "qbo-push-payments": JobHandler(key=_qbo_push_payments_key, run=_qbo_push_payments_run),
+    "qbo-push": JobHandler(key=qbo_push.run_key, run=_qbo_push_run),
+    "qbo-push-payments": JobHandler(key=qbo_push_payments.run_key, run=_qbo_push_payments_run),
     "sweep-cards": JobHandler(key=_sweep_cards_key, run=_sweep_cards_run),
 }
