@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -44,6 +44,10 @@ class JobContext:
     # The run's idempotency key, set by the runner once computed (empty while
     # the key itself is being built). Namespaces job records.
     run_key: str = ""
+    # The tenant's authority.toml as an ``authority_gate.TenantAuthority``,
+    # or None when it has none (#435); lanes read it in place of their
+    # ``unattended`` lists.
+    authority: Any = None
 
     def record_now(self, key: str, record_type: str, payload: dict) -> bool:
         """Durable AT ONCE, not at return (honesty audit #170, 03-F9): the
@@ -92,6 +96,11 @@ class ApprovalSpec(BaseModel):
     # 99e8ae57). The lane only declares; the runner closes each as
     # ``superseded``, same agent and action type, pending rows only.
     supersedes_keys: list[str] = Field(default_factory=list)
+    # Set only for a tenant with authority.toml (#435): the lane's agent
+    # holds the grant, so the card is written already decided by it, with
+    # the evaluator's reason. Empty (always, without the file): it waits.
+    decided_by: str = ""
+    decided_reason: str = ""
 
 
 class JobOutput(BaseModel):

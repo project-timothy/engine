@@ -1,0 +1,142 @@
+# The onboarding conversation (docs/tenant-kit-design.md, section 6).
+#
+# An agent asks these, in this order, in its own words if it likes; the
+# engine holds the rules. `sizes` and `families` limit a question to the
+# shapes it fits (absent = every shape). `defaults` gives a per-shape
+# default; `default` is the fallback. Kinds: choice, text, timezone, month,
+# amount, list, role (one of the shape's people roles), people (name = role lines).
+# No question names the machinery: the person never hears "role", "scope" or
+# "permission" unless they ask.
+
+[[question]]
+id = "who"
+ask = "Who is this for?"
+kind = "choice"
+choices = [
+    { label = "Just me, running a business", value = "commercial-solo" },
+    { label = "My business, with a few people", value = "commercial-small" },
+    { label = "A company with departments", value = "commercial-organization" },
+    { label = "Just me, a missionary or ministry worker with my own nonprofit", value = "nonprofit-solo" },
+    { label = "Our church", value = "nonprofit-small" },
+    { label = "Our ministry organization", value = "nonprofit-organization" },
+]
+
+[[question]]
+id = "legal_name"
+ask = "What is the legal name, the one on your tax filings?"
+help = "For a ministry, the name on its IRS determination letter."
+kind = "text"
+
+[[question]]
+id = "your_name"
+ask = "And what's your name?"
+kind = "text"
+
+[[question]]
+id = "your_role"
+ask = "What do you do there?"
+help = "Pick the closest; it decides what you'll be asked to okay."
+kind = "role"
+sizes = ["small", "organization"]
+
+[[question]]
+id = "timezone"
+ask = "What time zone are you in?"
+help = "A city or a country is fine, like Kathmandu, Nairobi or Eastern."
+kind = "timezone"
+default = "America/New_York"
+
+[[question]]
+id = "fiscal_start"
+ask = "What month does your financial year start?"
+help = "1 is January. Most businesses and churches use 1."
+kind = "month"
+default = "1"
+
+[[question]]
+id = "entity"
+ask = "How is the business set up for taxes?"
+kind = "choice"
+families = ["commercial"]
+default = ""
+choices = [
+    { label = "S corporation", value = "s-corp" },
+    { label = "Partnership or multi-member LLC", value = "partnership" },
+    { label = "C corporation", value = "c-corp" },
+    { label = "Sole proprietor or single-member LLC", value = "sole-proprietor" },
+    { label = "Not sure yet", value = "" },
+]
+
+[[question]]
+id = "entity_nonprofit"
+ask = "Is it a church, or a charity that files a Form 990?"
+kind = "choice"
+families = ["nonprofit"]
+default = "public-charity"
+defaults = { nonprofit-small = "church" }
+choices = [
+    { label = "A church", value = "church" },
+    { label = "A charity that files a Form 990", value = "public-charity" },
+]
+
+[[question]]
+id = "work"
+ask = "How does the work get paid for?"
+kind = "choice"
+families = ["commercial"]
+default = "A"
+choices = [
+    { label = "Projects, each with its own number", value = "A" },
+    { label = "Jobs in the field, construction or service calls", value = "B" },
+    { label = "Clients on retainers or campaigns", value = "C" },
+]
+
+[[question]]
+id = "reviewer"
+ask = "Does anyone look over your spending, like a sponsor, a board member or an accountant? Their name, or leave it blank."
+help = "They'll get a short monthly review of what was paid, instead of okaying each item. Add their email and Tim can invite them."
+kind = "person"
+sizes = ["solo"]
+optional = true
+default = ""
+
+[[question]]
+id = "second_person_above"
+ask = "Up to what amount can someone okay their own bill? Above it, a second person does."
+kind = "amount"
+sizes = ["small"]
+default = "500"
+
+[[question]]
+id = "two_approvals_above"
+ask = "Above what amount should a bill need two people to okay it?"
+kind = "amount"
+sizes = ["small", "organization"]
+default = "10000"
+defaults = { commercial-small = "5000", nonprofit-small = "2500" }
+
+[[question]]
+id = "people"
+ask = "Who else is involved, and what do they do? One per line, like: Sam Lee = board"
+help = "You can add people later; just ask."
+kind = "people"
+sizes = ["small", "organization"]
+optional = true
+default = ""
+
+[[question]]
+id = "banned_words"
+ask = "Are there words you never want to see in something written for you?"
+kind = "list"
+optional = true
+default = ""
+
+[[question]]
+id = "spelling"
+ask = "American or British spelling?"
+kind = "choice"
+default = "en-US"
+choices = [
+    { label = "American", value = "en-US" },
+    { label = "British", value = "en-GB" },
+]

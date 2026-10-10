@@ -7,7 +7,16 @@ still owed, did this morning's run work. Boundary classification
 explain the answer; the answer itself is computed here, every money value is
 an exact decimal string, and every row names its source so it can be traced
 to the books. Nothing here writes: the ledger is opened read-only and the run
-lock is never taken, so a question mid-run neither blocks nor is blocked.
+lock is never taken, so a question mid-run neither blocks nor is blocked. The
+one exception is ``decide_card``, offered only on the box's door with a
+doorkeeper (``decider``), which writes through core/tools/decide.py and only
+on the person's own Face ID.
+
+With a ``viewer`` (core/tools/viewer.py), the tools answer as that person:
+each row reaches them only when authority.toml lets them view its resource
+in its unit, totals count only those rows, and a tool whose rows they could
+never see is not offered. Without one, they answer for the whole tenant (the
+owner's own local use).
 """
 
 from __future__ import annotations
@@ -23,6 +32,9 @@ from typing import Any
 
 from ..agents.deadlines.jobs import DONE_EVENT, open_occurrences, tier_for
 from ..agents.deadlines.schema import DEFAULT_LEAD_DAYS, load_obligations
+from ..authority import UNDESCRIBED
+from ..engine.registry import load_card_authority
+from .viewer import Viewer, unit_of
 
 CLOSED_STATUSES = ("Paid", "Cancelled", "Void - Already Paid", "Void - Duplicate")
 
@@ -37,7 +49,8 @@ class ToolSpec:
     name: str
     description: str
     schema: dict
-    fn: Callable[[Tools, dict], dict]
+    fn: Callable[[Any, dict], dict]
+    annotations: dict | None = None  # MCP tool hints; None = read-only, closed world
 
 
 def _int(args: dict, key: str, default: int, lo: int = 1, hi: int = 500) -> int:
@@ -55,10 +68,16 @@ class Tools:
     obligations_file: Path | None = None
     today: str | None = None
     lead_days: tuple[int, ...] = DEFAULT_LEAD_DAYS
+    viewer: Viewer | None = None
+    decider: Any = None  # core/tools/decide.Decider, on the box's door only
     _specs: dict[str, ToolSpec] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._specs = {spec.name: spec for spec in SPECS}
+        self._specs = {
+            spec.name: spec for spec in SPECS if spec.name not in BOOKS_TOOLS or self.sees("books")
+        }
+        if self.decider is not None and self.decider.offered():
+            self._specs[DECIDE.name] = DECIDE
 
     # -- plumbing --------------------------------------------------------------
 
@@ -67,7 +86,7 @@ class Tools:
 
     def call(self, name: str, args: dict | None = None) -> dict:
         if name not in self._specs:
-            raise KeyError(f"no tool {name!r}; tools: {', '.join(TOOL_NAMES)}")
+            raise KeyError(f"no tool {name!r}; tools: {', '.join(self._specs)}")
         return self._specs[name].fn(self, dict(args or {}))
 
     def _db(self) -> sqlite3.Connection:
@@ -87,6 +106,16 @@ class Tools:
 
     def _today(self) -> date:
         return date.fromisoformat(self.today) if self.today else date.today()
+
+    def sees(self, resource: str, unit: str = "") -> bool:
+        """Whether the person asking may view this row; always, with no viewer."""
+        return self.viewer is None or self.viewer.sees(resource, unit)
+
+    def _cap(self, limit: int) -> int:
+        """The SQL LIMIT: the caller's, or none when rows are filtered after
+        the query (a limit before the filter could hide what the person may
+        see behind rows they may not)."""
+        return limit if self.viewer is None else -1
 
 
 # ---- the tools ---------------------------------------------------------------------
@@ -110,6 +139,8 @@ def _deadlines(t: Tools, args: dict) -> dict:
     }
     rows = []
     for ob in load_obligations(Path(path)):
+        if not t.sees("calendar", unit_of(ob.who)):
+            continue
         leads = ob.leads(t.lead_days)
         for due in open_occurrences(ob, today=today, leads=[days], done=done):
             left = (due - today).days
@@ -137,8 +168,9 @@ def _waiting_cards(t: Tools, args: dict) -> dict:
     rows = t._rows(
         "SELECT id, agent, action_type, params_json, status, created_at FROM approval_queue "
         "WHERE tenant = ? AND status = 'pending' ORDER BY id LIMIT ?",
-        (t.tenant, limit),
+        (t.tenant, t._cap(limit)),
     )
+    rows = [r for r in rows if _card_visible(t, r)][:limit]
     return {
         "rows": [
             {
@@ -153,6 +185,22 @@ def _waiting_cards(t: Tools, args: dict) -> dict:
             for r in rows
         ]
     }
+
+
+def _card_visible(t: Tools, r: sqlite3.Row) -> bool:
+    """A card is seen as the thing it decides: its rule's resource, in the
+    unit of the person it is about."""
+    if t.viewer is None:
+        return True
+    rule = load_card_authority(str(r["agent"])).get(str(r["action_type"]), UNDESCRIBED)
+    params = json.loads(r["params_json"] or "{}")
+    unit = unit_of(str(params.get(rule.submitter, ""))) if rule.submitter else ""
+    return t.sees(rule.resource, unit)
+
+
+def _invoice_visible(t: Tools, r: sqlite3.Row) -> bool:
+    """A vendor bill is the tenant's own unless it carries a project."""
+    return t.sees("ap.invoice", str(r["project"] or ""))
 
 
 def _invoice_row(r: sqlite3.Row) -> dict:
@@ -182,9 +230,9 @@ def _open_payables(t: Tools, args: dict) -> dict:
     rows = t._rows(
         f"SELECT {_INVOICE_COLS} FROM ap_invoices WHERE tenant = ? AND shadow = 0 "
         f"AND status NOT IN ({marks}) ORDER BY COALESCE(due_date, '9999'), id LIMIT ?",
-        (t.tenant, *CLOSED_STATUSES, limit),
+        (t.tenant, *CLOSED_STATUSES, t._cap(limit)),
     )
-    out = [_invoice_row(r) for r in rows]
+    out = [_invoice_row(r) for r in rows if _invoice_visible(t, r)][:limit]
     total = sum((Decimal(r["amount"]) for r in out), Decimal("0"))
     return {"rows": out, "total": f"{total:.2f}"}
 
@@ -198,9 +246,9 @@ def _find_invoices(t: Tools, args: dict) -> dict:
     rows = t._rows(
         f"SELECT {_INVOICE_COLS} FROM ap_invoices WHERE tenant = ? AND shadow = 0 "
         "AND (vendor LIKE ? OR invoice_number LIKE ?) ORDER BY invoice_date DESC, id DESC LIMIT ?",
-        (t.tenant, like, like, limit),
+        (t.tenant, like, like, t._cap(limit)),
     )
-    return {"rows": [_invoice_row(r) for r in rows]}
+    return {"rows": [_invoice_row(r) for r in rows if _invoice_visible(t, r)][:limit]}
 
 
 def _recent_runs(t: Tools, args: dict) -> dict:
@@ -260,8 +308,9 @@ def _expense_reports(t: Tools, args: dict) -> dict:
     rows = t._rows(
         "SELECT id, person, month, total_cents, status, reimbursed_date, cleared_date "
         "FROM expense_report WHERE tenant = ? AND shadow = 0 ORDER BY id DESC LIMIT ?",
-        (t.tenant, limit),
+        (t.tenant, t._cap(limit)),
     )
+    rows = [r for r in rows if t.sees("expense.report", unit_of(r["person"]))][:limit]
     return {
         "rows": [
             {
@@ -336,3 +385,34 @@ SPECS: tuple[ToolSpec, ...] = (
 )
 
 TOOL_NAMES: tuple[str, ...] = tuple(s.name for s in SPECS)
+
+
+def _decide(t: Tools, args: dict) -> dict:
+    return t.decider.decide(t, args)
+
+
+DECIDE = ToolSpec(
+    "decide_card",
+    "Approve or reject one waiting card as the signed-in person. The first call returns a "
+    "link: the person opens it on their phone, reads the card, and taps the button with Face "
+    "ID or a fingerprint. Call again with the same card and decision once they say they're "
+    "done, and the card is decided. Nothing is decided without their own tap.",
+    _schema(
+        {
+            "card": {"type": "integer", "minimum": 1},
+            "decision": {"type": "string", "enum": ["approve", "reject"]},
+        },
+        ["card", "decision"],
+    ),
+    _decide,
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "openWorldHint": False,
+    },
+)
+
+BOOKS_TOOLS = frozenset({"recent_runs", "close_status"})
+"""Tools about the books as a whole (the runs, the month's lock): offered
+only to a person who may view the books in every unit."""

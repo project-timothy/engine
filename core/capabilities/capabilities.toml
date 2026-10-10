@@ -1,0 +1,75 @@
+# What Tim does, in the words a missionary or treasurer would use.
+# `engine capabilities` builds the capability page from the code (the tools,
+# the onboarding questions, the registered lanes); this file only gives each
+# lane and each tool its one plain sentence. tests/unit/test_capabilities.py
+# fails when a lane or a tool is added or removed without a line here, so the
+# page cannot drift.
+# `shown = false` keeps a lane off the page (test fixtures, plumbing).
+
+[lane.ap]
+says = "Reads the bills that come in, files them, and asks a person before anything is paid."
+
+[lane.ar]
+says = "Notices money on its way in and checks it off when the bank shows it arrived."
+
+[lane.brief]
+says = "Sends each person one short page a week that leads with what needs them."
+
+[lane.close]
+says = "Gets the month ready to close and seals it once a person says yes."
+
+[lane.deadlines]
+says = "Remembers the dates that matter, like filings, renewals, passports and visas, and reminds you weeks ahead."
+
+[lane.expenses]
+says = "Turns receipts into an expense report and follows it until the money is paid back."
+
+[lane.mail]
+says = "Collects documents from the ministry's mailbox for the other lanes."
+
+[lane.projects]
+says = "Notices when the list of projects or funds drifts out of step with the books."
+
+[lane.routing]
+says = "Sends each decision to the right person, reminds them, and covers for someone who is away."
+
+[lane.timesheets]
+says = "Files the hours people report."
+
+[lane.demo]
+says = "A practice lane for testing the engine."
+shown = false
+
+[tool.deadlines]
+says = "What is coming due, and how many days are left."
+
+[tool.waiting_cards]
+says = "What is waiting for someone's yes or no."
+
+[tool.open_payables]
+says = "Which bills are still unpaid, the soonest first, and the total."
+
+[tool.find_invoices]
+says = "Find a bill by who sent it or its number."
+
+[tool.recent_runs]
+says = "Whether this morning's work ran, and how it went."
+
+[tool.close_status]
+says = "Where the month's closing stands."
+
+[tool.expense_reports]
+says = "Your expense reports, their totals, and whether you have been paid back."
+
+# Honest gaps, said plainly. Remove a line when it ships.
+[[not_yet]]
+says = "Take a photo of a receipt in the conversation. Today a receipt reaches Tim through a shared folder."
+
+[[not_yet]]
+says = "Take your yes in the conversation. Today a person approves at the computer that keeps the books."
+
+[[not_yet]]
+says = "Keep amounts in currencies other than US dollars."
+
+[[not_yet]]
+says = "Show a sponsor or a pastor a monthly page of their own."

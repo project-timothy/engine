@@ -32,7 +32,7 @@ the business this box will run.
    Set the legal name, the timezone, the people, and the account names you
    use. Everything the engine does comes from this file; nothing else needs
    editing. Put your own slug in `ENGINE_TENANT` in `compose.yaml` before the
-   first boot if you want the tenant called something other than `demo`.
+   first boot if you want the tenant called something other than `demo`. One install serves one business; a second gets its own container, and `engine doctor` fails while two tenants' credentials share one user.
 
 4. Ask what is still missing:
 
@@ -94,9 +94,9 @@ the business this box will run.
    `compose.yaml`: those are the files people paste into support threads.
    `docs/credentials-checklist.md` covers changing one and rotating the key.
 
-8. Connect the mailbox and the accounting system when you are ready. Until you
-   do, the morning run reports those two stages as not configured and does
-   everything else; `engine doctor` names them.
+8. Connect the mailbox and the accounting system when you are ready. Until
+   then the daily log ends `mail=1 ... reconcile=1`, each error naming the
+   setting it wants: an unconnected box, which `engine doctor` calls `skip`.
 
 9. Prove it now, instead of waiting for tomorrow. This runs every scheduled
    job once a minute, same commands:
@@ -104,8 +104,8 @@ the business this box will run.
        ENGINE_SCHEDULE_EVERY_MINUTE=1 docker compose up -d
 
    Give it two minutes. `/data/logs/engine-ap-daily.log` ends with a
-   `=== done: ...` line, `/data/logs/auditor-nightly.log` with
-   `=== done: auditor=0`, and the day's report is under
+   `=== done: ...` line (all `0` but step 8's two),
+   `/data/logs/auditor-nightly.log` with `=== done: auditor=0`, and the day's report is under
    `/data/demo-data/reports/_auditor/`. Put the real schedule back with
    `docker compose up -d`.
 
@@ -134,7 +134,7 @@ boot, so editing the crontab on the volume has no effect.
 ## Day to day
 
     docker compose exec engine uv run engine queue list demo      # what needs a decision
-    docker compose exec engine uv run engine queue approve demo 12
+    docker compose exec engine uv run engine queue approve demo --id 12 --as you  # you = your name under [people] in authority.toml
     docker compose exec engine uv run engine doctor demo          # what is missing
     docker compose exec engine uv run engine --version            # what you run
     docker compose logs -f                                        # the scheduler

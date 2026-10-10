@@ -26,9 +26,16 @@ engine's event record:
 
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
 import json
+import struct
+import tomllib
 from datetime import datetime
+from pathlib import Path
 
+from ..config import default_tenants_dir
 from ..findings import Finding
 from . import AuditContext
 
@@ -195,12 +202,82 @@ def check_swallowed_asks(ctx: AuditContext) -> list[Finding]:
     return findings
 
 
+# The doorkeeper's decision challenge (doorkeeper/witness.py), the auditor's
+# own copy: SHA-256 over a domain tag, the nonce, the person who tapped, the
+# card, the answer and the words they read, each length-prefixed.
+WITNESS_DOMAIN = b"tim-witness-v1"
+DOOR_VIA = {"door": "", "door-vouched": "vouched"}
+VERBS = {"approved": "approve", "rejected": "reject"}
+
+
+def _b64u(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def decision_challenge(nonce: bytes, person: str, card: str, verb: str, summary: str) -> bytes:
+    h = hashlib.sha256(WITNESS_DOMAIN)
+    for part in (nonce, person.encode(), card.encode(), verb.encode(), summary.encode()):
+        h.update(struct.pack(">I", len(part)) + part)
+    return h.digest()
+
+
+def _authority(ctx: AuditContext) -> dict | None:
+    root = Path(ctx.tenants_dir) if ctx.tenants_dir else default_tenants_dir()
+    path = root / ctx.tenant.slug / "authority.toml"
+    try:
+        with path.open("rb") as handle:
+            return tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def door_refusal(ctx: AuditContext, row: dict, params: dict) -> str:
+    """Why a decision the queue says came through the box's door (#465) is
+    not one the auditor can stand behind, or "". The signature math is the
+    doorkeeper's; the auditor checks the tenant opened the door for this
+    kind of card, the person who tapped is the decider or the voucher the
+    ministry named, and the signed answer is about this decision."""
+    authority = _authority(ctx)
+    if authority is None:
+        return "the tenant has no authority.toml to open the door"
+    door = (authority.get("presence") or {}).get("door") or []
+    resource = str(params.get("witness_resource", ""))
+    if not resource or resource not in door:
+        return f"authority.toml's [presence] door does not open {resource or 'this card'}"
+    people = authority.get("people") or {}
+    by = str(params.get("decided_by", ""))
+    if by not in people:
+        return f"{by or 'nobody'} is not a person in authority.toml"
+    tapper = by
+    if DOOR_VIA.get(str(params.get("decided_via"))) == "vouched":
+        tapper = str(params.get("vouched_by", ""))
+        if (authority.get("vouch") or {}).get(by) != tapper or tapper not in people:
+            return f"authority.toml does not name {tapper or 'anyone'} to vouch for {by}"
+    try:
+        evidence = json.loads(params.get("witness") or "")
+        client = json.loads(_b64u(str(evidence["client_data"])))
+        nonce = _b64u(str(evidence["nonce"]))
+        signed = _b64u(str(client["challenge"]))
+        summary = str(evidence["summary"])
+        if not evidence.get("signature") or client.get("type") != "webauthn.get":
+            raise ValueError("no signed answer")
+    except (ValueError, KeyError, TypeError, binascii.Error):
+        return "the signed evidence cannot be read"
+    verb = VERBS.get(str(row["status"]), "")
+    if signed != decision_challenge(nonce, tapper, str(row["id"]), verb, summary):
+        return f"the signed evidence is not {tapper}'s {verb} on this card"
+    return ""
+
+
 def check_human_only(ctx: AuditContext) -> list[Finding]:
     """A card stamped human-only (#356) and resolved without the queue's
-    record that a person at a terminal decided it. The queue CLI refuses
-    that route, so a hit means the decision came some other way: a faked
-    terminal, a direct write to the queue, or a bug in the gate. CRITICAL:
-    the stamp exists because no agent may make this decision."""
+    record that a person decided it: at a terminal, or through the box's
+    door with their own Face ID or the Face ID of the person the ministry
+    named to vouch for them (#465; the owner counts both the same). The
+    queue refuses any other route, so a hit means the decision came some
+    other way: a faked terminal, a direct write to the queue, or a bug in
+    the gate. CRITICAL: the stamp exists because no agent may make this
+    decision."""
     findings: list[Finding] = []
     for row in ctx.ledger.query(
         "SELECT * FROM approval_queue WHERE tenant = ? "
@@ -210,6 +287,12 @@ def check_human_only(ctx: AuditContext) -> list[Finding]:
         params = _params(row)
         if params.get("human_only") != "true" or params.get("decided_via") == "terminal":
             continue
+        why = "no record that a person decided it at a terminal or by Face ID"
+        if params.get("decided_via") in DOOR_VIA:
+            refused = door_refusal(ctx, row, params)
+            if not refused:
+                continue
+            why = f"a decision through the door the auditor cannot stand behind: {refused}"
         about = params.get("extracted_vendor") or params.get("file") or "?"
         findings.append(
             Finding(
@@ -218,8 +301,8 @@ def check_human_only(ctx: AuditContext) -> list[Finding]:
                 condition="human-only-decided-by-agent",
                 severity="CRITICAL",
                 detail=f"human-only card ({about}) was {row['status']} on "
-                f"{str(row['resolved_at'])[:10]} with no record that a person decided "
-                "it at a terminal; re-open the decision with the owner",
+                f"{str(row['resolved_at'])[:10]} with {why}; re-open the decision with "
+                "the owner",
             )
         )
     return findings

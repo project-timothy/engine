@@ -228,3 +228,20 @@ def image_only_pdf(pages: int = 1, *, size: int = 8) -> bytes:
         f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
     ).encode()
     return bytes(out)
+
+
+@pytest.fixture
+def demo_without_authority(tmp_path_factory, monkeypatch) -> Path:
+    """The demo tenant as the first tenant is today: no authority.toml, so
+    the queue and the lanes take the path they took before #435. For the
+    tests of that path's own mechanics (cards, overrides, the run lock,
+    unattended lists); tests/unit/test_authority_queue.py covers a tenant
+    with the file, and test_authority_equivalence.py holds the path itself
+    byte-identical."""
+    import shutil
+
+    root = tmp_path_factory.mktemp("tenants")
+    shutil.copytree(Path(__file__).resolve().parent / "tenants" / "demo", root / "demo")
+    (root / "demo" / "authority.toml").unlink()
+    monkeypatch.setenv("ENGINE_TENANTS_ROOT", str(root))
+    return root

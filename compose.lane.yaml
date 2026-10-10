@@ -1,0 +1,77 @@
+# The agent lane (issue #359, container half;
+# docs/decisions/2026-10-07-the-agent-lanes-run-in-a-container.md).
+#
+# Not the product box (that is compose.yaml). This file runs ONE model-driven
+# session, the way a tenant's lane wrapper calls it:
+#
+#   docker compose -f compose.lane.yaml -p <lane> run --rm lane <argv>
+#
+# Three walls, each a few lines below:
+#   - mounts:  the five paths the wrapper names, nothing else of the host;
+#   - egress:  the lane's only network is internal, and the egress proxy is
+#              its one door, open to three hosts (host/lane/squid.conf);
+#   - env:     only the names listed under `environment`, no env_file. The
+#              two secrets are NAMES passed through from the wrapper, which
+#              reads them from a file only it can open; values never appear
+#              in this file or in `docker compose config`.
+
+services:
+  lane:
+    build:
+      context: .
+      dockerfile: Dockerfile.lane
+    image: ${LANE_IMAGE:-engine-lane:dev}
+    depends_on:
+      - egress
+    networks:
+      - lane-internal
+    environment:
+      - HTTPS_PROXY=http://egress:3128
+      - HTTP_PROXY=http://egress:3128
+      - https_proxy=http://egress:3128
+      - http_proxy=http://egress:3128
+      - NO_PROXY=localhost,127.0.0.1
+      - no_proxy=localhost,127.0.0.1
+      # Where the session's runner finds the tenant and the ledger snapshot.
+      - ENGINE_TENANTS_ROOT=/work/tenant/tenants
+      - ENGINE_LEDGER_ROOT=/work/ledger
+      - TZ
+      # The model credential (`claude setup-token`) and, for a lane that
+      # opens PRs, a fine-grained GitHub token limited to its repositories.
+      # A wrapper that does not export one leaves it unset in here.
+      - CLAUDE_CODE_OAUTH_TOKEN
+      - GH_TOKEN
+    volumes:
+      # A fresh clone of the engine and of the tenant, made for this run.
+      - ${LANE_ENGINE:?the wrapper names the engine clone}:/work/engine
+      - ${LANE_TENANT:?the wrapper names the tenant clone}:/work/tenant
+      # The staged inputs (audit reports, earlier notes) and a snapshot of the
+      # ledger, both read-only. Never the live ledger.
+      - ${LANE_IN:?the wrapper names the staged inputs}:/work/in:ro
+      - ${LANE_LEDGER:?the wrapper names the ledger snapshot}:/work/ledger:ro
+      # Where the note and the transcript land.
+      - ${LANE_OUT:?the wrapper names the output folder}:/work/out
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 1024
+
+  egress:
+    # Canonical's squid on Ubuntu 24.04 LTS; tag for the reader, digest for
+    # the build (same rule as the Dockerfiles). Refresh with
+    #   docker buildx imagetools inspect ubuntu/squid:6.6-24.04_beta
+    # (the "Digest:" line, taken 2026-10-07).
+    image: ubuntu/squid:6.6-24.04_beta@sha256:6a097f68bae708cedbabd6188d68c7e2e7a38cedd05a176e1cc0ba29e3bbe029
+    networks:
+      - lane-internal
+      - lane-egress
+    volumes:
+      - ./host/lane/squid.conf:/etc/squid/squid.conf:ro
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  lane-internal:
+    internal: true
+  lane-egress: {}

@@ -16,16 +16,16 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from ..llm import runner_cli
 from .config import TenantNotFoundError
+from .kit import SHAPES
 from .registry import (
     UnknownAgentError,
     UnknownJobError,
     list_agents,
     load_agent_jobs,
-    load_approval_checks,
-    load_human_only,
 )
 from .runner import (
     LOCK_ANOMALY,
@@ -161,9 +161,20 @@ def _refuse_locked(exc: LedgerLocked) -> int:
     return 2
 
 
-# Card params the queue writes itself on a human-only card (#356); an
-# override naming one is refused, so nobody types their way past the gate.
-GATE_PARAMS = frozenset({"human_only", "decided_via"})
+# Card params the queue writes itself on a human-only card (#356) or a
+# door-witnessed decision (#465); an override naming one is refused, so
+# nobody types their way past the gate.
+GATE_PARAMS = frozenset(
+    {
+        "human_only",
+        "decided_via",
+        "witness",
+        "witness_at",
+        "witness_resource",
+        "vouched_by",
+        "vouchers",
+    }
+)
 
 
 def _operator_at_terminal() -> bool:
@@ -194,11 +205,124 @@ def _human_only_refusal(row: dict, verb: str, overrides: dict) -> str | None:
     return None
 
 
+ROUTE_COMMANDS = ("waiting", "delegate", "revoke", "handoff", "on-it")
+
+
+def _cmd_route(args: argparse.Namespace, root: Path) -> int:  # noqa: C901  # one branch per verb
+    """The route commands (#436), only for a tenant with authority.toml:
+    ``waiting`` reads; ``delegate``, ``revoke``, ``handoff`` and ``on-it``
+    are a person's acts at a terminal."""
+    import json
+    from dataclasses import replace
+    from datetime import UTC, date, datetime
+
+    from ..authority.routing import authority_for, due_date
+    from ..ledger import Ledger
+    from .authority_gate import load_delegations, load_policy, route_of, waiting
+    from .kit import KitError
+    from .runner import run
+
+    try:
+        authority = load_policy(args.tenant)
+    except (KitError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if authority is None:
+        print(
+            f"error: {args.tenant} has no authority.toml; cards there wait for one decision "
+            "and nothing routes",
+            file=sys.stderr,
+        )
+        return 2
+    policy = authority.policy
+    who = policy.people.get(args.as_principal)
+    now = datetime.now(UTC)
+    today = now.date()
+    if args.queue_command == "waiting":
+        with Ledger.open(root) as ledger:
+            items = waiting(policy, ledger, args.tenant, today=today, now=now.isoformat())
+            notes = ledger.conn.execute(
+                "SELECT payload_json FROM events WHERE tenant = ? AND event_type = "
+                "'route.reminder' ORDER BY id",
+                (args.tenant,),
+            ).fetchall()
+        latest = {}
+        for r in notes:
+            payload = json.loads(r["payload_json"])
+            if payload["to"] == args.as_principal:
+                latest[payload["card"]] = payload["text"]
+        mine = [i for i in items if args.as_principal in i["waiting_on"]]
+        if not mine:
+            print(f"nothing is waiting on {args.as_principal}")
+        for i in mine:
+            print(f"#{i['card']} {i['action_type']}: {i['step']}, by {i['due']}")
+            if i["card"] in latest:
+                print(f"  {latest[i['card']]}")
+        return 0
+    if who is None:
+        print(f"error: {args.as_principal!r} is not a person in authority.toml", file=sys.stderr)
+        return 2
+    if not _operator_at_terminal():
+        print(
+            f"error: {args.queue_command} is a person's act: run it at a terminal",
+            file=sys.stderr,
+        )
+        return 2
+    if args.queue_command in ("delegate", "revoke"):
+        params = {"by": args.as_principal, "today": today.isoformat()}
+        if args.queue_command == "delegate":
+            params |= {"to": args.to, "role": args.role, "until": args.until}
+        else:
+            params["delegation"] = args.delegation
+        result = run(
+            args.tenant, "routing", args.queue_command, params=params, ledger_dir=args.ledger_dir
+        )
+        print(result.summary)
+        return 0 if result.status == "ok" else 2
+    try:
+        with ledger_write_lock(root), Ledger.open(root) as ledger:
+            pending = ledger.list_approvals(args.tenant, status="pending")
+            row = next((r for r in pending if r["id"] == args.id), None)
+            if row is None:
+                raise ValueError(f"no pending approval #{args.id} for {args.tenant}")
+            _rule, route = route_of(policy, row, now.isoformat())
+            delegations = load_delegations(ledger, args.tenant)
+            if authority_for(policy, args.as_principal, route.step, delegations, today) is None:
+                raise ValueError(f"#{args.id} is not waiting on {args.as_principal}")
+            if args.queue_command == "handoff":
+                if authority_for(policy, args.to, route.step, delegations, today) is None:
+                    raise ValueError(f"{args.to} cannot decide this step, so cannot take it")
+                route = replace(route, handoff_to=args.to)
+                said = f"handed to {args.to}"
+            else:
+                by = date.fromisoformat(args.by)
+                if by <= today or (by - today).days > 30:
+                    raise ValueError("on it by a date in the next 30 days")
+                route = replace(route, on_it_until=by.isoformat(), on_it_set=today.isoformat())
+                said = f"{args.as_principal} is on it by {by.isoformat()} (the clock waits)"
+            ledger.update_pending_params(args.tenant, args.id, route.to_params())
+            ledger.commit(
+                agent="queue",
+                job=args.queue_command,
+                idempotency_key=f"approval-{args.id}-{args.queue_command}-{now.isoformat()}",
+                summary=f"approval #{args.id}: {said}",
+            )
+    except LedgerLocked as exc:
+        return _refuse_locked(exc)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(f"approval #{args.id}: {said}; due {due_date(route, row['params'], policy.routing)}")
+    return 0
+
+
 def _cmd_queue(args: argparse.Namespace) -> int:
     from ..ledger import Ledger
     from .runner import resolve_ledger_root
 
     root = resolve_ledger_root(args.tenant, args.ledger_dir)
+    if args.queue_command in ROUTE_COMMANDS:
+        return _cmd_route(args, root)
     if args.queue_command == "list":
         with Ledger.open(root) as ledger:
             rows = ledger.list_approvals(args.tenant, status=args.status)
@@ -215,56 +339,62 @@ def _cmd_queue(args: argparse.Namespace) -> int:
     # in its jobs.py) for cards whose approval must name a fact; a refused
     # approval is a clean error and the card stays pending.
     decision = "approved" if args.queue_command == "approve" else "rejected"
+    # authority.toml, when the tenant has one, decides who may decide (#435);
+    # without it this command is exactly what it was. The decision itself is
+    # the one path the box's door shares (core/engine/queue_decide.py).
+    from .authority_gate import DECISION_PARAMS, load_policy
+    from .kit import KitError
+    from .queue_decide import decide_in_ledger
+
+    try:
+        authority = load_policy(args.tenant)
+    except (KitError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if authority is None and args.as_principal:
+        print(
+            f"error: {args.tenant} has no authority.toml, so --as names no one; decide without it",
+            file=sys.stderr,
+        )
+        return 2
+    gated = GATE_PARAMS | DECISION_PARAMS if authority is not None else GATE_PARAMS
     try:
         with ledger_write_lock(root), Ledger.open(root) as ledger:
-
-            def _check(agent: str, action_type: str, params: dict) -> str | None:
-                fn = load_approval_checks(agent).get(action_type)
-                return fn(ledger, args.tenant, params) if fn else None
-
             try:
                 overrides = _parse_params(getattr(args, "param", []) or [])
-                gate_fields = sorted(GATE_PARAMS & set(overrides))
+                gate_fields = sorted(gated & set(overrides))
                 if gate_fields:
                     raise ValueError(
                         f"approval #{args.id}: {', '.join(gate_fields)} is set by the queue, "
                         "never by --param"
                     )
-                row = next(
-                    (r for r in ledger.list_approvals(args.tenant) if r["id"] == args.id),
-                    None,
-                )
-                if (
-                    row is not None
-                    and row["status"] == "pending"
-                    and (
-                        row["action_type"] in load_human_only(str(row["agent"]))
-                        or row["params"].get("human_only") == "true"
-                    )
-                ):
-                    refusal = _human_only_refusal(row, args.queue_command, overrides)
-                    if refusal:
-                        raise ValueError(refusal)
-                result = ledger.resolve_approval(
+                outcome = decide_in_ledger(
+                    ledger,
                     args.tenant,
                     args.id,
                     decision,
-                    param_overrides=overrides,
-                    check=_check if decision == "approved" else None,
+                    authority=authority,
+                    principal=args.as_principal or "",
+                    overrides=overrides,
+                    at_terminal=_operator_at_terminal(),
+                    confirm_human_only=lambda row, o: _human_only_refusal(
+                        row, args.queue_command, o
+                    ),
                 )
             except (LookupError, ValueError) as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 2
-            noted = f" ({', '.join(f'{k}={v}' for k, v in overrides.items())})" if overrides else ""
-            ledger.commit(
-                agent="queue",
-                job=decision,
-                idempotency_key=f"approval-{args.id}",
-                summary=f"approval #{args.id} {decision}: {result['action_type']}{noted}",
-            )
     except LedgerLocked as exc:
         return _refuse_locked(exc)
-    print(f"approval #{args.id} {decision} ({result['action_type']}){noted}")
+    if outcome.vote is not None:
+        print(
+            f"approval #{args.id}: {args.as_principal}'s yes is recorded; "
+            f"now {outcome.vote.step}, waiting on {outcome.waiting}"
+        )
+        return 0
+    overrides = outcome.overrides
+    noted = f" ({', '.join(f'{k}={v}' for k, v in overrides.items())})" if overrides else ""
+    print(f"approval #{args.id} {decision} ({outcome.action_type}){noted}")
     return 0
 
 
@@ -678,6 +808,7 @@ def _cmd_init(args: argparse.Namespace) -> int:
         result = init_tenant(
             args.slug,
             archetype=args.archetype,
+            shape=args.shape,
             root=args.root,
             data_root=args.data_root,
             legal_name=args.legal_name,
@@ -690,9 +821,12 @@ def _cmd_init(args: argparse.Namespace) -> int:
     except InitError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    print(f"tenant {result.slug} (archetype {result.archetype}) created at {result.tenant_dir}")
+    print(
+        f"tenant {result.slug} (archetype {result.archetype}, shape {result.shape}) "
+        f"created at {result.tenant_dir}"
+    )
     for path in result.files:
-        print(f"  {path.name}")
+        print(f"  {path.relative_to(result.tenant_dir).as_posix()}")
     print(f"data root: {result.data_root} ({len(result.folders)} folders)")
     print(f"ledger: {result.ledger_root}")
     if result.audit_ran:
@@ -710,14 +844,41 @@ def _cmd_init(args: argparse.Namespace) -> int:
 
 
 def _cmd_mcp(args: argparse.Namespace) -> int:
-    """Serve the read-only tools over MCP on stdio (Ask Tim, step 1)."""
+    """Serve the read-only tools over MCP on stdio (Ask Tim, step 1), or with
+    ``--onboarding`` the tenantless onboarding conversation (#448)."""
     from ..tools.catalog import Tools
     from ..tools.mcp_stdio import McpServer
     from .clock import local_today
     from .config import load_tenant, tenant_dir
     from .runner import resolve_ledger_root
 
+    if args.onboarding:
+        from ..onboarding.mcp import OnboardingTools
+
+        onboarding = OnboardingTools(
+            answers_dir=Path(args.answers_dir or "."),
+            root=args.root,
+            data_root=args.data_root,
+            ledger_dir=args.ledger_dir,
+            run_audit=not args.no_audit,
+        )
+        print("engine mcp: serving the onboarding conversation on stdio", file=sys.stderr)
+        return McpServer(
+            onboarding, name=onboarding.server_name, instructions=onboarding.instructions
+        ).serve()
+    if not args.tenant:
+        print("error: name a tenant, or pass --onboarding to onboard a new one", file=sys.stderr)
+        return 2
     cfg = load_tenant(args.tenant)
+    viewer = None
+    if args.as_person:
+        from ..tools.viewer import ViewerError, viewer_for
+
+        try:
+            viewer = viewer_for(args.tenant, args.as_person)
+        except ViewerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
     ob = Path(args.obligations_file) if args.obligations_file else None
     if ob is None:
         ob = (
@@ -725,15 +886,118 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
             if cfg.deadlines.file
             else tenant_dir(args.tenant) / "obligations.toml"
         )
+    if args.http:
+        return _serve_mcp_http(args, cfg, ob)
     tools = Tools(
         args.tenant,
         ledger_root=resolve_ledger_root(args.tenant, args.ledger_dir),
         obligations_file=ob,
         today=local_today(cfg.identity.timezone),
         lead_days=tuple(cfg.deadlines.lead_days),
+        viewer=viewer,
     )
-    print(f"engine mcp: serving {args.tenant} read-only on stdio", file=sys.stderr)
+    who = f" as {args.as_person}" if viewer else ""
+    print(f"engine mcp: serving {args.tenant} read-only{who} on stdio", file=sys.stderr)
     return McpServer(tools).serve()
+
+
+def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
+    """``engine mcp <tenant> --http``: the read tools on one HTTP endpoint,
+    each request answered as the person its bearer token signs in
+    (core/tools/mcp_http.py). Bind to localhost behind a TLS proxy."""
+    from urllib.parse import urlsplit
+
+    from ..tools.mcp_http import Introspection, RefuseAll, TokenFile, Verifier, make_server
+    from ..tools.witness_desk import WitnessDesk
+    from .clock import local_today
+    from .runner import resolve_ledger_root
+
+    if not args.resource:
+        print("error: --http needs --resource, the endpoint's public https URL", file=sys.stderr)
+        return 2
+    if args.introspect and args.tokens:
+        print("error: --introspect or --tokens, not both", file=sys.stderr)
+        return 2
+    verifier: Verifier = RefuseAll()
+    desk = None
+    who = "nobody (no --introspect or --tokens)"
+    if args.introspect:
+        if not args.introspect_secret:
+            print(
+                "error: --introspect needs --introspect-secret, the shared secret's file",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            verifier = Introspection(
+                url=args.introspect, secret_file=args.introspect_secret, resource=args.resource
+            )
+        except (OSError, ValueError) as err:
+            print(f"error: {err}", file=sys.stderr)
+            return 2
+        who = f"people the sign-in service at {args.introspect} vouches for"
+        # The same doorkeeper witnesses a person's own yes (Face ID): a tenant
+        # whose authority.toml opened [presence] door gets decide_card.
+        origin = "{0.scheme}://{0.netloc}".format(urlsplit(args.introspect))
+        desk = WitnessDesk(url=origin, secret_file=args.introspect_secret)
+    elif args.tokens:
+        verifier, who = TokenFile(args.tokens), "invitation tokens"
+    server = make_server(
+        args.tenant,
+        tenants_root=None,
+        ledger_root=resolve_ledger_root(args.tenant, args.ledger_dir),
+        obligations_file=ob,
+        verifier=verifier,
+        resource=args.resource,
+        authorization_servers=list(args.authorization_server),
+        host=args.bind,
+        port=args.port,
+        today=lambda: local_today(cfg.identity.timezone),
+        lead_days=tuple(cfg.deadlines.lead_days),
+        desk=desk,
+    )
+    print(
+        f"engine mcp: serving {args.tenant} on http://{args.bind}:{server.server_address[1]}"
+        f"/mcp for {args.resource}; admitting {who}",
+        file=sys.stderr,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
+def _cmd_door_token(args: argparse.Namespace) -> int:
+    """``engine door-token <tenant> <person> --tokens FILE``: a new invitation
+    token for one person in authority.toml. Prints the token once; the file
+    keeps only its hash."""
+    from ..tools.mcp_http import new_token
+    from ..tools.viewer import ViewerError, viewer_for
+
+    try:
+        viewer_for(args.tenant, args.person)
+    except ViewerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(new_token(args.tokens, args.person))
+    return 0
+
+
+def _cmd_capabilities(args: argparse.Namespace) -> int:
+    """``engine capabilities``: what Tim can do today, built from the code."""
+    import json
+
+    from ..capabilities import build, markdown
+
+    page = build()
+    if args.format == "json":
+        print(json.dumps(page, indent=1))
+    else:
+        print(markdown(page), end="")
+    return 0
 
 
 def _cmd_doctor(args: argparse.Namespace) -> int:
@@ -764,6 +1028,98 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     return 1
+
+
+def _cmd_onboard(args: argparse.Namespace) -> int:
+    """``engine onboard <slug>``: the onboarding conversation as JSON, for any
+    agent to drive (docs/tenant-kit-design.md, section 6). Prints the next
+    question; ``--answer ID=VALUE`` records answers into the answers file;
+    ``--apply`` renders the tenant from them and runs doctor. Exit 2 on an
+    answer it cannot take or an apply it cannot do yet."""
+    import json
+
+    from ..onboarding import OnboardingError, apply, next_question, plan, record
+    from .init import InitError
+
+    store = Path(args.answers or f"onboarding-{args.slug}.json")
+    answers = json.loads(store.read_text(encoding="utf-8")) if store.exists() else {}
+    try:
+        for item in args.answer or []:
+            qid, sep, value = item.partition("=")
+            if not sep:
+                raise OnboardingError(f"--answer {item!r} is not ID=VALUE")
+            parsed: object = json.loads(value) if value.strip().startswith("[") else value
+            answers = record(answers, qid.strip(), parsed)
+        store.write_text(json.dumps(answers, indent=2) + "\n", encoding="utf-8")
+        if args.apply:
+            result = apply(
+                plan(answers, args.slug),
+                root=args.root,
+                data_root=args.data_root,
+                ledger_dir=args.ledger_dir,
+                run_audit=not args.no_audit,
+            )
+            report = result.doctor
+            out = {
+                "created": str(result.tenant_dir),
+                "files": [p.relative_to(result.tenant_dir).as_posix() for p in result.init.files],
+                "doctor": [f"{c.name}: {c.status}: {c.detail}" for c in report.checks],
+                "missing": len(report.missing),
+            }
+            print(json.dumps(out, indent=2))
+            return 0
+    except (OnboardingError, InitError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(
+        json.dumps(
+            {"slug": args.slug, "next": next_question(answers), "answers": answers}, indent=2
+        )
+    )
+    return 0
+
+
+def _cmd_voice_check(args: argparse.Namespace) -> int:
+    """``engine voice-check <tenant> <file> [--register NAME]``: the tenant's
+    kit/voice.toml against a file (docs/tenant-kit-design.md, section 2).
+    Exit 0 clean, 1 warnings, 2 fatal or a refusal. No model call."""
+    from ..voice import VoiceError, check_text, exit_code
+    from .config import tenant_dir
+    from .kit import KitError, load_part
+
+    root = Path(args.root) if args.root else None
+    directory = tenant_dir(args.tenant, tenants_root=root)
+    try:
+        voice = load_part(directory, "voice")
+    except KitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if voice is None:
+        print(
+            f"error: {directory / 'kit' / 'voice.toml'} does not exist; "
+            "`engine init` renders one for a new tenant",
+            file=sys.stderr,
+        )
+        return 2
+    path = Path(args.file)
+    try:
+        text = path.read_text(encoding="utf-8")
+        hits = check_text(text, voice, register=args.register)
+    except (OSError, VoiceError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(
+        f"voice-check {path.name}  register={args.register or 'none'}  "
+        f"spelling={voice['spelling']}  preset={voice['preset']}"
+    )
+    for hit in hits:
+        label = f"{hit.severity.upper():<6} {hit.check:<15} line {hit.line}"
+        print(f"{label}: {hit.message}  | {hit.excerpt}")
+    code = exit_code(hits)
+    fatal = sum(h.severity == "fatal" for h in hits)
+    result = ("CLEAN", "WARN", "FATAL")[code]
+    print(f"RESULT: {result} ({fatal} fatal, {len(hits) - fatal} warn)")
+    return code
 
 
 def _cmd_schedule(args: argparse.Namespace) -> int:
@@ -934,11 +1290,42 @@ def build_parser() -> argparse.ArgumentParser:
     q_list.add_argument("tenant")
     q_list.add_argument("--status", default=None, help="filter: pending|approved|rejected")
     q_list.add_argument("--ledger-dir", default=None)
+    route_help = {
+        "waiting": "what is waiting on a person, with their latest reminder (authority.toml only)",
+        "delegate": "hand a role you hold to someone until a date (a person, at a terminal)",
+        "revoke": "end a delegation you gave before its date",
+        "handoff": "hand one card on its route to someone who can decide it",
+        "on-it": "say you will decide a card by a date; its clock waits until then",
+    }
+    for verb, text in route_help.items():
+        q_route = queue_sub.add_parser(verb, help=text)
+        q_route.add_argument("tenant")
+        q_route.add_argument("--as", dest="as_principal", required=True, metavar="NAME")
+        q_route.add_argument("--ledger-dir", default=None)
+        if verb in ("handoff", "on-it"):
+            q_route.add_argument("--id", type=int, required=True)
+        if verb in ("delegate", "handoff"):
+            q_route.add_argument("--to", required=True, metavar="NAME")
+        if verb == "delegate":
+            q_route.add_argument("--role", required=True)
+            q_route.add_argument("--until", required=True, metavar="YYYY-MM-DD")
+        if verb == "revoke":
+            q_route.add_argument("--delegation", required=True, metavar="ID")
+        if verb == "on-it":
+            q_route.add_argument("--by", required=True, metavar="YYYY-MM-DD")
     for verb in ("approve", "reject"):
         q_verb = queue_sub.add_parser(verb, help=f"{verb} a pending item")
         q_verb.add_argument("tenant")
         q_verb.add_argument("--id", type=int, required=True)
         q_verb.add_argument("--ledger-dir", default=None)
+        q_verb.add_argument(
+            "--as",
+            dest="as_principal",
+            default=None,
+            metavar="NAME",
+            help="who is deciding, a person or agent in the tenant's authority.toml "
+            "(required when the tenant has one; a person decides only at a terminal)",
+        )
         if verb == "approve":
             q_verb.add_argument(
                 "--param",
@@ -1123,11 +1510,86 @@ def build_parser() -> argparse.ArgumentParser:
         "e.g. Calendars.ReadWrite for deadlines/calendar; [mail].scopes is unchanged",
     )
     mcp_p = sub.add_parser(
-        "mcp", help="serve the read-only tools over MCP on stdio (for a chat client)"
+        "mcp",
+        help="serve the read-only tools over MCP on stdio (for a chat client); "
+        "--onboarding serves the onboarding conversation, no tenant needed",
     )
-    mcp_p.add_argument("tenant")
+    mcp_p.add_argument("tenant", nargs="?", default=None)
     mcp_p.add_argument("--ledger-dir", default=None)
     mcp_p.add_argument("--obligations-file", default=None)
+    mcp_p.add_argument(
+        "--http",
+        action="store_true",
+        help="serve on one HTTP endpoint instead of stdio; each request answers as the "
+        "person its bearer token signs in",
+    )
+    mcp_p.add_argument("--resource", default=None, help="with --http: the endpoint's public URL")
+    mcp_p.add_argument(
+        "--tokens", default=None, help="with --http: the invitation-token file (hashes only)"
+    )
+    mcp_p.add_argument(
+        "--introspect",
+        default=None,
+        metavar="URL",
+        help="with --http: the sign-in service's introspection endpoint (RFC 7662), "
+        "which says who each token is",
+    )
+    mcp_p.add_argument(
+        "--introspect-secret",
+        default=None,
+        metavar="FILE",
+        help="with --introspect: the file holding the secret shared with the sign-in service",
+    )
+    mcp_p.add_argument(
+        "--authorization-server",
+        action="append",
+        default=[],
+        help="with --http: a sign-in service named in the resource metadata (repeatable)",
+    )
+    mcp_p.add_argument("--bind", default="127.0.0.1", help="with --http: the address to bind")
+    mcp_p.add_argument("--port", type=int, default=8765, help="with --http: the port")
+    mcp_p.add_argument(
+        "--as",
+        dest="as_person",
+        default=None,
+        metavar="PERSON",
+        help="answer as this person (their id in authority.toml): every tool shows only "
+        "what they may view",
+    )
+    mcp_p.add_argument(
+        "--onboarding",
+        action="store_true",
+        help="serve the onboarding conversation for a tenant that does not exist yet",
+    )
+    mcp_p.add_argument(
+        "--answers-dir",
+        default=None,
+        help="with --onboarding: where onboarding-<slug>.json lives (default: here)",
+    )
+    mcp_p.add_argument(
+        "--root", default=None, help="with --onboarding: tenants directory (default: ./tenants)"
+    )
+    mcp_p.add_argument(
+        "--data-root", default=None, help="with --onboarding: where the tenant's folders go"
+    )
+    mcp_p.add_argument(
+        "--no-audit",
+        action="store_true",
+        help="with --onboarding: skip the first auditor run on apply",
+    )
+
+    token_p = sub.add_parser(
+        "door-token",
+        help="make an invitation token for one person (prints it once; the file keeps its hash)",
+    )
+    token_p.add_argument("tenant")
+    token_p.add_argument("person", help="their id in authority.toml")
+    token_p.add_argument("--tokens", required=True, help="the invitation-token file")
+
+    caps_p = sub.add_parser(
+        "capabilities", help="what Tim can do today, built from the code (markdown or json)"
+    )
+    caps_p.add_argument("--format", choices=("md", "json"), default="md")
 
     doctor_p = sub.add_parser(
         "doctor",
@@ -1141,6 +1603,40 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="create every folder the tenant names that does not exist yet, then report",
     )
+
+    onboard_p = sub.add_parser(
+        "onboard",
+        help="the onboarding conversation as JSON for an agent: the next question, "
+        "--answer ID=VALUE, then --apply to create the tenant (docs/tenant-kit-design.md)",
+    )
+    onboard_p.add_argument("slug", help="tenant slug: lowercase letters, digits, hyphens")
+    onboard_p.add_argument(
+        "--answers", default=None, help="the answers file (default: onboarding-<slug>.json)"
+    )
+    onboard_p.add_argument(
+        "--answer", action="append", help="record an answer, ID=VALUE (repeatable)"
+    )
+    onboard_p.add_argument(
+        "--apply", action="store_true", help="create the tenant from the answers"
+    )
+    onboard_p.add_argument("--root", default=None, help="tenants directory (default: ./tenants)")
+    onboard_p.add_argument("--data-root", default=None, help="where the tenant's folders go")
+    onboard_p.add_argument("--ledger-dir", default=None, help="ledger base directory")
+    onboard_p.add_argument(
+        "--no-audit", action="store_true", help="skip the first auditor run --local-only"
+    )
+
+    voice_p = sub.add_parser(
+        "voice-check",
+        help="check a file against the tenant's kit/voice.toml: spelling, banned words "
+        "and shapes, glossary, register (exit 0 clean, 1 warn, 2 fatal)",
+    )
+    voice_p.add_argument("tenant")
+    voice_p.add_argument("file", help="the text to check")
+    voice_p.add_argument(
+        "--register", default=None, help="a [registers.<name>] in voice.toml, e.g. formal"
+    )
+    voice_p.add_argument("--root", default=None, help="tenants directory (default: ./tenants)")
 
     schedule_p = sub.add_parser(
         "schedule",
@@ -1165,7 +1661,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_p = sub.add_parser(
         "init",
-        help="create a tenant from an archetype template: engine init <slug> [--archetype A|B|C]",
+        help="create a tenant from an archetype template: engine init <slug> "
+        "[--archetype A|B|C] [--shape SHAPE]",
     )
     init_p.add_argument("slug", help="tenant slug: lowercase letters, digits, hyphens")
     init_p.add_argument(
@@ -1174,6 +1671,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("A", "B", "C"),
         help="A project-coded technical services (default), B construction subs and "
         "trades, C agencies (docs/archetypes.md)",
+    )
+    init_p.add_argument(
+        "--shape",
+        default="commercial-small",
+        choices=SHAPES,
+        help="commercial or nonprofit; solo, small or organization (default commercial-small; "
+        "docs/tenant-kit-design.md)",
     )
     init_p.add_argument("--root", default=None, help="tenants directory (default: ./tenants)")
     init_p.add_argument(
@@ -1243,7 +1747,16 @@ def main(argv: list[str] | None = None) -> int:
     return code
 
 
-_NO_REFRESH = {"mcp", "init", "doctor", "schedule", "evals", "status-page"}
+_NO_REFRESH = {
+    "mcp",
+    "init",
+    "doctor",
+    "schedule",
+    "evals",
+    "status-page",
+    "voice-check",
+    "onboard",
+}
 
 
 def _refresh_view(args: argparse.Namespace) -> None:
@@ -1276,7 +1789,11 @@ _COMMANDS = {
     "dismiss": _cmd_dismiss,
     "identify": _cmd_identify,
     "mcp": _cmd_mcp,
+    "door-token": _cmd_door_token,
+    "capabilities": _cmd_capabilities,
     "doctor": _cmd_doctor,
+    "voice-check": _cmd_voice_check,
+    "onboard": _cmd_onboard,
     "schedule": _cmd_schedule,
     "init": _cmd_init,
     "evals": _cmd_evals,

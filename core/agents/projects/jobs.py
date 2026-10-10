@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ...authority import CardRule
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.result import Anomaly
 from ...engine.runkey import RunKey
@@ -181,3 +182,10 @@ def _drift_run(ctx: JobContext) -> JobOutput:
 
 
 JOBS: dict[str, JobHandler] = {"drift": JobHandler(key=_key, run=_drift_run)}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    "projects.registry_drift": CardRule("approve", "books", money=False)
+}

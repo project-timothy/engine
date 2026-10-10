@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import IO, Any
+from typing import IO, Any, Protocol
 
-from .catalog import Tools
+from .catalog import ToolSpec
 
 SERVER_NAME = "timothy-engine"
 SERVER_VERSION = "0.1.0"
@@ -21,11 +21,25 @@ INSTRUCTIONS = (
     "decimal string; quote it as given and cite its source. These tools never change "
     "anything; acting on an answer is a person's decision."
 )
+READ_ONLY = {"readOnlyHint": True, "openWorldHint": False}
+
+
+class ToolSet(Protocol):
+    """What the server serves: the tenant's read-only catalog, or the
+    tenantless onboarding tools (core/onboarding/mcp.py)."""
+
+    def specs(self) -> list[ToolSpec]: ...
+
+    def call(self, name: str, args: dict | None = None) -> dict: ...
 
 
 class McpServer:
-    def __init__(self, tools: Tools) -> None:
+    def __init__(
+        self, tools: ToolSet, *, name: str = SERVER_NAME, instructions: str = INSTRUCTIONS
+    ) -> None:
         self.tools = tools
+        self.name = name
+        self.instructions = instructions
 
     def handle(self, msg: dict[str, Any]) -> dict[str, Any] | None:
         """One request in, one response out; a notification gets no reply."""
@@ -41,8 +55,8 @@ class McpServer:
                 result: dict[str, Any] = {
                     "protocolVersion": version,
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
-                    "instructions": INSTRUCTIONS,
+                    "serverInfo": {"name": self.name, "version": SERVER_VERSION},
+                    "instructions": self.instructions,
                 }
             elif method == "ping":
                 result = {}
@@ -53,7 +67,7 @@ class McpServer:
                             "name": s.name,
                             "description": s.description,
                             "inputSchema": s.schema,
-                            "annotations": {"readOnlyHint": True, "openWorldHint": False},
+                            "annotations": s.annotations or READ_ONLY,
                         }
                         for s in self.tools.specs()
                     ]

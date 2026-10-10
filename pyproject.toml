@@ -107,6 +107,12 @@ markers = [
 python_version = "3.12"
 files = [
   "core/ledger",
+  # The authority model (#432): who may do what, and the floor under it.
+  "core/authority",
+  # The tenant's voice check (#431).
+  "core/voice",
+  # The onboarding conversation (#442).
+  "core/onboarding",
   "core/engine/contracts.py",
   "core/llm/gateway.py",
   "core/adapters",

@@ -1,0 +1,25 @@
+# The nonprofit default (docs/tenant-kit-design.md, section 2).
+#
+# PLACEHOLDER. This frame is written with a ministry partner during the first
+# nonprofit onboarding, not by the engine. Until then it carries only the
+# shared plain-writing rules below, and a ministry tenant tunes it in its own
+# kit/voice.toml.
+
+frame = """
+Placeholder: the conservative Christian worldview frame for this preset is
+written with a ministry partner during the first nonprofit onboarding. Until
+then, write warmly and plainly to a supporter, a church or a partner: lead
+with what happened and what it means, use specific names and numbers, and
+never inflate the work.
+"""
+
+banned = [
+    "delve",
+    "synergy",
+    "game-changer",
+    "supercharge",
+    "it's worth noting",
+    "let that sink in",
+]
+
+banned_patterns = []

@@ -22,6 +22,9 @@ from core.agents.brief import jobs as brief_jobs
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
 
+# Today's (no authority.toml) path; #435 adds the other.
+pytestmark = pytest.mark.usefixtures("demo_without_authority")
+
 OBLIGATIONS = """
 [[obligation]]
 id = "permit"

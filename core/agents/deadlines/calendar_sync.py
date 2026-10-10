@@ -30,6 +30,7 @@ import urllib.request
 from collections.abc import Callable
 from datetime import date, timedelta
 
+from ...engine.authority_gate import lane_decision
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobOutput
 from ...engine.result import Anomaly
 from ...engine.runkey import RunKey
@@ -242,6 +243,8 @@ def calendar_key(ctx: JobContext) -> str:
     h = _plan_hash(ops)
     key.value("plan", h)
     key.value("card", list(_card(ctx, h)))
+    if ctx.authority is not None:
+        key.value("authority", ctx.authority.sha256)
     return key.digest()
 
 
@@ -275,23 +278,22 @@ def calendar_run(ctx: JobContext) -> JobOutput:
         )
     unattended = "calendar" in _param_list(ctx, "unattended", ctx.tenant.deadlines.unattended)
     status, card_id = _card(ctx, h)
+    granted = None
+    if ctx.authority is not None:
+        # authority.toml is the only source (#435): the lane's agent writes
+        # with no one asked only when it holds send:calendar, and never
+        # decides a card a person was already asked.
+        granted = lane_decision(ctx.authority.policy, "deadlines", "send", "calendar")
+        unattended = granted is not None and status == "none"
     if not unattended and status != "approved":
         if status in ("pending", "rejected"):
             return JobOutput(
                 status="ok", summary=f"deadlines calendar: plan card #{card_id} {status}"
             )
-        titles = [f"{o['op']}: {o.get('subject', '')} {o.get('day', '')}".strip() for o in ops[:12]]
         return JobOutput(
             status="needs_approval",
             summary=f"deadlines calendar: {_counts(ops)}; approval card parked",
-            approvals=[
-                ApprovalSpec(
-                    key=f"calendar:{h}",
-                    action_type=CAL_ACTION,
-                    params={"plan": h, "provider": provider, "changes": titles},
-                    reason=f"write deadlines to your calendar ({_counts(ops)})",
-                )
-            ],
+            approvals=[_plan_card(ops, h, provider)],
         )
     try:
         client = _calendar_client(ctx)
@@ -346,9 +348,25 @@ def calendar_run(ctx: JobContext) -> JobOutput:
         events.append(
             EventSpec(key=f"cal:{o['uid']}:{record['op']}", event_type=CAL_EVENT, payload=record)
         )
+    decided = []
+    if granted is not None:
+        agent, verdict = granted
+        decided = [_plan_card(ops, h, provider, decided_by=agent, decided_reason=verdict.reason)]
     return JobOutput(
         status="ok",
         summary=f"deadlines calendar: wrote {len(events)} of {len(ops)} change(s) to {provider}",
         events=events,
         anomalies=anomalies,
+        approvals=decided,
+    )
+
+
+def _plan_card(ops: list[dict], h: str, provider: str, **decided: str) -> ApprovalSpec:
+    titles = [f"{o['op']}: {o.get('subject', '')} {o.get('day', '')}".strip() for o in ops[:12]]
+    return ApprovalSpec(
+        key=f"calendar:{h}",
+        action_type=CAL_ACTION,
+        params={"plan": h, "provider": provider, "changes": titles},
+        reason=f"write deadlines to your calendar ({_counts(ops)})",
+        **decided,
     )

@@ -39,10 +39,15 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from core.agents.ap import store
 from core.engine.cli import main
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
+
+# Today's (no authority.toml) path; #435 adds the other.
+pytestmark = pytest.mark.usefixtures("demo_without_authority")
 
 VENDOR = "Acme Tooling"
 OTHER = "Beta Supply"

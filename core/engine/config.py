@@ -15,9 +15,11 @@ path of its own.
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -42,10 +44,139 @@ class Identity(BaseModel):
     legal_name: str
     slug: str
     timezone: str = "America/New_York"
+    # The tenant's shape (docs/tenant-kit-design.md): commercial or nonprofit,
+    # solo, small or organization. None for a tenant that predates the kit.
+    shape: (
+        Literal[
+            "commercial-solo",
+            "commercial-small",
+            "commercial-organization",
+            "nonprofit-solo",
+            "nonprofit-small",
+            "nonprofit-organization",
+        ]
+        | None
+    ) = None
 
 
 class Fiscal(BaseModel):
     year_start_month: int = Field(default=1, ge=1, le=12)
+
+
+ENTITY_RETURNS = {
+    "s-corp": "1120-S",
+    "partnership": "1065",
+    "c-corp": "1120",
+    "sole-proprietor": "Schedule C",
+    "public-charity": "990",
+    "church": "",  # a church files no Form 990
+}
+"""The entities [books] knows, and the federal return each one files."""
+
+NONPROFIT_ENTITIES = frozenset({"public-charity", "church"})
+
+
+class CostObject(BaseModel):
+    """What every dollar is coded to: a project number for a business, a fund
+    or unit code for a nonprofit (docs/tenant-kit-design.md, section 4).
+    ``pattern`` is a regular expression whose groups make up the code and
+    ``canonical`` formats those groups (``"P{0}_{1}"``). Parsed and checked
+    here; the three sites that hard-code today's format move to it on an
+    owner coding day (#340), so nothing reads it yet. No pattern resolves no
+    text as a code."""
+
+    label: str = "project"
+    pattern: str = ""
+    canonical: str = ""
+    tag_pattern: str = ""
+
+    @model_validator(mode="after")
+    def _compiles(self) -> CostObject:
+        for name in ("pattern", "tag_pattern"):
+            text = getattr(self, name)
+            if not text:
+                continue
+            try:
+                compiled = re.compile(text)
+            except re.error as exc:
+                raise ValueError(f"[books.cost_object] {name} does not compile: {exc}") from exc
+            if not self.canonical:
+                raise ValueError(f"[books.cost_object] {name} needs a canonical format")
+            try:
+                self.canonical.format(*(["0"] * compiled.groups))
+            except (IndexError, KeyError) as exc:
+                raise ValueError(
+                    f"[books.cost_object] canonical {self.canonical!r} names more groups "
+                    f"than {name} has ({compiled.groups})"
+                ) from exc
+        return self
+
+    def canonicalize(self, text: str) -> list[str]:
+        """Every code in ``text``, in canonical form, in order of appearance."""
+        if not self.pattern:
+            return []
+        return [self.canonical.format(*m.groups()) for m in re.finditer(self.pattern, text)]
+
+
+class Fund(BaseModel):
+    name: str
+    restricted: bool = False
+
+
+class NonprofitBooks(BaseModel):
+    """Reserved for the fund dimension (a separate build): parsed and checked
+    now so the kit does not change shape when it lands."""
+
+    funds: list[Fund] = Field(default_factory=list)
+    designated_gifts: bool = True
+    # A written acknowledgment for a single gift at or above this amount.
+    acknowledgment_at: Decimal = Decimal("250")
+    # The quid-pro-quo disclosure for a payment above this amount.
+    quid_pro_quo_above: Decimal = Decimal("75")
+    housing_allowance: bool = False
+
+
+class Form1099(BaseModel):
+    """Reserved: which vendor tax classifications get a 1099-NEC. Empty keeps
+    today's behavior (the W-9 lane's own rules)."""
+
+    nec_for: list[str] = Field(default_factory=list)
+
+
+class Books(BaseModel):
+    """[books] in tenant.toml (docs/tenant-kit-design.md, section 4). Nothing
+    in the daily loop reads it yet; [fiscal], [qbo] and
+    [expenses].category_accounts stay where they are."""
+
+    system: Literal["qbo", "none"] = "qbo"
+    entity: (
+        Literal["s-corp", "partnership", "c-corp", "sole-proprietor", "public-charity", "church"]
+        | None
+    ) = None
+    cost_object: CostObject = Field(default_factory=CostObject)
+    form_1099: Form1099 = Field(default_factory=Form1099)
+    nonprofit: NonprofitBooks | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_entity(cls, data: object) -> object:
+        # The template writes entity = "" until onboarding asks.
+        if isinstance(data, dict) and data.get("entity") == "":
+            return {**data, "entity": None}
+        return data
+
+    @model_validator(mode="after")
+    def _nonprofit_only(self) -> Books:
+        if self.nonprofit is not None and self.entity not in NONPROFIT_ENTITIES:
+            raise ValueError(
+                "[books.nonprofit] belongs to a public-charity or church entity, "
+                f"not {self.entity or 'an unset entity'}"
+            )
+        return self
+
+    @property
+    def tax_return(self) -> str:
+        return ENTITY_RETURNS[self.entity] if self.entity else ""
 
 
 class Approval(BaseModel):
@@ -605,6 +736,7 @@ class LlmSettings(BaseModel):
 class TenantConfig(BaseModel):
     identity: Identity
     fiscal: Fiscal = Field(default_factory=Fiscal)
+    books: Books = Field(default_factory=Books)
     approval: Approval = Field(default_factory=Approval)
     ap: ApSettings = Field(default_factory=ApSettings)
     timesheets: TimesheetsSettings = Field(default_factory=TimesheetsSettings)

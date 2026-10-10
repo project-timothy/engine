@@ -20,6 +20,12 @@ existing is renamed.
 
 **Ledger schema.** No change (still ledger migration 8).
 
+- The agent lanes get their own container (issue #359): `Dockerfile.lane`
+  (the lockfile's dependencies with the `[claude]` extra and the dev group,
+  no engine code, uid 10001) and `compose.lane.yaml` (an internal network,
+  a digest-pinned squid allowing GitHub and the Anthropic API only, and only
+  the environment the file names). The product image is unchanged and stays
+  SDK-free. Nothing schedules it yet; a tenant's wrapper runs it.
 - `engine --version`, `auditor --version`, and a version line at the top of
   `engine doctor` (public #7).
 - The ledger can be restored from its remote, and a test proves it;
@@ -40,6 +46,9 @@ existing is renamed.
 - The two QuickBooks push jobs moved out of `core/agents/ap/jobs.py` into
   `qbo_push.py` and `qbo_push_payments.py`, with no change in what they do;
   the payments run, complexity 28, is cut into steps of 9 or less (public #2).
+- `engine doctor` fails when another tenant's credentials (its accounting
+  token file, a configured mailbox, or a secrets file this user can decrypt)
+  are reachable by the same OS user: one tenant per user or container.
 
 ## 0.1.0 (2026-10-04)
 

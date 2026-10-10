@@ -11,6 +11,7 @@ import base64
 import hashlib
 from pathlib import Path
 
+from ...authority import CardRule
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.fileops import CannotVerify, CopyMismatch, place_bytes
 from ...engine.result import Anomaly
@@ -322,4 +323,11 @@ def _fetch_run(ctx: JobContext) -> JobOutput:
 
 JOBS: dict[str, JobHandler] = {
     "fetch": JobHandler(key=_fetch_key, run=_fetch_run),
+}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    "expenses.cc_charge_filed": CardRule("approve", "expense.report", money=False)
 }

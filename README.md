@@ -5,9 +5,10 @@ idempotent CLI invocation against a git-backed ledger, every agent is a brief
 plus deterministic code versioned together, every tenant is pure configuration,
 and every past incident is a regression test.
 
-It ships ten agents and their jobs: accounts payable (`ap`), accounts
+It ships eleven agents and their jobs: accounts payable (`ap`), accounts
 receivable remittance (`ar`), month-end `close`, `expenses`, `timesheets`,
-`mail`, `deadlines`, `projects`, a weekly `brief`, and `demo`; run
+`mail`, `deadlines`, `projects`, a weekly `brief`, approval `routing`, and
+`demo`; run
 `uv run engine agents` for the full list. Beside the engine sits an
 independent `auditor` that recomputes truth from ground sources every night
 and imports nothing from the engine.
@@ -34,7 +35,10 @@ Read these first, in order:
 7. Give the demo its folders: `uv run engine doctor demo --create-folders` makes the
    `demo-data/` tree its `tenant.toml` names (the container does this at first boot).
    Now `uv run engine run demo ap intake` runs, with nothing to intake until you drop
-   a PDF in `demo-data/inbox/`.
+   a PDF in `demo-data/inbox/`. Run `uv run engine doctor demo` again: it still
+   names one item missing, the `ledger remote`, which only a host that pushes
+   its ledger every night needs (`docs/install.md` step 5). The demo needs
+   nothing else, and every `skip` line is a lane the demo never connects.
 8. Run the test suite: `uv run pytest`.
 9. Lint: `uv run ruff check .` and check the tenant boundary: `uv run python -m core.evals.bleedthrough_lint`.
 
@@ -59,7 +63,9 @@ Every engine command takes `--help`. The owner-facing ones need a tenant.
 |---------|--------------|
 | `uv run engine run <tenant> <agent> <job> [--shadow] [--json]` | Run a job against a tenant's ledger |
 | `uv run engine agents` | List discoverable agents and their jobs |
-| `uv run engine init <slug> [--archetype A\|B\|C]` | Create a tenant from an archetype template |
+| `uv run engine init <slug> [--archetype A\|B\|C] [--shape SHAPE]` | Create a tenant from an archetype template, with its kit (`docs/tenant-kit-design.md`) |
+| `uv run engine onboard <slug> [--answer ID=VALUE] [--apply]` | The onboarding conversation as JSON for an agent: next question, record answers, then create the tenant and run doctor |
+| `uv run engine voice-check <tenant> <file> [--register NAME]` | Check a draft against the tenant's `kit/voice.toml`: spelling, banned words, glossary, register |
 | `uv run engine doctor <tenant>` | Report what this host is missing: secrets, folders, the ledger and its remote, the scheduler |
 | `uv run engine schedule <tenant>` | Render this host's crontab from `[host.schedule]` |
 | `uv run engine queue ...` | Review the approval queue |
@@ -73,7 +79,12 @@ Every engine command takes `--help`. The owner-facing ones need a tenant.
 | `uv run engine jobs ...` | The job ledger: bounded retries (`engine jobs resume`) |
 | `uv run engine runner ...` | Agentic sessions: `engine runner run <tenant> <skill path>` |
 | `uv run engine mail ...` | Owner acts on the tenant mailbox connection |
-| `uv run engine mcp <tenant>` | Serve the read-only tools over MCP on stdio, for a chat client |
+| `uv run engine mcp <tenant> [--as <person>]` | Serve the read-only tools over MCP on stdio, for a chat client; `--as` answers as one person under authority.toml |
+| `uv run engine mcp <tenant> --http --resource <url> --tokens <file>` | Serve the same tools on one HTTP endpoint for a hosted box, each request answered as the person its bearer token signs in |
+| `uv run engine door-token <tenant> <person> --tokens <file>` | Make an invitation token for one person; printed once, the file keeps only its hash |
+| `uv run engine mcp <tenant> --http --resource <url> --authorization-server <issuer> --introspect <url> --introspect-secret <file>` | The same endpoint, signed in through the box's sign-in service ([doorkeeper](https://github.com/project-timothy/doorkeeper)), which the engine asks who each token is (RFC 7662) |
+| `uv run engine mcp --onboarding` | Serve the onboarding conversation over MCP, before any tenant exists; apply needs the person's yes |
+| `uv run engine capabilities [--format json]` | What Tim can do today, built from the code: the tools, the setup questions, each lane in one plain sentence, and what is not built yet |
 | `uv run engine evals ...` | Score a model on a job and write the results file the tenant config gate reads |
 | `uv run auditor run <tenant> [--local-only]` | The independent nightly audit (`auditor --help` for the rest) |
 | `uv run pytest` | Unit tests (`tests/`) + evals (`core/**/evals/`) |

@@ -1,0 +1,22 @@
+# The commercial default (docs/tenant-kit-design.md, section 2). A tenant
+# tunes it in its own kit/voice.toml or replaces it with preset = "custom".
+
+frame = """
+Write as the business itself, to a person who is busy. Lead with the answer,
+then the reason. Short paragraphs, specific numbers and names, active voice,
+plain words. Say what is uncertain plainly. No hype, no filler, no closing
+summary of what was just said.
+"""
+
+# Words that read as machine-written in any business's mail.
+banned = [
+    "delve",
+    "synergy",
+    "game-changer",
+    "supercharge",
+    "it's worth noting",
+    "in today's fast-paced",
+    "let that sink in",
+]
+
+banned_patterns = []

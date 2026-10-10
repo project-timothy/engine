@@ -16,6 +16,7 @@ import os
 from datetime import date, timedelta
 from pathlib import Path
 
+from ...authority import CardRule
 from ...engine.clock import local_today
 from ...engine.config import tenant_dir
 from ...engine.contracts import EventSpec, JobContext, JobHandler, JobOutput
@@ -284,4 +285,11 @@ JOBS: dict[str, JobHandler] = {
     "scan": JobHandler(key=_scan_key, run=_scan_run),
     "done": JobHandler(key=_done_key, run=_done_run),
     "calendar": JobHandler(key=_calendar_key, run=_calendar_run),
+}
+
+
+# What deciding each card is, for a tenant with authority.toml (#435;
+# core.authority.CardRule). A tenant without one never reads this.
+CARD_AUTHORITY: dict[str, CardRule] = {
+    "deadlines.calendar_sync": CardRule("send", "calendar", money=False)
 }

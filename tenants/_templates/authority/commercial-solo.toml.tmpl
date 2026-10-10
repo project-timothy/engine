@@ -1,0 +1,94 @@
+# Who may do what for ${legal_name} (shape ${shape}). Rendered by
+# `engine init`; the design is docs/tenant-kit-design.md, section 3.
+#
+# With this file the approval queue decides who may decide each card, and a
+# lane acts with no one asked only through a grant to the agent it runs as
+# (`lanes`); each lane's `unattended` list in tenant.toml no longer counts.
+# Every decision names who made it (`engine queue approve ... --as NAME`).
+# The agent that runs onboarding fills in [people]; everything here can be
+# changed, and a change is proposed, confirmed by a person, and recorded.
+#
+# A permission is action:resource[@scope][<=limit]. Actions: view, submit,
+# approve, release (money), send (anything leaving the building), review,
+# propose and confirm (an authority change). Resources: ap.invoice,
+# expense.report, purchase.order, payment, message, authority, vendor (a new
+# vendor or its tax facts), books (writes to the accounting system, the
+# month's lock), calendar, card (a card type no agent describes), or * for all.
+# @own limits it to the projects, funds or units a person is assigned to.
+#
+# The floor, which no edit here switches off: money and outside sends happen
+# only through a card; no agent releases money or confirms an authority
+# change; an agent that reads outside documents never proposes one.
+
+[money]
+# "human": no agent releases money. The engine accepts no other value;
+# anything beyond it belongs to the payment-rails design.
+out = "human"
+
+[safeguards]
+# One person runs it. They approve their own; if someone looks over the
+# spending (a sponsor, a board member, an accountant), they get a monthly
+# review of everything paid instead of approving each item.
+self_approval = "allowed"
+self_approval_limit = 0
+review_after = "monthly"
+distinct_payer = "off"
+distinct_payer_above = 0
+second_approver_above = 0
+authority_confirm = "self"
+report_self_approvals = "never"
+
+# ---- roles
+[roles.owner]
+grants = ["*:*"]
+
+[roles.accountant]
+grants = ["view:*", "review:*"]
+
+# ---- agents
+[roles.agent-bookkeeper]
+grants = ["view:*", "submit:*", "review:*"]
+
+[roles.agent-admin]
+grants = ["view:*", "propose:authority"]
+
+[agents.bookkeeper]
+# The agent that keeps the books: reads statements, receipts and invoices.
+roles = ["agent-bookkeeper"]
+reads_outside = true
+# The engine lanes it runs as. Add send:message to its role to email the
+# weekly brief with no one asked, send:calendar to write deadlines.
+lanes = ["ap", "ar", "brief", "close", "deadlines", "expenses", "mail", "projects", "timesheets"]
+
+[agents.admin]
+# The agent that runs onboarding and keeps this file current. It reads no
+# outside documents, so it may propose a change; a person confirms it.
+roles = ["agent-admin"]
+reads_outside = false
+
+[routing]
+# How a document waits for its decision (docs/tenant-kit-design.md, section 3).
+# The clock is the document's own deadline, else window_days from when its
+# step opened; reminders keep that shape, anchored to the date. The backup
+# ("covering for") and upward routing are off until turned on; upward works
+# only in the organization shape. owner = the person whose brief lists what
+# is waiting on whom.
+window_days = 5
+first_reminder_days = 2
+second_reminder_days = 4
+backup = false
+backup_after_days = 5
+# upward = true
+# upward_role = "board"
+# owner = "<a person under [people]>"
+#
+# A route gives a resource above an amount its steps, each a role and how
+# many of it: need = "one", "two" or "all". Without one, a card takes one
+# approver, and a second past second_approver_above.
+# [[routing.route]]
+# resource = "payment"
+# above = 5000
+# steps = [{ role = "approver" }, { role = "owner" }]
+
+[people]
+# Filled in at onboarding: name = { roles = [...], scopes = [...] }

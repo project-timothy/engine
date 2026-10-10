@@ -1,0 +1,16 @@
+[books]
+# The books (docs/tenant-kit-design.md, section 4). Nothing in the daily loop
+# reads this section yet; [fiscal], [qbo] and [expenses].category_accounts
+# stay where they are.
+system = "qbo"
+# s-corp, partnership, c-corp or sole-proprietor: the agent asks at onboarding.
+entity = ""
+
+[books.cost_object]
+# What every dollar is coded to. pattern is a regular expression whose groups
+# make up the code, and canonical formats those groups, for example
+# pattern = "P(\\d{2})_?(\\d{4})" with canonical = "P{0}_{1}". Empty resolves
+# no text as a code.
+label = "project"
+pattern = ""
+canonical = ""

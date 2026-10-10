@@ -1,0 +1,70 @@
+# The agent lane's image (issue #359, container half;
+# docs/decisions/2026-10-07-the-agent-lanes-run-in-a-container.md).
+#
+# A lane session (audit triage today, the build lane when it is loaded) writes
+# code and runs it. This image is where it does that: the engine's pinned
+# Python and uv, the lockfile's dependencies WITH the [claude] extra and the
+# dev group (pytest, ruff), and no engine code at all. The code is the fresh
+# clone the host wrapper mounts at /work/engine, so what the session tests is
+# what it is reviewing, never a copy baked in here.
+#
+# The Claude Code CLI comes inside the claude-agent-sdk wheel (its _bundled/
+# binary), so it is hash-pinned by uv.lock like every other dependency and
+# moves only when the SDK pin does (tests/unit/test_sdk_cli_pair.py).
+#
+# The product image (Dockerfile) stays SDK-free, row 7.26's exit criterion:
+# this is a separate file, and nothing here is a stage of that one.
+#
+# Build:  docker compose -f compose.lane.yaml build lane
+# Run:    the tenant's lane wrapper, never by hand against a live tenant.
+
+# Same bases, same digests as Dockerfile (security review 2026-10-03, finding
+# 3): a digest change is a reviewed PR, in both files at once.
+FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf25833671f512b26a9b6d778cb3
+
+# The real uv lives under libexec; /usr/local/bin/uv is the shim below.
+COPY --from=ghcr.io/astral-sh/uv:0.9.27@sha256:143b40f4ab56a780f43377604702107b5a35f83a4453daf1e4be691358718a6a /uv /usr/local/libexec/uv
+
+# git: the session's clone, its branches and its diffs.
+# ca-certificates: every https call, through the proxy.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates git \
+ && rm -rf /var/lib/apt/lists/*
+
+# The dependencies only, from the lockfile, into a venv outside any mount.
+# --no-install-project: the engine itself is the mounted clone.
+WORKDIR /opt/lane-build
+COPY pyproject.toml uv.lock ./
+RUN UV_PROJECT_ENVIRONMENT=/opt/lane-venv UV_PYTHON_DOWNLOADS=never \
+    /usr/local/libexec/uv sync --locked --extra claude --no-install-project --no-cache \
+ && rm -rf /opt/lane-build
+
+# Every `uv run` a session makes goes to that venv, offline (host/lane/uv).
+COPY --chmod=0755 host/lane/uv /usr/local/bin/uv
+
+# Non-root, the same uid as the product image (security review 2026-10-03,
+# finding 2). /opt/lane-venv stays root-owned: a session cannot change the
+# packages it is tested against. HOME is its own, for Claude Code's state.
+# safe.directory: the clones are bind mounts owned by the host user, and git
+# refuses a repository another uid owns; the system file is root's, so a
+# session cannot widen anything else through it.
+RUN groupadd --system --gid 10001 lane \
+ && useradd --system --uid 10001 --gid lane --home-dir /home/lane --create-home \
+      --shell /usr/sbin/nologin lane \
+ && mkdir -p /work \
+ && chown lane:lane /work \
+ && git config --system safe.directory '*'
+
+# DISABLE_AUTOUPDATER: the CLI is the one the lockfile pinned; it never
+# replaces itself (the 2026-09-04 SDK/CLI break). The other flag stops the
+# telemetry and error reporting calls the proxy would refuse anyway, so the
+# proxy log shows only what the session itself reached for.
+ENV PATH=/usr/local/bin:/opt/lane-venv/bin:/usr/bin:/bin \
+    HOME=/home/lane \
+    DISABLE_AUTOUPDATER=1 \
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+USER lane
+WORKDIR /work/engine

@@ -26,6 +26,9 @@ from core.agents.deadlines import calendar_sync as cs
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
 
+# Today's (no authority.toml) path; #435 adds the other.
+pytestmark = pytest.mark.usefixtures("demo_without_authority")
+
 OBLIGATIONS = """
 [[obligation]]
 id = "permit"

@@ -44,8 +44,9 @@ from pathlib import Path
 from ..ledger import Ledger
 from ..llm import telemetry
 from ..redact import env_values, redact, redact_text
+from .authority_gate import TenantAuthority, load_policy
 from .config import MissingFolderError, TenantConfig, load_tenant
-from .contracts import JobContext, JobOutput, RetryPolicy
+from .contracts import ApprovalSpec, JobContext, JobOutput, RetryPolicy
 from .guard import ProtectedSurfaceError, WriteGuard
 from .registry import UnknownAgentError, UnknownJobError, agent_dir, get_job
 from .result import Anomaly, ApprovalNeeded, LlmTotals, RunResult, RunStatus
@@ -553,6 +554,7 @@ def run(
 ) -> RunResult:
     params = params or {}
     tenant: TenantConfig = load_tenant(tenant_slug, tenants_root=tenants_root)
+    authority = load_policy(tenant_slug, tenants_root=tenants_root)
     handler = get_job(agent, job)
     root = resolve_ledger_root(tenant_slug, ledger_dir)
 
@@ -580,6 +582,7 @@ def run(
                 handler=handler,
                 root=root,
                 guard=guard,
+                authority=authority,
             )
     except LedgerLocked as exc:
         return RunResult(
@@ -592,6 +595,14 @@ def run(
             anomalies=[Anomaly(code=LOCK_ANOMALY, detail=str(exc))],
             summary=f"refused: another run holds the ledger lock at {root}",
         )
+
+
+def _decided_stamp(ap: ApprovalSpec) -> dict[str, str]:
+    return {
+        "decided_by": ap.decided_by,
+        "decided_via": "authority",
+        "authority_reason": ap.decided_reason,
+    }
 
 
 def resume_due(
@@ -614,6 +625,7 @@ def resume_due(
     when nothing was due.
     """
     tenant: TenantConfig = load_tenant(tenant_slug, tenants_root=tenants_root)
+    authority = load_policy(tenant_slug, tenants_root=tenants_root)
     root = resolve_ledger_root(tenant_slug, ledger_dir)
     guard = WriteGuard(tenant.ap.protected_paths, allowed=tenant.ap.allowed_paths)
     if guard.is_protected(root):
@@ -626,14 +638,19 @@ def resume_due(
         due = ledger.due_retries(tenant_slug, as_of=stamp)
     results: list[RunResult] = []
     for record in due:
-        taken = _resume_one(record, tenant=tenant, root=root, guard=guard)
+        taken = _resume_one(record, tenant=tenant, root=root, guard=guard, authority=authority)
         if taken is not None:
             results.append(taken)
     return results
 
 
 def _resume_one(
-    record: dict, *, tenant: TenantConfig, root: Path, guard: WriteGuard
+    record: dict,
+    *,
+    tenant: TenantConfig,
+    root: Path,
+    guard: WriteGuard,
+    authority: TenantAuthority | None = None,
 ) -> RunResult | None:
     """Take one scheduled attempt under the run lock. None when another
     process took it first (the compare-and-set on the record lost)."""
@@ -687,6 +704,7 @@ def _resume_one(
                 root=root,
                 guard=guard,
                 resume=fresh,
+                authority=authority,
             )
     except LedgerLocked as exc:
         return RunResult(
@@ -701,7 +719,7 @@ def _resume_one(
         )
 
 
-def _run_locked(  # noqa: C901  # complexity 24, tracked debt
+def _run_locked(  # noqa: C901  # complexity 25, tracked debt
     tenant_slug: str,
     agent: str,
     job: str,
@@ -713,6 +731,7 @@ def _run_locked(  # noqa: C901  # complexity 24, tracked debt
     root: Path,
     guard: WriteGuard,
     resume: dict | None = None,
+    authority: TenantAuthority | None = None,
 ) -> RunResult:
     # Input tracing (#153): under ENGINE_KEY_AUDIT the job sees traced views
     # of its config and params, so every read is recorded and the audit
@@ -736,6 +755,7 @@ def _run_locked(  # noqa: C901  # complexity 24, tracked debt
             params=TracedParams(params) if auditing else params,
             agent_dir=agent_dir(agent),
             guard=guard,
+            authority=authority,
         )
 
         key_trail = InputTrail()
@@ -979,6 +999,11 @@ def _run_locked(  # noqa: C901  # complexity 24, tracked debt
                     action_type=ap.action_type,
                     params=ap.params,
                 )
+                if queued and ap.decided_by:
+                    # Decided by the lane's agent under authority.toml (#435):
+                    # on the record, and waiting on no one.
+                    ledger.decide_queued(subject_key, _decided_stamp(ap))
+                    continue
                 if queued:
                     honored.append(
                         ApprovalNeeded(

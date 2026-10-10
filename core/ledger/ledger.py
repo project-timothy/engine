@@ -569,6 +569,48 @@ class Ledger:
         self._conn.commit()
         return {"id": approval_id, "action_type": row["action_type"], "status": decision}
 
+    def decide_queued(self, idempotency_key: str, stamp: dict[str, str]) -> bool:
+        """Mark a just-queued card approved by the lane's own agent under the
+        tenant's authority.toml (#435), merging ``stamp`` (who decided and
+        why) into its params. Pending rows only; inside the run's
+        transaction it commits with the run."""
+        row = self._conn.execute(
+            "SELECT id, params_json FROM approval_queue "
+            "WHERE idempotency_key = ? AND status = 'pending'",
+            (idempotency_key,),
+        ).fetchone()
+        if row is None:
+            return False
+        params = {**json.loads(row["params_json"]), **stamp}
+        self._conn.execute(
+            "UPDATE approval_queue SET status = 'approved', resolved_at = ?, params_json = ? "
+            "WHERE id = ?",
+            (_now(), json.dumps(params, sort_keys=True), row["id"]),
+        )
+        if not self._in_txn:
+            self._conn.commit()
+        return True
+
+    def update_pending_params(self, tenant: str, approval_id: int, merge: dict[str, str]) -> bool:
+        """Merge ``merge`` into a pending card's params without deciding it:
+        a vote on a route that has more to go, a handoff, an "on it by"
+        date (#436). Pending rows only."""
+        row = self._conn.execute(
+            "SELECT params_json FROM approval_queue WHERE tenant = ? AND id = ? "
+            "AND status = 'pending'",
+            (tenant, approval_id),
+        ).fetchone()
+        if row is None:
+            return False
+        params = {**json.loads(row["params_json"]), **merge}
+        self._conn.execute(
+            "UPDATE approval_queue SET params_json = ? WHERE id = ?",
+            (json.dumps(params, sort_keys=True), approval_id),
+        )
+        if not self._in_txn:
+            self._conn.commit()
+        return True
+
     def supersede_approval(self, approval_id: int) -> bool:
         """Close a PENDING card as ``superseded``: queue hygiene, never a
         decision (an execute path that selects approved cards moves nothing on
