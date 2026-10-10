@@ -116,6 +116,8 @@ files = [
   "core/engine/contracts.py",
   "core/llm/gateway.py",
   "core/adapters",
+  # The plug shapes (#344): Apache-2.0, imported by the adapters above.
+  "core/contracts",
   # The bill and payment pushes and their inputs (public issue #2).
   "core/agents/ap/qbo_push.py",
   "core/agents/ap/qbo_push_payments.py",

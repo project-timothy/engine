@@ -51,12 +51,12 @@ deterministic engine code (invariant 4).
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date as _date
 from typing import Any
 
+from ...engine.config import CostObject
 from .reconcile import DATE_SLACK, norm_check_ref
 from .registry import VendorRegistry
 
@@ -79,12 +79,6 @@ DEFAULT_ACCOUNT_PATTERNS: tuple[str, ...] = (
 # it". ``already_recorded`` and ``settle`` are explained by definition, and
 # ``review`` already has its own card naming candidate rows.
 CARDABLE_DECISIONS: frozenset[str] = frozenset({"out_of_scope", "unknown"})
-
-# A P-number as the house chart spells it inside an account name. This is a
-# display hint for the card, NOT a second canonicalizer: the canonical
-# implementation is ``auditor/pn.py``, which core deliberately does not
-# import (the package-independence lint keeps core free of auditor).
-_PN_IN_ACCOUNT = re.compile(r"PN?\s?(\d{2})\s?_?\s?(\d{4})", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -220,12 +214,14 @@ def cross_source_pairs(
     return {k: v for k, v in claims.items() if v not in contested}
 
 
-def pn_hint(accounts: tuple[str, ...] | list[str]) -> str:
-    """The first P-number spelled inside an account name, canonical form."""
+def pn_hint(accounts: tuple[str, ...] | list[str], code: CostObject) -> str:
+    """The first project code spelled inside an account name, canonical form
+    (the tenant's [books.cost_object], #340). A display hint for the card;
+    "" when the tenant has no pattern or no account carries a code."""
     for account in accounts:
-        found = _PN_IN_ACCOUNT.search(str(account))
+        found = code.canonicalize(str(account))
         if found:
-            return f"P{found.group(1)}_{found.group(2)}"
+            return found[0]
     return ""
 
 
@@ -252,6 +248,7 @@ def propose(
     cost_types: tuple[str, ...] = DEFAULT_COST_TYPES,
     account_patterns: tuple[str, ...] = DEFAULT_ACCOUNT_PATTERNS,
     floor_cents: int = 60_000,
+    cost_object: CostObject | None = None,
 ) -> Proposal | None:
     """Should this unexplained clearing become a payable proposal?
 
@@ -329,6 +326,6 @@ def propose(
         date=str(getattr(evidence, "date", "") or ""),
         accounts=accounts,
         cost_type=cost_type,
-        project_hint=pn_hint(accounts),
+        project_hint=pn_hint(accounts, cost_object or CostObject()),
         basis=basis,
     )

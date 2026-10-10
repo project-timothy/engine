@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
 
@@ -71,6 +73,7 @@ def test_intake_files_by_folder_attribution(tmp_path):
     assert filed.is_file()
 
 
+@pytest.mark.usefixtures("demo_with_project_codes")
 def test_filename_tag_is_the_fallback_attribution(tmp_path):
     _drop(tmp_path, "hotel P26_2002.pdf", project=None)
 

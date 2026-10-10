@@ -472,6 +472,47 @@ def _one_tenant_check(
     )
 
 
+def _document_checks(cfg: TenantConfig) -> list[Check]:
+    """Which model tiers may receive a document (#358). Without
+    ``[llm].document_tiers`` any tier may: a SKIP, the default. With it, each
+    allowed tier is listed with what its provider retains, and a document job
+    routed to a tier off the list is MISSING, found here instead of at the
+    first refused call. Imported here: ``core.llm`` reads ``core.engine``."""
+    from ..llm.policy import DOCUMENT_JOB_TYPES
+
+    llm = cfg.llm
+    if llm.document_tiers is None:
+        return [
+            Check(
+                "documents", SKIP, "no [llm].document_tiers: any model tier may receive documents"
+            )
+        ]
+    retention = {True: "zero data retention", False: "retains data", None: "retention not stated"}
+    listed = [
+        f"{name} ({llm.tiers[name].adapter}, {retention[llm.tiers[name].zero_data_retention]})"
+        for name in llm.document_tiers
+    ]
+    checks = [
+        Check(
+            "documents", OK, "only " + ("; ".join(listed) or "no tier") + " may receive documents"
+        )
+    ]
+    default = llm.jobs.get("default")
+    for job in sorted(DOCUMENT_JOB_TYPES):
+        tier = llm.jobs.get(job, default)
+        if tier is None or tier == LLM_DETERMINISTIC or tier in llm.document_tiers:
+            continue
+        checks.append(
+            Check(
+                f"documents {job}",
+                MISSING,
+                f"routes to tier {tier!r}, which [llm].document_tiers does not allow; "
+                "every call would be refused",
+            )
+        )
+    return checks
+
+
 def _books_check(cfg: TenantConfig) -> Check:
     """[books] (docs/tenant-kit-design.md, section 4). Nothing reads it yet,
     so an unset entity is `skip`; the section itself already loaded or the
@@ -580,6 +621,7 @@ def run_doctor(
     checks += _secret_checks(cfg, environment, secrets.names)
     checks += _secrets_file_checks(cfg, environment, secrets)
     checks += _tier_checks(cfg, environment)
+    checks += _document_checks(cfg)
     checks += _kit_checks(cfg, path.parent)
     checks.append(_books_check(cfg))
     checks.append(_qbo_check(cfg))

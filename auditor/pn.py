@@ -17,39 +17,53 @@ to it:
 Nicknames are tenant data (``[auditor.projects].nicknames`` in tenant.toml),
 never code: keys are matched case-insensitively with whitespace collapsed.
 
-**The ``PYY_NNNN`` shape is one tenant's numbering scheme**, the first
-tenant's, carried here as the default. A tenant that numbers projects
-another way resolves through nicknames today; making the pattern itself a
-tenant setting is a proposed change to what the auditor does, not taken here.
+**The numbering scheme is tenant data** (#340): ``[books.cost_object]``
+gives a pattern whose groups make the code and a canonical format
+(``"P{0}_{1}"`` for the first tenant). The auditor reads that table itself
+(it imports nothing from core) and hands a :class:`CodeFormat` here. No
+pattern resolves no text as a project code; nicknames still resolve.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 
 OVERHEAD = "OVERHEAD"
 MULTI = "MULTI"
 
-# A P-number embedded anywhere in a lower-cased string: an optional 'n' after
-# the 'p' (PN00_0103), optional spaces, underscore-or-space between the
-# 2-digit year and the 4-digit number (`p 25 _ 1017` included). `pn 1018` (four digits, no year) is
-# deliberately NOT matched; that shape is a nickname.
-_P_NUMBER = re.compile(r"p\s?n?\s?(\d{2})\s?_?\s?(\d{4})", re.IGNORECASE)
 _DEFAULT_OVERHEAD = frozenset({"general/overhead", "general / overhead", "overhead"})
 _MULTI_PREFIX = "multi"
 _WS = re.compile(r"\s+")
+
+
+@dataclass(frozen=True)
+class CodeFormat:
+    """A tenant's project-code scheme: ``pattern``'s groups, formatted by
+    ``canonical``. The empty format finds nothing."""
+
+    pattern: str = ""
+    canonical: str = ""
+
+    def find(self, text: str) -> list[str]:
+        if not self.pattern:
+            return []
+        return [self.canonical.format(*m.groups()) for m in re.finditer(self.pattern, text)]
+
+
+NO_FORMAT = CodeFormat()
 
 
 def _norm(text: str) -> str:
     return _WS.sub(" ", text.strip().lower())
 
 
-def find_pns(text: str | None) -> list[str]:
-    """Every P-number in a free-text field, in order, canonical form."""
+def find_pns(text: str | None, code: CodeFormat = NO_FORMAT) -> list[str]:
+    """Every project code in a free-text field, in order, canonical form."""
     if not text:
         return []
-    return [f"P{y}_{n}" for y, n in _P_NUMBER.findall(text)]
+    return code.find(text)
 
 
 def canonicalize(
@@ -57,11 +71,12 @@ def canonicalize(
     *,
     nicknames: Mapping[str, str] | None = None,
     overhead_tokens: Iterable[str] = (),
+    code: CodeFormat = NO_FORMAT,
 ) -> str | None:
-    """Resolve a project string to PYY_NNNN, OVERHEAD, MULTI, or None.
+    """Resolve a project string to its canonical code, OVERHEAD, MULTI, or None.
 
     Never raises. Order: overhead tokens, the multi prefix, an embedded
-    P-number, then the nickname map."""
+    project code, then the nickname map."""
     if value is None:
         return None
     text = _norm(value)
@@ -71,7 +86,7 @@ def canonicalize(
         return OVERHEAD
     if text.startswith(_MULTI_PREFIX):
         return MULTI
-    found = find_pns(text)
+    found = find_pns(text, code)
     if found:
         return found[0]
     for nick, pn in (nicknames or {}).items():

@@ -27,7 +27,7 @@ import tomllib
 from pathlib import Path
 
 from ..findings import Finding
-from ..pn import MULTI, OVERHEAD, canonicalize, find_pns
+from ..pn import MULTI, OVERHEAD, CodeFormat, canonicalize, find_pns
 from . import AuditContext
 from ._tables import has_table
 
@@ -49,6 +49,7 @@ def _collect(ctx: AuditContext) -> tuple[dict[str, list[str]], dict[str, list[st
     slug = ctx.tenant.slug
     nicknames = ctx.tenant.projects_nicknames
     overhead = ctx.tenant.projects_overhead_tokens
+    code = CodeFormat(ctx.tenant.cost_object_pattern, ctx.tenant.cost_object_canonical)
     pns: dict[str, list[str]] = {}
     unresolved: dict[str, list[str]] = {}
 
@@ -56,7 +57,7 @@ def _collect(ctx: AuditContext) -> tuple[dict[str, list[str]], dict[str, list[st
         text = (value or "").strip()
         if not text:
             return
-        canon = canonicalize(text, nicknames=nicknames, overhead_tokens=overhead)
+        canon = canonicalize(text, nicknames=nicknames, overhead_tokens=overhead, code=code)
         if canon in (OVERHEAD, MULTI):
             return
         if canon is None:
@@ -71,7 +72,7 @@ def _collect(ctx: AuditContext) -> tuple[dict[str, list[str]], dict[str, list[st
             (slug,),
         ):
             label = f"AP #{row['id']} {row['vendor']} / {row['invoice_number']}"
-            for pn in find_pns(row["gl_account"]):
+            for pn in find_pns(row["gl_account"], code):
                 pns.setdefault(pn, []).append(f"{label} (gl_account)")
             note(row["project"], f"{label} (project)")
     if has_table(ctx, "expense_line") and has_table(ctx, "expense_report"):

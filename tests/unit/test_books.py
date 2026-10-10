@@ -178,3 +178,27 @@ def test_doctor_reports_books(world):
     }
     assert lines["grace"].status == "ok" and "church" in lines["grace"].detail
     assert lines["acme"].status == "skip" and "entity" in lines["acme"].detail
+
+
+# ---- the sites read it (#340) -------------------------------------------------
+
+FIRST_TENANT = {
+    "label": "project",
+    "pattern": r"(?i)p\s?n?\s?(\d{2})\s?_?\s?(\d{4})",
+    "canonical": "P{0}_{1}",
+    "tag_pattern": r"\bPN?(?:(\d{2})[_-])?(\d{4})\b",
+}
+
+
+def test_a_tag_is_the_code_as_written_in_a_name():
+    code = _books(cost_object=FIRST_TENANT).cost_object
+    assert code.tag("dinner P26-2034 $43.87.pdf") == "P26-2034"
+    assert code.tag("receipt P2035.pdf") == "P2035"
+    assert code.tag("PN00_0101 lunch") == "PN00_0101"
+    assert code.tag("no tag here") == ""
+
+
+def test_a_tag_falls_back_to_the_pattern_and_a_bare_tenant_has_none():
+    plain = _books(cost_object={**FIRST_TENANT, "tag_pattern": ""}).cost_object
+    assert plain.tag("lunch P26_2034") == "P26_2034"
+    assert _books().cost_object.tag("lunch P26_2034") == ""

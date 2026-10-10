@@ -30,10 +30,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from core.adapters.qbo import QboEvidence, normalize_purchase
 from core.agents.ap import direct_payment as dp
 from core.agents.ap import store
 from core.agents.ap.registry import VendorEntry, VendorRegistry
+from core.engine.config import CostObject
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
 
@@ -45,6 +48,10 @@ PROJECT_ACCOUNT = "Cost of Goods Sold:Project Expense - PN00_0101"
 UNREGISTERED = "Dana Whitfield"  # contractor with no registry row
 REGISTERED = "Ray Ostlund"  # contractor with a row and a W-9
 FREIGHT = "Cartway Freight"  # the true negative
+
+
+# The tenant's [books.cost_object] (#340); the hint reads only what it names.
+CODE = CostObject(pattern=r"(?i)p\s?n?\s?(\d{2})\s?_?\s?(\d{4})", canonical="P{0}_{1}")
 
 
 def _registry(**entries: VendorEntry) -> VendorRegistry:
@@ -80,6 +87,7 @@ def test_unregistered_contractor_cards():
         _ev(qbo_id="Purchase:83", payee=UNREGISTERED, amount_cents=260000),
         "out_of_scope",
         registry=_registry(),
+        cost_object=CODE,
     )
     assert proposal is not None
     assert proposal.payee == UNREGISTERED
@@ -192,6 +200,7 @@ def test_split_purchase_reads_every_account():
         _ev(accounts=["Office Supplies", PROJECT_ACCOUNT]),
         "out_of_scope",
         registry=_registry(),
+        cost_object=CODE,
     )
     assert proposal is not None
     assert proposal.project_hint == "P00_0101"
@@ -270,6 +279,7 @@ def _approve(ledger_dir: Path, card_id: int, project: str = "P00_0101") -> None:
         ledger.conn.commit()
 
 
+@pytest.mark.usefixtures("demo_with_project_codes")
 def test_card_parks_then_approval_creates_the_payable_row(tmp_path):
     d = tmp_path / "d"
     ev = _evidence_file(tmp_path, PAYMENT)
@@ -1167,3 +1177,14 @@ def test_the_summary_counts_the_statement_lines(tmp_path):
     result = _run(d, _evidence_file(tmp_path), bank_csv=str(csv))
 
     assert "statement lines: 1" in result.summary
+
+
+def test_a_tenant_without_a_scheme_gets_no_project_hint():
+    """#340: the numbering is tenant data; with none, the card asks plainly."""
+    proposal = dp.propose(
+        _ev(qbo_id="Purchase:84", payee=UNREGISTERED, amount_cents=260000),
+        "out_of_scope",
+        registry=_registry(),
+    )
+    assert proposal is not None
+    assert proposal.project_hint == ""

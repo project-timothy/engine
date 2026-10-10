@@ -18,6 +18,32 @@ Unreleased section under the new number.
 `senders` list per vendor in `vendors.toml`. Both default to empty; nothing
 existing is renamed.
 
+**Tenant files.** New optional `[llm].document_tiers` (a list of tier
+names) and a per-tier `zero_data_retention` (true, false, or unset). With
+`document_tiers` set, a model call that carries a document (an invoice,
+receipt, or scan sent as an attachment) goes only to a listed tier; any
+other tier, fallbacks included, is refused before the call and recorded as
+`documents_refused`. `engine doctor` lists the allowed tiers with their
+retention and names any document job routed off the list. Unset keeps
+today's behavior (#358).
+
+**Act before upgrading: project codes are tenant config now.** The engine
+no longer knows the `PYY_NNNN` project-number scheme; `[books.cost_object]`
+in `tenant.toml` names it (`pattern`, `canonical`, optional `tag_pattern`).
+With no pattern, no text reads as a project code: the hand-check card has
+no project hint, receipt file names carry no project tag, and the
+auditor's projects lens resolves only nicknames. A tenant that relied on
+the old built-in scheme adds, before upgrading:
+
+    [books.cost_object]
+    pattern = "(?i)p\\s?n?\\s?(\\d{2})\\s?_?\\s?(\\d{4})"
+    canonical = "P{0}_{1}"
+    tag_pattern = "\\bPN?(?:(\\d{2})[_-])?(\\d{4})\\b"
+
+Those are the three regexes the engine hard-coded before, and a replay of
+the first tenant's ledger and receipt tree through old and new code found
+no difference (#340).
+
 **Ledger schema.** No change (still ledger migration 8).
 
 - The agent lanes get their own container (issue #359): `Dockerfile.lane`

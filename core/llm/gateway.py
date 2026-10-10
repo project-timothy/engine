@@ -31,12 +31,39 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol, get_args, get_origin
+from typing import Annotated, Any, get_args, get_origin
 
 from pydantic import AfterValidator, BaseModel, ValidationError
 
-Role = Literal["system", "user", "assistant"]
+# The model seam's shapes live in the contracts package (#344); re-exported
+# here so every existing import keeps working.
+from core.contracts.llm import (
+    Adapter as Adapter,
+)
+from core.contracts.llm import (
+    Attachment as Attachment,
+)
+from core.contracts.llm import (
+    GatewayError as GatewayError,
+)
+from core.contracts.llm import (
+    GatewayTransportError as GatewayTransportError,
+)
+from core.contracts.llm import (
+    Message as Message,
+)
+from core.contracts.llm import (
+    PromptBundle as PromptBundle,
+)
+from core.contracts.llm import (
+    RawReply as RawReply,
+)
+from core.contracts.llm import (
+    Role as Role,
+)
+from core.contracts.llm import (
+    Usage as Usage,
+)
 
 # ---- the money rule ----------------------------------------------------------
 
@@ -56,74 +83,6 @@ DecimalString = Annotated[str, AfterValidator(_validate_decimal_string)]
 ``"1875.00"``, pydantic rejects a JSON number outright (a ``str`` field never
 coerces from a number), and the CALLER re-parses with ``Decimal(...)`` in
 code. The gateway never hands a float to anyone for money."""
-
-
-# ---- the prompt side ----------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Message:
-    role: Role
-    content: str
-
-
-@dataclass(frozen=True)
-class Attachment:
-    """A file for the model to look at. The ADAPTER reads the bytes (base64
-    inline on the wire); the gateway only carries the path and the MIME type.
-    Images and PDFs are the shapes every adapter accepts."""
-
-    path: Path
-    mime: str
-
-
-@dataclass(frozen=True)
-class PromptBundle:
-    """Everything an adapter needs for one provider call. ``messages`` may
-    hold system turns anywhere; each adapter folds them into its provider's
-    system slot. Attachments ride the FIRST user turn (the ask), which keeps
-    them in place when the retry appends the correction turns."""
-
-    job_type: str
-    model: str
-    messages: tuple[Message, ...]
-    attachments: tuple[Attachment, ...]
-    timeout_s: int
-
-    def system_text(self) -> str:
-        return "\n\n".join(m.content for m in self.messages if m.role == "system")
-
-    def turns(self) -> tuple[Message, ...]:
-        return tuple(m for m in self.messages if m.role != "system")
-
-
-# ---- the reply side -----------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Usage:
-    input_tokens: int = 0
-    output_tokens: int = 0
-
-
-@dataclass(frozen=True)
-class RawReply:
-    """What an adapter returns: the reply text as the provider gave it, the
-    usage the provider reported, and the model id the provider reports back
-    (``None`` when it reports nothing)."""
-
-    text: str
-    usage: Usage = Usage()
-    model: str | None = None
-
-
-class Adapter(Protocol):
-    """One method: the prompt bundle plus the JSON schema in, raw text and
-    usage out. Raise anything on a transport failure; the gateway maps it."""
-
-    name: str
-
-    def complete(self, bundle: PromptBundle, schema: dict[str, Any]) -> RawReply: ...
 
 
 @dataclass(frozen=True)
@@ -165,11 +124,7 @@ class GatewayResult[T: BaseModel]:
     record: CallRecord
 
 
-# ---- errors -------------------------------------------------------------------
-
-
-class GatewayError(RuntimeError):
-    """Base of every gateway failure."""
+# ---- errors (GatewayError and GatewayTransportError live in core/contracts/llm.py) ---
 
 
 class GatewaySchemaError(GatewayError):
@@ -188,18 +143,6 @@ class GatewayValidationError(GatewayError):
         self.job_type = job_type
         self.replies = list(replies)
         self.errors = list(errors)
-
-
-class GatewayTransportError(GatewayError):
-    """The provider could not be reached or would not answer. ``cause`` is a
-    short label (``timeout`` / ``transport_error`` / ``no_api_key`` /
-    ``refusal`` / ``max_tokens``); ``transient`` says whether a redial could plausibly help,
-    the same taxonomy the AP extractor's retry wrapper already reads."""
-
-    def __init__(self, message: str, *, cause: str = "transport_error", transient: bool = True):
-        super().__init__(message)
-        self.cause = cause
-        self.transient = transient
 
 
 # ---- the schema rule ----------------------------------------------------------

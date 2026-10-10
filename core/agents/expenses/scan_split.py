@@ -44,6 +44,7 @@ from pydantic import BaseModel, Field
 
 from core.llm import Attachment, Message
 
+from ...engine.config import CostObject
 from .schema import parse_project_tag
 
 _TIMEOUT_S = 120
@@ -142,20 +143,20 @@ def _amount_token(raw: str) -> str:
     return f"${cents // 100}.{cents % 100:02d}"
 
 
-def normalized_stem(stem: str) -> str:
+def normalized_stem(stem: str, code: CostObject) -> str:
     """The original's stem with any project tag folded to underscore form,
     so children carry attribution intake can parse the same way."""
-    tag = parse_project_tag(stem)
+    tag = parse_project_tag(stem, code)
     if tag and "-" in tag:
         return stem.replace(tag, tag.replace("-", "_"))
     return stem
 
 
-def child_name(stem: str, index: int, group: ScanGroup) -> str:
+def child_name(stem: str, index: int, group: ScanGroup, code: CostObject) -> str:
     # Space-joined, matching the live filename style ("dinner $43.87.pdf").
     # An underscore here would glue onto a trailing project tag and break
     # schema's \b-anchored tag parse (P26_2034_r01 carries no boundary).
-    parts = [normalized_stem(stem), f"r{index:02d}"]
+    parts = [normalized_stem(stem, code), f"r{index:02d}"]
     if group.vendor:
         parts.append(_slug(group.vendor))
     if group.date.strip():
@@ -170,7 +171,9 @@ def child_name(stem: str, index: int, group: ScanGroup) -> str:
 # ---- the split itself (code, never the LLM) ----------------------------------
 
 
-def split_pdf(path: Path, groups: list[ScanGroup]) -> list[SplitChild]:
+def split_pdf(
+    path: Path, groups: list[ScanGroup], code: CostObject | None = None
+) -> list[SplitChild]:
     """Write one child PDF per group next to the original. Returns the
     children; the caller owns eventing and archiving the original."""
     from pypdf import PdfReader, PdfWriter
@@ -185,7 +188,7 @@ def split_pdf(path: Path, groups: list[ScanGroup]) -> list[SplitChild]:
         writer = PdfWriter()
         for page_no in group.pages:
             writer.add_page(pages[page_no - 1])
-        target = path.parent / child_name(path.stem, index, group)
+        target = path.parent / child_name(path.stem, index, group, code or CostObject())
         n = 2
         while target.exists():
             target = target.with_name(f"{target.stem} ({n}){target.suffix}")

@@ -505,3 +505,111 @@ def test_an_uncaught_budget_refusal_is_a_recorded_failure_with_the_anomaly(tmp_p
     codes = {a.code for a in result.anomalies}
     assert {"job.exception", "llm.budget", "engine.run_failed"} <= codes
     assert result.llm.calls == 0
+
+
+# ---- which tiers may see documents (#358) ------------------------------------
+
+
+def _doc_attachment(tmp_path):
+    from core.llm import Attachment
+
+    path = tmp_path / "invoice.pdf"
+    path.write_bytes(b"%PDF-1.4 donor list")
+    return [Attachment(path, "application/pdf")]
+
+
+class _TransientThenNothing:
+    """Fails transiently on every call, counting which model it was asked for."""
+
+    name = "fixture"
+
+    def __init__(self) -> None:
+        self.models: list[str] = []
+
+    def complete(self, bundle, schema):
+        self.models.append(bundle.model)
+        raise GatewayTransportError("provider down", cause="transport_error", transient=True)
+
+
+def test_a_document_to_a_tier_off_the_list_is_refused_before_any_call(tmp_path):
+    from core.llm.policy import DocumentTierRefused
+
+    ctx = _ctx(tmp_path, _settings(document_tiers=["strong"]))
+    adapter = FixtureAdapter({"*": GOOD_REPLY})
+    with pytest.raises(DocumentTierRefused) as info:
+        complete_for(
+            ctx,
+            "invoice_extract",
+            _messages(),
+            InvoiceLine,
+            attachments=_doc_attachment(tmp_path),
+            adapter=adapter,
+        )
+    assert "cheap" in str(info.value) and "document_tiers" in str(info.value)
+    assert adapter.calls == [], "the document never left"
+    (row,) = _rows(ctx.ledger)
+    assert row["status"] == "documents_refused" and row["tier"] == "cheap"
+
+
+def test_a_document_to_an_allowed_tier_goes_and_text_is_never_gated(tmp_path):
+    ctx = _ctx(tmp_path, _settings(document_tiers=["cheap"]))
+    adapter = FixtureAdapter({"*": GOOD_REPLY})
+    sent = complete_for(
+        ctx,
+        "invoice_extract",
+        _messages(),
+        InvoiceLine,
+        attachments=_doc_attachment(tmp_path),
+        adapter=adapter,
+    )
+    assert sent.output.vendor == "Acme Fasteners"
+    # draft_advisory routes to "strong", off the list, but carries no document.
+    assert complete_for(ctx, "draft_advisory", _messages(), InvoiceLine, adapter=adapter)
+
+
+def test_a_fallback_off_the_list_is_never_tried_with_a_document(tmp_path):
+    ctx = _ctx(tmp_path, _settings(document_tiers=["cheap"]))
+    adapter = _TransientThenNothing()
+    with pytest.raises(GatewayTransportError):
+        complete_for(
+            ctx,
+            "invoice_extract",
+            _messages(),
+            InvoiceLine,
+            attachments=_doc_attachment(tmp_path),
+            adapter=adapter,
+        )
+    assert adapter.models == ["cheap-model"], "the fallback tier 'strong' never saw it"
+
+
+def test_no_list_is_todays_behavior(tmp_path):
+    ctx = _ctx(tmp_path)
+    adapter = FixtureAdapter({"*": GOOD_REPLY})
+    assert complete_for(
+        ctx,
+        "invoice_extract",
+        _messages(),
+        InvoiceLine,
+        attachments=_doc_attachment(tmp_path),
+        adapter=adapter,
+    )
+
+
+def test_a_document_tier_that_names_no_tier_fails_at_load():
+    with pytest.raises(ValidationError, match="document_tiers"):
+        TenantConfig.model_validate(_settings(document_tiers=["cheapp"]))
+
+
+def test_the_document_job_types_are_the_agents_own():
+    from core.agents.ap.extraction import INVOICE_EXTRACT_JOB
+    from core.agents.expenses.inbox import INBOX_CLASSIFY_JOB
+    from core.agents.expenses.jobs import RECEIPT_EXTRACT_JOB
+    from core.agents.expenses.scan_split import SCAN_GROUP_JOB
+    from core.llm.policy import DOCUMENT_JOB_TYPES
+
+    assert DOCUMENT_JOB_TYPES == {
+        INVOICE_EXTRACT_JOB,
+        RECEIPT_EXTRACT_JOB,
+        INBOX_CLASSIFY_JOB,
+        SCAN_GROUP_JOB,
+    }

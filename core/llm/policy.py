@@ -76,6 +76,27 @@ class UnresolvedJobError(LlmPolicyError):
         self.job_type = job_type
 
 
+class DocumentTierRefused(LlmPolicyError):
+    """A call carrying a document was routed to a tier the tenant's
+    ``[llm].document_tiers`` does not list (#358). Raised before any call;
+    a config error, so the job reports it rather than retrying."""
+
+    def __init__(self, job_type: str, tier: str, allowed: list[str]) -> None:
+        super().__init__(
+            f"{job_type}: tier {tier!r} may not receive documents; [llm].document_tiers "
+            f"allows {', '.join(allowed) or 'none'} (route the job to one of them)"
+        )
+        self.job_type = job_type
+        self.tier = tier
+
+
+# The engine's jobs that send a document to a model, as an attachment. A test
+# holds this to the agents' own constants; engine doctor checks their routes.
+DOCUMENT_JOB_TYPES = frozenset(
+    {"invoice_extract", "receipt_extract", "inbox_classify", "scan_group"}
+)
+
+
 class BudgetExceeded(RuntimeError):
     """The month's recorded spend reached ``[llm.budget].monthly_usd``. No
     call was made; the refusal is on the record. A job catches this and
@@ -319,6 +340,21 @@ def complete_for[T: BaseModel](
     conn = ctx.ledger.conn
     common = {"tenant": ctx.tenant_slug, "job_type": job_type, "run_key": ctx.run_key}
 
+    allowed = settings.document_tiers
+    gated = bool(attachments) and allowed is not None
+    if gated and resolved.tier not in allowed:
+        refused = DocumentTierRefused(job_type, resolved.tier, list(allowed))
+        telemetry.record_call(
+            conn,
+            **common,
+            tier=resolved.tier,
+            adapter=resolved.adapter,
+            model=resolved.model,
+            status=telemetry.STATUS_DOCUMENTS_REFUSED,
+            detail=str(refused),
+        )
+        raise refused
+
     cap = settings.budget.monthly_usd
     if cap is not None:
         spent = telemetry.month_to_date_usd(conn, ctx.tenant_slug, now=now)
@@ -336,6 +372,9 @@ def complete_for[T: BaseModel](
             raise refusal
 
     chain = [resolved, *(_resolve_tier(settings, name) for name in resolved.fallback)]
+    if gated:
+        # A fallback the list does not name never sees the document.
+        chain = [attempt for attempt in chain if attempt.tier in (allowed or [])]
     for index, attempt in enumerate(chain):
         wire = adapter if adapter is not None else build_adapter(attempt)
         try:

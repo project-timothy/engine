@@ -46,3 +46,44 @@ def test_the_mail_shape_is_importable_on_its_own():
     assert {"list_messages", "get_body", "list_attachments", "download", "send_mail"} <= set(
         dir(MailClient)
     )
+
+
+def test_the_model_adapter_shape_is_importable_on_its_own():
+    """#344: the plug a provider adapter is written against."""
+    from core.contracts.llm import (
+        Adapter,
+        Attachment,
+        GatewayError,
+        GatewayTransportError,
+        Message,
+        PromptBundle,
+        RawReply,
+        Usage,
+    )
+
+    assert "complete" in dir(Adapter)
+    assert issubclass(GatewayTransportError, GatewayError)
+    bundle = PromptBundle("t", "m", (Message("user", "hi"),), (), 30)
+    assert bundle.turns() == (Message("user", "hi"),)
+    assert RawReply("x").usage == Usage()
+    assert Attachment.__dataclass_fields__.keys() == {"path", "mime"}
+
+
+def test_the_gateway_re_exports_the_same_objects():
+    """Old import paths keep working: the gateway's names ARE the contract's
+    classes, so isinstance checks and except clauses see one type."""
+    from core.contracts import llm
+    from core.llm import gateway
+
+    for name in (
+        "Adapter",
+        "Attachment",
+        "GatewayError",
+        "GatewayTransportError",
+        "Message",
+        "PromptBundle",
+        "RawReply",
+        "Role",
+        "Usage",
+    ):
+        assert getattr(gateway, name) is getattr(llm, name), name
