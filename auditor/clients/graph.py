@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
+
+from ..web import open_url
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -77,8 +78,7 @@ def keychain_token_provider(mail_config: dict) -> TokenProvider:
 
 
 def _default_transport(url: str, headers: dict) -> dict:
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with open_url(url, timeout=60, headers=headers) as resp:
         return json.load(resp)
 
 

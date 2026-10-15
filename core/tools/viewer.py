@@ -34,6 +34,15 @@ def unit_of(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(name or "").casefold()).strip("-")
 
 
+def display_name(person: str) -> str:
+    """``carol-jennings`` reads as "Carol Jennings": a person's id said back
+    as their name (the inverse of ``unit_of``)."""
+    words = [part for part in person.split("-") if part]
+    return " ".join(
+        w if w == "and" and 0 < i < len(words) - 1 else w.capitalize() for i, w in enumerate(words)
+    )
+
+
 @dataclass(frozen=True)
 class Viewer:
     policy: Policy
@@ -61,4 +70,4 @@ def viewer_for(slug: str, person: str, *, tenants_root: str | Path | None = None
     return Viewer(policy, person)
 
 
-__all__ = ["Viewer", "ViewerError", "unit_of", "viewer_for"]
+__all__ = ["Viewer", "ViewerError", "display_name", "unit_of", "viewer_for"]

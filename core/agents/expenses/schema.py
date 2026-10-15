@@ -13,6 +13,7 @@ review instead of silently choosing either side (invariant 2).
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -49,6 +50,21 @@ def parse_amount_tag(name: str) -> int | None:
     return dollars * 100 + int(m.group(2))
 
 
+# A door receipt's name (core/tools/receipts.py): the day on the person's own
+# clock, then their claim. A claim in another currency is its ISO code and
+# the amount as said ("2026-10-12_receipt_NPR4300.00.jpg"); never a dollar tag.
+_DOOR_RECEIPT = re.compile(r"^(\d{4}-\d{2}-\d{2})_receipt_(?:([A-Z]{3})(\d+\.\d{2}))?")
+
+
+def parse_foreign_claim(name: str) -> tuple[str, Decimal, str] | None:
+    """(day, amount, currency) a door receipt's name carries for a claim in a
+    currency other than dollars, or None."""
+    m = _DOOR_RECEIPT.match(name)
+    if not m or not m.group(2) or m.group(2) == "USD":
+        return None
+    return m.group(1), Decimal(m.group(3)), m.group(2)
+
+
 def has_entertainment_tag(name: str) -> bool:
     return bool(_ENTERTAINMENT_TAG.search(name))
 
@@ -83,6 +99,14 @@ class ManifestLine(BaseModel):
     category: str = ""
     project: str = ""
     note: str = ""
+    # A receipt paid in another currency (alpha step 3): the amount and
+    # currency as the person said them, and the rate that set amount_cents
+    # (units per dollar on fx_date, from fx_source). Empty for dollars.
+    said_amount: str = ""
+    said_currency: str = ""
+    fx_rate: str = ""
+    fx_date: str = ""
+    fx_source: str = ""
     # Owner-directed split discriminator (issue #110): 0 = the whole
     # receipt (the default, keys unchanged); 1..N = one part of a split
     # (hotel-folio shape), keyed report:line:<sha>:<part>.

@@ -22,7 +22,7 @@ req = urllib.request.Request(
         "Accept": "application/json",
     },
 )
-tok = json.load(urllib.request.urlopen(req))
+tok = json.load(urllib.request.urlopen(req))  # noqa: S310  (a fixed Intuit https URL)
 t["refresh_token"] = tok["refresh_token"]  # rotated; persist the new one
 json.dump(t, open(p, "w"), indent=2)
 
@@ -30,5 +30,5 @@ req = urllib.request.Request(
     f"https://quickbooks.api.intuit.com/v3/company/{t['realm_id']}/companyinfo/{t['realm_id']}?minorversion=73",
     headers={"Authorization": f"Bearer {tok['access_token']}", "Accept": "application/json"},
 )
-info = json.load(urllib.request.urlopen(req))["CompanyInfo"]
+info = json.load(urllib.request.urlopen(req))["CompanyInfo"]  # noqa: S310  (a fixed Intuit https URL)
 print(f"CONNECTED: {info['CompanyName']} (realm {t['realm_id']})")

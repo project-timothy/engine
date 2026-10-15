@@ -287,4 +287,21 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
             "ON job_records(tenant, retry_state, next_attempt_at)",
         ],
     ),
+    (
+        9,
+        # A receipt paid in another currency (alpha step 3, the owner's
+        # decisions of 2026-10-13, his yes to this migration the same day).
+        # The line keeps the amount and currency as the person said them and
+        # the rate that set its dollar value: units per dollar, the receipt's
+        # own date, and the feed it came from, so a reviewer can check it.
+        # Purely additive; a dollar line reads '' in each. Flagged as a
+        # one-way door in the PR (a ledger schema change).
+        [
+            "ALTER TABLE expense_line ADD COLUMN said_amount TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE expense_line ADD COLUMN said_currency TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE expense_line ADD COLUMN fx_rate TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE expense_line ADD COLUMN fx_date TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE expense_line ADD COLUMN fx_source TEXT NOT NULL DEFAULT ''",
+        ],
+    ),
 ]

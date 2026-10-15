@@ -5,10 +5,10 @@ idempotent CLI invocation against a git-backed ledger, every agent is a brief
 plus deterministic code versioned together, every tenant is pure configuration,
 and every past incident is a regression test.
 
-It ships eleven agents and their jobs: accounts payable (`ap`), accounts
+It ships twelve agents and their jobs: accounts payable (`ap`), accounts
 receivable remittance (`ar`), month-end `close`, `expenses`, `timesheets`,
-`mail`, `deadlines`, `projects`, a weekly `brief`, approval `routing`, and
-`demo`; run
+`mail`, `deadlines`, `projects`, `policy` (a handbook's rules, each in force
+only on a person's yes), a weekly `brief`, approval `routing`, and `demo`; run
 `uv run engine agents` for the full list. Beside the engine sits an
 independent `auditor` that recomputes truth from ground sources every night
 and imports nothing from the engine.
@@ -69,6 +69,8 @@ Every engine command takes `--help`. The owner-facing ones need a tenant.
 | `uv run engine doctor <tenant>` | Report what this host is missing: secrets, folders, the ledger and its remote, the scheduler |
 | `uv run engine schedule <tenant>` | Render this host's crontab from `[host.schedule]` |
 | `uv run engine queue ...` | Review the approval queue |
+| `uv run engine tracker <tenant> <person> [--domain d]` | A token for one person's phone tracker app; the box keeps their drives as miles and times only |
+| `uv run engine notices <tenant>` | The emails the box should send (a month ready, a yes waiting), one JSON line each, for `doorkeeper send-notices` |
 | `uv run engine status <tenant> ...` | Owner write-back: mark an invoice scheduled or paid |
 | `uv run engine status-page <tenant>` | Render the read-only status page |
 | `uv run engine close-preflight <tenant>` | Month-end close checklist; exits 0 OK, 1 WARN, 2 BLOCK |
@@ -85,6 +87,8 @@ Every engine command takes `--help`. The owner-facing ones need a tenant.
 | `uv run engine mcp <tenant> --http --resource <url> --authorization-server <issuer> --introspect <url> --introspect-secret <file>` | The same endpoint, signed in through the box's sign-in service ([doorkeeper](https://github.com/project-timothy/doorkeeper)), which the engine asks who each token is (RFC 7662) |
 | `uv run engine mcp --onboarding` | Serve the onboarding conversation over MCP, before any tenant exists; apply needs the person's yes |
 | `uv run engine capabilities [--format json]` | What Tim can do today, built from the code: the tools, the setup questions, each lane in one plain sentence, and what is not built yet |
+| `uv run engine faq [--format json]` | The questions people ask about Tim, with Tim's answers; held to the door's tools by a test (docs/tim-faq.md) |
+| `uv run engine rules <tenant>` | The ministry's policy rules, highest layer first, each in Tim's words with the page it came from; a lower layer may only make a rule stricter (core/policy) |
 | `uv run engine evals ...` | Score a model on a job and write the results file the tenant config gate reads |
 | `uv run auditor run <tenant> [--local-only]` | The independent nightly audit (`auditor --help` for the rest) |
 | `uv run pytest` | Unit tests (`tests/`) + evals (`core/**/evals/`) |

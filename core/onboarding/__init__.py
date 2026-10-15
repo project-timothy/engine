@@ -101,11 +101,17 @@ def _question(qid: str) -> Question:
 
 
 @cache
+def _shape_policy(shape: str):
+    """The default authority policy ``shape`` renders with."""
+    files = render("preview", "A", shape=shape, data_root_rel="preview-data")
+    return parse_policy(tomllib.loads(files["authority.toml"]))
+
+
+@cache
 def people_roles(shape: str) -> tuple[str, ...]:
     """The roles a person can hold in ``shape``: the shape's defaults, minus
     the roles only its agents hold."""
-    files = render("preview", "A", shape=shape, data_root_rel="preview-data")
-    policy = parse_policy(tomllib.loads(files["authority.toml"]))
+    policy = _shape_policy(shape)
     agent_roles = {r for a in policy.agents.values() for r in a.roles}
     return tuple(r for r in policy.roles if r not in agent_roles)
 
@@ -220,6 +226,32 @@ def name_and_email(qid: str, said: str) -> tuple[str, str]:
     return name, email
 
 
+_PLACE = re.compile(r"\b(?:based in|living in|lives in|in|from)\s+(?:the\s+)?([^,;]+?)\s*$", re.I)
+
+
+def _you(answers: dict) -> tuple[str, str]:
+    """The person setting up, and their address when they gave one (the
+    invitation at apply mails them their welcome link too). An answer saved
+    before the address was asked is a name alone."""
+    you = answers["your_name"]
+    if isinstance(you, dict):
+        return str(you.get("name", "")), str(you.get("email", ""))
+    return str(you), ""
+
+
+def _place_zone(words: str) -> str:
+    """The zone the place in a person's line names ("missionary in Nepal"),
+    or "" when it names none or more than one: that person keeps the
+    ministry's zone, which the plan shows beside them."""
+    found = _PLACE.search(words.strip(" ,;"))
+    if not found:
+        return ""
+    try:
+        return resolve_zone(found.group(1))
+    except ZoneAnswerError:
+        return ""
+
+
 def _people(qid: str, value: object, shape: str) -> list[dict]:
     roles = people_roles(shape)
     if isinstance(value, list) and all(isinstance(v, dict) for v in value):
@@ -248,8 +280,54 @@ def _people(qid: str, value: object, shape: str) -> list[dict]:
         person = {"name": name, "role": _role(qid, role, roles)}
         if email:
             person["email"] = email
+        if zone := _place_zone(role):
+            person["zone"] = zone
         people.append(person)
     return people
+
+
+def _named(answers: dict, shape: str) -> dict[str, tuple[str, str]]:
+    """Everyone the conversation has named so far, by their name folded:
+    (the name as given, their role)."""
+    named: dict[str, tuple[str, str]] = {}
+    if answers.get("your_name"):
+        you, _email = _you(answers)
+        named[you.casefold()] = (you, SELF_ROLE.get(shape) or str(answers.get("your_role", "")))
+    for entry in answers.get("people", []) or []:
+        named.setdefault(entry["name"].casefold(), (entry["name"], entry["role"]))
+    return named
+
+
+def _looks_after(qid: str, value: object, answers: dict, shape: str) -> list[dict]:
+    """``Ann Lee = Sam Ortiz, Mei Tan``, one per line: who looks after whom.
+    Every name must be one already given, and nobody who files their own
+    reports looks after anyone else's (they could file and see a
+    neighbor's)."""
+    named = _named(answers, shape)
+
+    def known(name: str) -> tuple[str, str]:
+        found = named.get(" ".join(name.split()).casefold())
+        if found is None:
+            raise OnboardingError(f"{qid}: who is {name.strip()!r}? Add them to the people first")
+        return found
+
+    out = []
+    for line in (p for p in re.split(r"[;\n]", str(value)) if p.strip()):
+        if "=" not in line:
+            raise OnboardingError(
+                f"{qid}: {line.strip()!r} is not 'name = the people they look after'"
+            )
+        left, right = line.split("=", 1)
+        name, role = known(left)
+        if role and _files_expenses(_shape_policy(shape), role):
+            raise OnboardingError(
+                f"{qid}: {name} files their own reports, so they can't look after anyone else's"
+            )
+        charges = [known(c)[0] for c in right.split(",") if c.strip()]
+        if not charges:
+            raise OnboardingError(f"{qid}: whom does {name} look after?")
+        out.append({"name": name, "looks_after": charges})
+    return out
 
 
 def record(answers: dict, qid: str, value: object) -> dict:
@@ -260,17 +338,18 @@ def record(answers: dict, qid: str, value: object) -> dict:
     if qid != "who" and shape is None:
         raise OnboardingError("answer who this is for first")
     text = value.strip() if isinstance(value, str) else value
+    if not text and not q.optional and q.kind in ("text", "person"):
+        raise OnboardingError(f"{qid}: needs an answer")
     if q.kind == "choice":
         wanted = str(text).casefold()
         for choice in q.choices:
-            if wanted in (choice["label"].casefold(), str(choice["value"]).casefold()):
+            said_as = (choice["label"], str(choice["value"]), *choice.get("was", ()))
+            if wanted in (s.casefold() for s in said_as):  # "was": a label it had before
                 return {**answers, qid: choice["value"]}
         raise OnboardingError(
             f"{qid}: {value!r} is not one of {', '.join(c['label'] for c in q.choices)}"
         )
     if q.kind == "text":
-        if not text and not q.optional:
-            raise OnboardingError(f"{qid}: needs an answer")
         return {**answers, qid: str(text or "")}
     if q.kind == "person":
         if not text:
@@ -288,11 +367,14 @@ def record(answers: dict, qid: str, value: object) -> dict:
         return {**answers, qid: _amount(qid, text)}
     if q.kind == "list":
         return {**answers, qid: _items(text) if text else []}
-    assert shape is not None
+    if shape is None:  # every question below this line depends on the shape
+        raise OnboardingError(f"{qid}: answer who the books are for first")
     if q.kind == "role":
         return {**answers, qid: _role(qid, str(text), people_roles(shape))}
     if q.kind == "people":
         return {**answers, qid: _people(qid, text, shape) if text else []}
+    if q.kind == "looks_after":
+        return {**answers, qid: _looks_after(qid, text, answers, shape) if text else []}
     raise OnboardingError(f"{qid}: unknown kind {q.kind!r}")
 
 
@@ -326,9 +408,14 @@ class Plan:
     people: tuple[tuple[str, str, str], ...]  # (id, name, role)
     self_approval_limit: str | None
     two_approvals_above: str | None
+    yes_by_word_up_to: str
     banned: tuple[str, ...]
     spelling: str
     emails: dict[str, str] = field(default_factory=dict)  # person id -> address, if given
+    zones: dict[str, str] = field(default_factory=dict)  # person id -> their IANA zone
+    looks_after: dict[str, tuple[str, ...]] = field(
+        default_factory=dict
+    )  # id -> their charges' ids
 
 
 def _person_id(name: str, taken: set[str]) -> str:
@@ -356,9 +443,11 @@ def plan(answers: dict, slug: str) -> Plan:
     taken: set[str] = set()
     people: list[tuple[str, str, str]] = []
     emails: dict[str, str] = {}
-    you = str(answers["your_name"])
+    you, your_email = _you(answers)
     your_role = SELF_ROLE.get(shape) or str(answers["your_role"])
     people.append((_person_id(you, taken), you, your_role))
+    if your_email:
+        emails[people[-1][0]] = your_email
     reviewer = answers.get("reviewer", "") or ""
     if isinstance(reviewer, dict):
         r_name, r_email = str(reviewer.get("name", "")), str(reviewer.get("email", ""))
@@ -369,11 +458,28 @@ def plan(answers: dict, slug: str) -> Plan:
         people.append((pid, r_name, REVIEWER_ROLE[shape]))
         if r_email:
             emails[pid] = r_email
+    ministry_zone = str(get("timezone"))
+    zones = {pid: ministry_zone for pid, _n, _r in people}
     for entry in answers.get("people", []) or []:
         pid = _person_id(entry["name"], taken)
         people.append((pid, entry["name"], entry["role"]))
         if entry.get("email"):
             emails[pid] = entry["email"]
+        zones[pid] = entry.get("zone") or ministry_zone
+    ids: dict[str, str] = {}
+    for pid, name, _role in people:
+        ids.setdefault(name.casefold(), pid)
+    looks_after: dict[str, tuple[str, ...]] = {}
+    for entry in answers.get("looks_after", []) or []:
+        # Asked again if the people changed since: every name must still be here.
+        names = [entry["name"], *entry["looks_after"]]
+        gone = [n for n in names if n.casefold() not in ids]
+        if gone:
+            raise OnboardingError(f"looks_after: who is {gone[0]!r}? Add them to the people first")
+        pid = ids[entry["name"].casefold()]
+        looks_after[pid] = looks_after.get(pid, ()) + tuple(
+            ids[n.casefold()] for n in entry["looks_after"]
+        )
     family = family_of(shape)
     entity = str(get("entity") if family == "commercial" else get("entity_nonprofit")) or ""
     size = shape.split("-", 1)[1]
@@ -382,15 +488,18 @@ def plan(answers: dict, slug: str) -> Plan:
         shape=shape,
         archetype=str(get("work")) if family == "commercial" else "C",
         legal_name=str(answers["legal_name"]),
-        timezone=str(get("timezone")),
+        timezone=ministry_zone,
         fiscal_start=int(str(get("fiscal_start"))),
         entity=entity,
         people=tuple(people),
         self_approval_limit=str(get("second_person_above")) if size == "small" else None,
         two_approvals_above=str(get("two_approvals_above")) if size != "solo" else None,
+        yes_by_word_up_to=str(get("yes_by_word_up_to")),
         banned=tuple(_items(answers.get("banned_words", []) or [])),
         spelling=str(get("spelling")),
         emails=emails,
+        zones=zones,
+        looks_after=looks_after,
     )
 
 
@@ -484,13 +593,19 @@ def apply(
         _set_line(authority, "distinct_payer_above", p.self_approval_limit)
     if p.two_approvals_above is not None:
         _set_line(authority, "second_approver_above", p.two_approvals_above)
+    _set_line(authority, "yes_by_word_up_to", p.yes_by_word_up_to)
     # Each person's own id is their unit, so an @own grant covers their own
-    # submissions; the agent widens a scope later when the tenant says so.
-    # An address the person gave rides beside them, for the sign-in invitation.
+    # submissions; whoever looks after others (a regional director) holds
+    # their units too, and the agent widens a scope later when the tenant
+    # says so. An address the person gave rides beside them, for the sign-in
+    # invitation, and so does their own zone, so the invitation (and Tim,
+    # later) tells them times in it.
     tables = "".join(
         f"\n[people.{pid}]\n# {json.dumps(name)[1:-1]}\n"
-        f"roles = [{json.dumps(role)}]\nscopes = [{json.dumps(pid)}]\n"
+        f"roles = [{json.dumps(role)}]\n"
+        f"scopes = {json.dumps(list(dict.fromkeys((pid, *p.looks_after.get(pid, ())))))}\n"
         + (f"email = {json.dumps(p.emails[pid])}\n" if pid in p.emails else "")
+        + (f"zone = {json.dumps(p.zones[pid])}\n" if pid in p.zones else "")
         for pid, name, role in p.people
     )
     authority.write_text(authority.read_text(encoding="utf-8") + tables, encoding="utf-8")

@@ -126,7 +126,8 @@ def test_ruth_signed_in_sees_her_own_and_never_the_bakers(box):
     assert "close_status" not in names
     reply = _rpc(box, box["ruth"], "tools/call", {"name": "expense_reports", "arguments": {}})
     rows = json.loads(reply["result"]["content"][0]["text"])["rows"]
-    assert [r["person"] for r in rows] == ["Ruth Hollis"]
+    # her filed report and the one still waiting for approval (#485)
+    assert {r["person"] for r in rows} == {"Ruth Hollis"}
 
 
 def test_the_treasurer_signed_in_sees_the_church(box):

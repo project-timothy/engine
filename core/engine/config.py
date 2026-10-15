@@ -356,6 +356,10 @@ class ExpensesSettings(BaseModel):
 
     drop_dir: str = ""
     filing_dir: str = ""
+    # What reads a door receipt's photo when the person's words carry no
+    # amount (core/contracts/reader.py): "" none (Tim asks how much),
+    # "pretend" for practice. A reading is only a proposal for their yes.
+    reader: Literal["", "pretend"] = ""
     # Issue #112: the Taildrop receipt inbox the classifier pre-stage scans
     # (label-only contract), and the person its proposals attribute to (the
     # phone's owner); both correctable per-card at approval.
@@ -525,6 +529,24 @@ class MailSettings(BaseModel):
     # instead of the AP landing folder — filed paper awaiting statement
     # reconciliation, never a nightly not-landed flag (expenses design decision 3).
     cc_charge_senders: list[str] = Field(default_factory=list)
+
+
+class InstitutionSettings(BaseModel):
+    """The sending organization's profile (Robb's idea 1, 2026-10-13). Empty
+    is a small church or an independent missionary: Tim places each receipt
+    in the ministry's own categories and the books pay it out.
+
+    ``categorizes`` false means the institution's own system places receipts
+    (AGWM's Sage does), so Tim never guesses one. ``submit_to`` names where
+    claims go after the missionary's yes (``core/institution``): "" for the
+    books, ``pretend`` for the stand-in until an institution's interface is
+    in hand. ``mileage_rate`` is the institution's own rate per mile; unset,
+    the IRS rate on the day of the drive applies."""
+
+    name: str = ""
+    categorizes: bool = True
+    submit_to: str = ""
+    mileage_rate: Decimal | None = Field(default=None, ge=0)
 
 
 class ArSettings(BaseModel):
@@ -783,6 +805,7 @@ class TenantConfig(BaseModel):
     qbo_sweep: QboSweepSettings = Field(default_factory=QboSweepSettings)
     mail: MailSettings = Field(default_factory=MailSettings)
     ar: ArSettings = Field(default_factory=ArSettings)
+    institution: InstitutionSettings = Field(default_factory=InstitutionSettings)
     close: CloseSettings = Field(default_factory=CloseSettings)
     w9: W9Settings = Field(default_factory=W9Settings)
     deadlines: DeadlinesSettings = Field(default_factory=DeadlinesSettings)

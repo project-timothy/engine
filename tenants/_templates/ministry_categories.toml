@@ -1,0 +1,14 @@
+# A ministry's starter expense categories (the owner's decision of
+# 2026-10-13), used by every nonprofit shape until the sending organization's
+# own chart arrives. Each maps to a placeholder account name the ministry
+# replaces with its own (a Sage account, say). A receipt whose words name no
+# category reads "Uncategorized", and its reviewer places it.
+[category_accounts]
+Travel = "Travel"
+Lodging = "Lodging"
+Meals = "Meals"
+"Ministry Supplies" = "Ministry Supplies"
+Communication = "Communication"
+Medical = "Medical"
+Housing = "Housing"
+Other = "Other"

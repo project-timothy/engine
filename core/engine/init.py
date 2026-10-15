@@ -22,6 +22,7 @@ the knobs do not supply is a hard error, never a silent blank.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -106,6 +107,19 @@ def _validate(slug: str, archetype: str, shape: str = DEFAULT_SHAPE) -> None:
         raise InitError(f"shape {shape!r} is not one of {', '.join(SHAPES)}")
 
 
+MINISTRY_CATEGORIES_FILE = "ministry_categories.toml"
+
+
+def load_ministry_categories() -> dict[str, str]:
+    """A ministry's starter expense categories (tenants/_templates)."""
+    with (templates_dir() / MINISTRY_CATEGORIES_FILE).open("rb") as handle:
+        return dict(tomllib.load(handle)["category_accounts"])
+
+
+def _toml_key(key: str) -> str:
+    return key if re.fullmatch(r"[A-Za-z0-9_-]+", key) else json.dumps(key)
+
+
 def load_archetypes() -> dict[str, dict]:
     with (templates_dir() / ARCHETYPES_FILE).open("rb") as handle:
         return tomllib.load(handle)
@@ -140,7 +154,12 @@ def render(
     """
     _validate(slug, archetype, shape)
     knobs = load_archetypes()[archetype]
-    categories = "\n".join(f'{cat} = "{acct}"' for cat, acct in knobs["category_accounts"].items())
+    accounts = knobs["category_accounts"]
+    if family_of(shape) != "commercial":
+        accounts = load_ministry_categories()  # a ministry's starter list (2026-10-13)
+    categories = "\n".join(
+        f"{_toml_key(cat)} = {json.dumps(acct)}" for cat, acct in accounts.items()
+    )
     values = {
         "slug": slug,
         "legal_name": legal_name or default_legal_name(slug),

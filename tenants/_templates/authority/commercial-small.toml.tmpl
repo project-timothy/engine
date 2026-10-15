@@ -36,6 +36,10 @@ distinct_payer_above = 500
 second_approver_above = 5000
 authority_confirm = "second_person"
 report_self_approvals = "above_limit"
+# A yes said to the person's own AI, through the box's door, decides a card
+# committing up to this much; above it they confirm with Face ID. 0 = every
+# yes takes Face ID. Onboarding sets it per shape; human-only cards always do.
+yes_by_word_up_to = 0
 
 # ---- roles
 [roles.owner]

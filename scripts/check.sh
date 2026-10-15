@@ -51,6 +51,7 @@ gate "independence lint" uv run python -m auditor.evals.independence_lint
 gate "shellcheck" sh -c "git ls-files -z '*.sh' | xargs -0 shellcheck -x --severity=style"
 gate "zizmor" uvx --from zizmor==1.30.1 zizmor --offline .github/workflows
 gate "vulture" uv run vulture core auditor tenants vulture_whitelist.py --min-confidence 80
+gate "duplicate-code ceiling" uv run python -m core.evals.duplicate_code
 gate "tests + coverage floor" sh -c "uv run coverage run -m pytest -q && uv run coverage report"
 if [ -n "${ENGINE_LINT_TOKENS:-}" ]; then
   gate "bleed-through lint, private tokens" uv run python -m core.evals.bleedthrough_lint

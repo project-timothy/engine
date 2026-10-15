@@ -142,7 +142,12 @@ LEDGER_DDL = [
         category            TEXT    NOT NULL DEFAULT '',
         project             TEXT    NOT NULL DEFAULT '',
         note                TEXT    NOT NULL DEFAULT '',
-        created_at          TEXT    NOT NULL
+        created_at          TEXT    NOT NULL,
+        said_amount         TEXT    NOT NULL DEFAULT '',
+        said_currency       TEXT    NOT NULL DEFAULT '',
+        fx_rate             TEXT    NOT NULL DEFAULT '',
+        fx_date             TEXT    NOT NULL DEFAULT '',
+        fx_source           TEXT    NOT NULL DEFAULT ''
     )
     """,
 ]

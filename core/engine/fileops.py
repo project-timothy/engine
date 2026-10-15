@@ -162,7 +162,7 @@ def place_bytes(
     same contract: adopt identical content, suffix different content, read
     the write back, never guess about a placeholder."""
     guard.check_write(dest)
-    body_hash = hashlib.md5(body).hexdigest()
+    body_hash = hashlib.md5(body, usedforsecurity=False).hexdigest()
     for candidate in _candidates(dest, suffix_fmt):
         if not candidate.exists():
             target = candidate

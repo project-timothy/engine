@@ -197,7 +197,8 @@ def test_ruth_signed_in_through_the_service_sees_her_own(service, church):  # no
     finally:
         server.shutdown()
         server.server_close()
-    assert [r["person"] for r in json.loads(text)["rows"]] == ["Ruth Hollis"]
+    # her filed report and the one still waiting for approval (#485)
+    assert {r["person"] for r in json.loads(text)["rows"]} == {"Ruth Hollis"}
 
 
 def test_http_takes_a_sign_in_service_or_a_token_file_never_both(church, capsys):  # noqa: F811

@@ -73,12 +73,12 @@ JOB_FILE = "job.json"
 CASES_DIRNAME = "cases"
 DOCUMENTS_DIRNAME = "documents"
 RESULTS_DIRNAME = "results"
-DOCUMENT_TEXT_TOKEN = "{document_text}"
+DOCUMENT_TEXT_TOKEN = "{document_text}"  # noqa: S105  (a template placeholder, not a secret)
 """The document's text layer, for a job whose live site inlines it. Plain
 replacement, not ``str.format``: a prompt that shows the model a JSON example
 has braces of its own and must not be a format string."""
 
-PAGE_COUNT_TOKEN = "{page_count}"
+PAGE_COUNT_TOKEN = "{page_count}"  # noqa: S105  (a template placeholder, not a secret)
 """The pages of THIS case's document, for a job whose live ask states the
 count (the combined-scan grouper's does: "the attached 4-page scan"). The
 ``user`` template is one string for the whole set, so the per-case value has

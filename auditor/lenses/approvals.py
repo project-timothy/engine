@@ -33,6 +33,7 @@ import json
 import struct
 import tomllib
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from ..config import default_tenants_dir
@@ -105,7 +106,7 @@ def _parked_row_ids(ctx: AuditContext) -> set[str]:
     parked: set[str] = set()
     placeholders = ",".join("?" for _ in PARKED_TYPES)
     for row in ctx.ledger.query(
-        f"SELECT params_json FROM approval_queue WHERE tenant = ? AND status = 'pending' "
+        f"SELECT params_json FROM approval_queue WHERE tenant = ? AND status = 'pending' "  # noqa: S608  (? placeholders only)
         f"AND action_type IN ({placeholders})",
         (ctx.tenant.slug, *PARKED_TYPES),
     ):
@@ -308,10 +309,97 @@ def check_human_only(ctx: AuditContext) -> list[Finding]:
     return findings
 
 
+# Where a money card keeps its amount: (field, in cents). The auditor reads the
+# card's own words rather than the engine's rule table (it imports nothing
+# from core/); a word-decided card whose amount it cannot read is a finding.
+AMOUNT_FIELDS = (
+    ("total_cents", True),
+    ("amount_cents", True),
+    ("amount", False),
+    ("new_amount", False),
+)
+
+
+def card_dollars(params: dict) -> Decimal | None:
+    for field, cents in AMOUNT_FIELDS:
+        raw = str(params.get(field, "")).replace("$", "").replace(",", "").strip()
+        if raw:
+            try:
+                value = Decimal(raw)
+            except InvalidOperation:
+                return None
+            return value / 100 if cents else value
+    return None
+
+
+def _ministry_line(ctx: AuditContext) -> Decimal | None:
+    authority = _authority(ctx)
+    raw = ((authority or {}).get("safeguards") or {}).get("yes_by_word_up_to", 0)
+    try:
+        return Decimal(str(raw))
+    except InvalidOperation:
+        return None
+
+
+def check_word_line(ctx: AuditContext) -> list[Finding]:
+    """Every yes said by word through the box's door (the owner's decision of
+    2026-10-11: at or under the ministry's dollar line, the person's word
+    decides; over it, Face ID) holds to the line. CRITICAL: a card decided by
+    word above the line it was decided under, or with no amount to hold to a
+    line, means the door let a word do what only Face ID may. WARN: the
+    line stamped on the card is not the ministry's line in authority.toml
+    today, so someone changed the line; check the change was the ministry's
+    own."""
+    findings: list[Finding] = []
+    today = _ministry_line(ctx)
+    for row in ctx.ledger.query(
+        "SELECT * FROM approval_queue WHERE tenant = ? "
+        "AND status IN ('approved', 'rejected') ORDER BY id",
+        (ctx.tenant.slug,),
+    ):
+        params = _params(row)
+        if params.get("decided_via") != "door-word":
+            continue
+        subject = f"approval #{row['id']} {row['action_type']}"
+        amount = card_dollars(params)
+        try:
+            line = Decimal(str(params.get("yes_by_word_up_to", "")))
+        except InvalidOperation:
+            line = None
+        who = params.get("decided_by") or "someone"
+        if amount is None or line is None or amount > line:
+            said = f"${amount:,.2f}" if amount is not None else "no amount the auditor can read"
+            held = f"${line:,.2f}" if line is not None else "no line on the card"
+            findings.append(
+                Finding(
+                    lens=LENS,
+                    subject=subject,
+                    condition="word-yes-over-the-line",
+                    severity="CRITICAL",
+                    detail=f"{who}'s word decided this card ({said}) against a dollar line of "
+                    f"{held}; over the line only Face ID decides. Re-open the decision with "
+                    "the ministry",
+                )
+            )
+        elif today is not None and line != today:
+            findings.append(
+                Finding(
+                    lens=LENS,
+                    subject=subject,
+                    condition="word-line-changed",
+                    severity="WARN",
+                    detail=f"decided by word under a ${line:,.2f} line; the ministry's line in "
+                    f"authority.toml is ${today:,.2f} now. Check the change was the ministry's",
+                )
+            )
+    return findings
+
+
 def check(ctx: AuditContext) -> list[Finding]:
     return [
         *check_stale_pending(ctx),
         *check_human_only(ctx),
+        *check_word_line(ctx),
         *check_approved_batches_consumed(ctx),
         *check_swallowed_asks(ctx),
     ]

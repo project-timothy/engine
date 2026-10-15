@@ -134,7 +134,7 @@ def _md5(path: Path) -> str | None:
         if exc.errno == errno.EDEADLK:
             return None
         raise
-    return hashlib.md5(data).hexdigest()
+    return hashlib.md5(data, usedforsecurity=False).hexdigest()
 
 
 # Inline email graphics saved into the landing folder alongside real

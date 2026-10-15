@@ -11,9 +11,9 @@ The promises under test:
    person, for that card, saying that answer, on a resource the tenant
    opened to the door. The decision records it was the door and carries the
    signed evidence.
-3. ``WitnessDesk`` asks the doorkeeper for a yes and collects it, over
-   localhost with the box's shared secret. Anything the engine cannot read
-   as a yes is no yes.
+3. ``WitnessDesk`` asks the doorkeeper for a yes, hears each tapped yes as
+   it lands, and says how each went, over localhost with the box's shared
+   secret (engine #480). Anything the engine cannot read as a yes is no yes.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import pytest
 from core.agents.expenses.jobs import REVIEW_CARD
 from core.authority import AuthorityError, parse_policy
 from core.engine.authority_gate import Witnessed, decide_card
-from core.tools.witness_desk import DeskRefused, WitnessDesk
+from core.tools.witness_desk import DeskRefused, Tapped, WitnessDesk
 
 POLICY = """
 [money]
@@ -201,10 +201,11 @@ def _desk(d, **over) -> WitnessDesk:
     return WitnessDesk(**args)
 
 
-def _witnessed_reply(**over) -> dict:
+def _tapped_reply(**over) -> dict:
     reply = {
-        "status": "witnessed",
+        "yes": 7,
         "person": "carol-jennings",
+        "for": "carol-jennings",
         "card": "214",
         "verb": "approve",
         "summary": "Reimburse Ruth Hollis $186.40.",
@@ -230,6 +231,14 @@ def test_asking_returns_the_link_for_the_person_and_keeps_the_witness_id(doorkee
         "verb": "approve",
         "summary": "Reimburse Ruth.",
     }
+    assert "for" not in sent  # her own yes
+
+
+def test_a_vouched_ask_says_whose_yes_it_is(doorkeeper):
+    _Doorkeeper.replies["/witness/ask"] = (200, {"witness": "w" * 43, "link": "https://t/yes#t"})
+    _desk(doorkeeper).ask("don-pruitt", "214", "approve", "x", for_person="carol-jennings")
+    assert _Doorkeeper.seen[0]["person"] == "don-pruitt"
+    assert _Doorkeeper.seen[0]["for"] == "carol-jennings"
 
 
 @pytest.mark.parametrize("reason", ["no_passkey", "not_invited"])
@@ -241,45 +250,83 @@ def test_the_engine_hears_why_no_link_could_be_made(doorkeeper, reason):
 
 
 def test_a_doorkeeper_that_cannot_be_reached_is_a_refusal(tmp_path, doorkeeper):
+    gone = _desk(doorkeeper, url="http://127.0.0.1:9")
     with pytest.raises(DeskRefused) as refused:
-        _desk(doorkeeper, url="http://127.0.0.1:9").ask("carol-jennings", "214", "approve", "x")
+        gone.ask("carol-jennings", "214", "approve", "x")
     assert refused.value.reason == "unreachable"
+    with pytest.raises(DeskRefused):
+        gone.next(set(), 0)  # the finisher pauses and tries again
 
 
-def test_collecting_a_yes(doorkeeper):
-    _Doorkeeper.replies["/witness/check"] = (200, _witnessed_reply())
-    got = _desk(doorkeeper).check("w" * 43)
-    assert got == _witness()
-    assert _Doorkeeper.seen[0]["witness"] == "w" * 43
+def test_the_engine_hears_each_tapped_yes(doorkeeper):
+    _Doorkeeper.replies["/witness/next"] = (200, {"yeses": [_tapped_reply()]})
+    (got,) = _desk(doorkeeper).next({3, 5}, 20)
+    assert got == Tapped(7, "carol-jennings", _witness())
+    sent = _Doorkeeper.seen[0]
+    assert sent["wait"] == "20" and sent["skip"] == "3,5"
 
 
-@pytest.mark.parametrize("status", ["waiting", "unknown"])
-def test_no_yes_yet(doorkeeper, status):
-    _Doorkeeper.replies["/witness/check"] = (200, {"status": status})
-    assert _desk(doorkeeper).check("w" * 43) == status
+def test_a_vouched_yes_is_the_persons_and_the_voucher_tapped(doorkeeper):
+    reply = _tapped_reply(person="don-pruitt", **{"for": "carol-jennings"})
+    _Doorkeeper.replies["/witness/next"] = (200, {"yeses": [reply]})
+    (got,) = _desk(doorkeeper).next(set(), 0)
+    assert got.principal == "carol-jennings" and got.witness.person == "don-pruitt"
 
 
 @pytest.mark.parametrize(
     "reply",
     [
-        b"not json",
-        _witnessed_reply(status="Witnessed"),
-        _witnessed_reply(person=""),
-        _witnessed_reply(at="soon"),
-        _witnessed_reply(evidence="signed"),
-        _witnessed_reply(card=214),
+        _tapped_reply(person=""),
+        _tapped_reply(at="soon"),
+        _tapped_reply(evidence="signed"),
+        _tapped_reply(card=214),
+        _tapped_reply(yes="7"),
+        _tapped_reply(yes=True),
+        _tapped_reply(**{"for": ""}),
     ],
 )
 def test_anything_the_engine_cannot_read_as_a_yes_is_no_yes(doorkeeper, reply):
+    _Doorkeeper.replies["/witness/next"] = (200, {"yeses": [reply, _tapped_reply(yes=8)]})
+    assert [t.yes for t in _desk(doorkeeper).next(set(), 0)] == [8]
+
+
+@pytest.mark.parametrize("reply", [b"not json", {"yeses": "many"}, {"status": "witnessed"}])
+def test_a_reply_that_is_not_a_list_of_yeses_is_none(doorkeeper, reply):
+    _Doorkeeper.replies["/witness/next"] = (200, reply)
+    assert _desk(doorkeeper).next(set(), 0) == []
+
+
+@pytest.mark.parametrize("status", ["waiting", "witnessed", "settled", "unknown"])
+def test_the_engine_asks_where_a_yes_stands(doorkeeper, status):
+    _Doorkeeper.replies["/witness/check"] = (200, {"status": status})
+    assert _desk(doorkeeper).check("w" * 43) == status
+    assert _Doorkeeper.seen[0]["witness"] == "w" * 43
+
+
+@pytest.mark.parametrize("reply", [b"not json", {"status": "Witnessed"}, {}])
+def test_a_standing_the_engine_cannot_read_is_unknown(doorkeeper, reply):
     _Doorkeeper.replies["/witness/check"] = (200, reply)
     assert _desk(doorkeeper).check("w" * 43) == "unknown"
 
 
-def test_a_wrong_secret_collects_nothing(doorkeeper, tmp_path):
+def test_the_engine_says_how_it_went(doorkeeper):
+    _Doorkeeper.replies["/witness/settled"] = (200, {"ok": True})
+    assert _desk(doorkeeper).settle(7, "approved", "Approved: Ruth's report.") is True
+    sent = _Doorkeeper.seen[0]
+    assert (sent["yes"], sent["status"], sent["message"]) == (
+        "7",
+        "approved",
+        "Approved: Ruth's report.",
+    )
+    _Doorkeeper.replies["/witness/settled"] = (400, {"error": "unknown"})
+    assert _desk(doorkeeper).settle(7, "approved", "x") is False
+
+
+def test_a_wrong_secret_hears_nothing(doorkeeper, tmp_path):
     wrong = tmp_path / "wrong.secret"
     wrong.write_text("w" * 48)
-    _Doorkeeper.replies["/witness/check"] = (200, _witnessed_reply())
-    assert _desk(doorkeeper, secret_file=wrong).check("w" * 43) == "unknown"
+    _Doorkeeper.replies["/witness/next"] = (200, {"yeses": [_tapped_reply()]})
+    assert _desk(doorkeeper, secret_file=wrong).next(set(), 0) == []
 
 
 @pytest.mark.parametrize(

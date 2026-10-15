@@ -129,7 +129,9 @@ def test_the_plan_previews_in_plain_terms_and_writes_nothing(world):
     preview, err = _call(server, "onboarding_plan", slug="ellis")
     assert not err
     assert preview["plan"]["legal_name"] == "Ellis Mission Inc."
-    assert preview["plan"]["people"] == [{"name": "Jo Ellis", "role": "missionary"}]
+    assert preview["plan"]["people"] == [
+        {"name": "Jo Ellis", "role": "missionary", "zone": "America/New_York"}
+    ]
     assert preview["confirm_with"] == "ellis"
     assert not (root / "ellis").exists()
 

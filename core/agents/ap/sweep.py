@@ -40,7 +40,7 @@ _NON_INVOICE_DIR = re.compile(r"non.?invoice|misrouted", re.IGNORECASE)
 
 
 def _md5(path: Path) -> str:
-    digest = hashlib.md5()
+    digest = hashlib.md5(usedforsecurity=False)
     digest.update(path.read_bytes())
     return digest.hexdigest()
 

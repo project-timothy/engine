@@ -9,6 +9,11 @@ parenthesis); an email address anywhere in the answer is kept as that
 person's address, for the sign-in invitation, and written beside them in
 authority.toml. Two addresses in one answer, or an address with no name, is
 asked again.
+
+The person setting up may give their own address the same way ("Daniel
+Reyes, daniel@livingwatermz.org", Caleb's alpha install of 2026-10-13): the
+invitation at apply mails them their welcome link too, so the person the
+books are for is never the one left without a way in.
 """
 
 from __future__ import annotations
@@ -109,3 +114,45 @@ def test_apply_writes_each_address_beside_its_person(tmp_path, monkeypatch):
     assert data["people"]["linda-park"]["email"] == "linda@livingwatermz.org"
     assert "email" not in data["people"]["daniel-reyes"]
     assert set(parse_policy(data).people) == {"daniel-reyes", "linda-park"}
+
+
+def test_the_person_setting_up_may_give_their_own_address():
+    p = plan(
+        _answers(
+            your_name="Daniel Reyes, daniel@livingwatermz.org",
+            reviewer="Linda Park, linda@livingwatermz.org",
+        ),
+        "living-water",
+    )
+    assert ("daniel-reyes", "Daniel Reyes", "missionary") in p.people
+    assert p.emails == {
+        "daniel-reyes": "daniel@livingwatermz.org",
+        "linda-park": "linda@livingwatermz.org",
+    }
+
+
+def test_the_person_setting_up_still_needs_a_name():
+    answers = record({}, "who", "nonprofit-solo")
+    with pytest.raises(OnboardingError, match="needs an answer"):
+        record(answers, "your_name", "")
+    with pytest.raises(OnboardingError, match="name"):
+        record(answers, "your_name", "daniel@livingwatermz.org")
+
+
+def test_a_name_saved_before_the_address_was_asked_still_plans():
+    answers = _answers()
+    assert answers["your_name"] == "Daniel Reyes"
+    p = plan(answers, "living-water")
+    assert ("daniel-reyes", "Daniel Reyes", "missionary") in p.people
+    assert "daniel-reyes" not in p.emails
+
+
+def test_their_own_address_lands_beside_them(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    root = tmp_path / "tenants"
+    monkeypatch.setenv("ENGINE_TENANTS_ROOT", str(root))
+    monkeypatch.setenv("ENGINE_LEDGER_ROOT", str(tmp_path / "ledger"))
+    p = plan(_answers(your_name="Daniel Reyes <daniel@livingwatermz.org>"), "lw")
+    result = apply(p, root=root, run_audit=False)
+    data = tomllib.loads((result.tenant_dir / "authority.toml").read_text())
+    assert data["people"]["daniel-reyes"]["email"] == "daniel@livingwatermz.org"

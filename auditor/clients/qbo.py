@@ -20,12 +20,13 @@ import os
 import tempfile
 import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 
-TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+from ..web import open_url
+
+TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"  # noqa: S105  (a public OAuth URL, not a secret)
 API_BASE = "https://quickbooks.api.intuit.com/v3/company"
 # Intuit retired minor versions 1-74 on 2025-08-01; every request below 75 is served as 75 since.
 MINOR_VERSION = "75"
@@ -46,9 +47,8 @@ def cents(total_amt: object) -> int:
 
 
 def _default_transport(url: str, *, data: bytes | None, headers: dict) -> dict:
-    req = urllib.request.Request(url, data=data, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with open_url(url, timeout=60, data=data, headers=headers) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode()[:300]
@@ -119,7 +119,7 @@ class AuditorQboClient:
         start = 1
         while True:
             response = self._query(
-                "SELECT Id, DisplayName, Active, Vendor1099 FROM Vendor "
+                "SELECT Id, DisplayName, Active, Vendor1099 FROM Vendor "  # noqa: S608  (digit ids checked above, integer paging)
                 f"STARTPOSITION {start} MAXRESULTS {PAGE}"
             )
             batch = (response.get("QueryResponse") or {}).get("Vendor", [])
@@ -143,9 +143,11 @@ class AuditorQboClient:
         unique = sorted({str(i) for i in ids if str(i)})
         for start in range(0, len(unique), CHUNK):
             chunk = unique[start : start + CHUNK]
+            if not all(i.isdigit() for i in chunk):
+                raise AuditorQboError("a QBO id that is not digits never reaches a query")
             listed = ",".join(f"'{i}'" for i in chunk)
             response = self._query(
-                f"SELECT Id, TotalAmt FROM {entity} WHERE Id IN ({listed}) MAXRESULTS 1000"
+                f"SELECT Id, TotalAmt FROM {entity} WHERE Id IN ({listed}) MAXRESULTS 1000"  # noqa: S608  (digit ids checked above, integer paging)
             )
             for obj in (response.get("QueryResponse") or {}).get(entity, []):
                 found[str(obj.get("Id", ""))] = cents(obj.get("TotalAmt", 0))

@@ -82,7 +82,11 @@ shared bug passes both. So independence here is structural, not aspirational:
    bill id or a parked mapping/duplicate card); resolved cards whose
    follow-through never happened; and a card stamped human-only (#356)
    resolved without the queue's `decided_via=terminal` record is
-   `human-only-decided-by-agent` (CRITICAL).
+   `human-only-decided-by-agent` (CRITICAL). A yes said by word through the
+   box's door (`decided_via=door-word`) holds to the ministry's dollar line:
+   above the line stamped on the card, or with no amount or line to hold it
+   to, it is `word-yes-over-the-line` (CRITICAL); a stamped line that is not
+   authority.toml's `yes_by_word_up_to` today is `word-line-changed` (WARN).
 7. **QBO consistency.** With its own fetch: every stored `qbo_bill_id`
    exists in QBO with the row's amount; every reconcile-flipped row's
    evidence transaction still exists; engine-authored records match what

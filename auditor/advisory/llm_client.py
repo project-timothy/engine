@@ -34,7 +34,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+from ..web import open_url
 
 ADVISORY_JOB = "draft_advisory"
 """The ``[llm.jobs]`` key this module resolves. The tenant names the tier."""
@@ -199,14 +200,14 @@ class Client(Protocol):
 
 
 def _post_json(url: str, body: dict[str, Any], headers: dict[str, str], timeout_s: int) -> dict:
-    request = Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json", **headers},
-        method="POST",
-    )
     try:
-        with urlopen(request, timeout=timeout_s) as response:
+        with open_url(
+            url,
+            timeout=timeout_s,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json", **headers},
+            method="POST",
+        ) as response:
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:300] if exc.fp else ""

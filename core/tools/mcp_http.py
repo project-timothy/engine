@@ -33,19 +33,22 @@ import json
 import secrets
 import time
 import urllib.error
-import urllib.request
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlencode, urlsplit
 
+from ..engine import web
+from ..engine.config import load_tenant
+from ..mileage.door import TrackDoor
 from .catalog import Tools
 from .mcp_stdio import INSTRUCTIONS, SUPPORTED_VERSIONS, McpServer
 from .viewer import ViewerError, viewer_for
 
 ENDPOINT = "/mcp"
 PRM_PATH = "/.well-known/oauth-protected-resource"
+TRACK_PATH = "/track"  # a phone's tracker app reports here (core/mileage)
 MAX_BODY = 1_000_000
 
 
@@ -123,7 +126,7 @@ class Introspection:
     def person(self, token: str) -> str | None:
         if not token:
             return None
-        request = urllib.request.Request(  # noqa: S310  scheme checked in __init__
+        request = web.request(
             self.url,
             data=urlencode({"token": token}).encode("ascii"),
             method="POST",
@@ -134,7 +137,7 @@ class Introspection:
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as resp:  # noqa: S310
+            with web.urlopen(request, timeout=self.timeout) as resp:
                 answer = json.loads(resp.read(65536))
         except (OSError, ValueError, urllib.error.URLError):
             return None
@@ -196,6 +199,8 @@ def make_server(
     today: Callable[[], str | None] = lambda: None,
     lead_days: tuple[int, ...] | None = None,
     desk: Any = None,
+    receipts: Any = None,
+    tracker: Any = None,
 ) -> ThreadingHTTPServer:
     """An HTTP server for ``tenant``'s read tools. Bind it to localhost and put
     a TLS proxy in front; ``resource`` is the public URL of the endpoint.
@@ -203,10 +208,17 @@ def make_server(
     With ``desk`` (core/tools/witness_desk.WitnessDesk, the box's
     doorkeeper), a tenant whose authority.toml opened the door also gets
     ``decide_card``: a person decides a card with their own Face ID
-    (core/tools/decide.py)."""
+    (core/tools/decide.py). With ``receipts`` (core/tools/receipts.ReceiptDesk),
+    a person who files expenses also gets ``add_receipt`` and the box serves
+    the camera page at ``receipts.PAGE_PATH``. With ``desk``, the box also
+    shows a reviewer a person's month (core/tools/month_page.py) to a grant
+    the doorkeeper's month page posts after their Face ID."""
+    from . import month_page as mp
+    from . import receipts as rcpt
     from .decide import AskBook, Decider
 
     asks = AskBook()
+    ministry = load_tenant(tenant, tenants_root=tenants_root).identity.legal_name
     origin = "{0.scheme}://{0.netloc}".format(urlsplit(resource))
     prm_url = origin + PRM_PATH
     prm = {
@@ -227,16 +239,27 @@ def make_server(
                 desk=desk,
                 asks=asks,
             )
+        if receipts is not None:
+            kwargs["receipts"] = rcpt.Receipts(
+                tenant,
+                tenants_root=tenants_root,
+                ledger_root=ledger_root,
+                person=person,
+                desk=receipts,
+                base_url=origin + rcpt.PAGE_PATH,
+            )
         return Tools(
             tenant,
             ledger_root=ledger_root,
             obligations_file=obligations_file,
             today=today(),
             viewer=viewer,
+            ministry=ministry,
             **kwargs,
         )
 
     door = _Door(verifier, tools_for, origin, prm_url)
+    month = mp.page_for(desk, tools_for=tools_for, ministry=ministry)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "timothy-engine"
@@ -255,9 +278,40 @@ def make_server(
             self.end_headers()
             self.wfile.write(data)
 
+        def _page(self, html: str, nonce: str) -> None:
+            data = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header(
+                "Content-Security-Policy",
+                f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; "
+                "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            )
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _receipt(self) -> None:
+            status, body, close = rcpt.upload(
+                receipts,
+                self.headers,
+                self.rfile.read,
+                origin=origin,
+                tenant=tenant,
+                tenants_root=tenants_root,
+                ledger_root=ledger_root,
+            )
+            self.close_connection = close  # an unread body never reaches the next request
+            self._reply(status, body)
+
         def do_GET(self) -> None:  # noqa: N802
-            path = self.path.split("?")[0]
-            if path in (PRM_PATH, PRM_PATH + ENDPOINT):
+            path, _, query = self.path.partition("?")
+            if receipts is not None and path == rcpt.PAGE_PATH:
+                nonce = secrets.token_urlsafe(16)
+                self._page(rcpt.page(nonce, many=query == "many", ministry=ministry), nonce)
+            elif path in (PRM_PATH, PRM_PATH + ENDPOINT):
                 self._reply(200, prm)
             elif path == ENDPOINT:
                 self._reply(405, None, {"Allow": "POST"})
@@ -268,6 +322,9 @@ def make_server(
             self._reply(405, None, {"Allow": "POST"})
 
         def do_POST(self) -> None:  # noqa: N802
+            if receipts is not None and self.path.split("?")[0] == rcpt.PAGE_PATH:
+                self._receipt()
+                return
             if self.path.split("?")[0] != ENDPOINT:
                 self._reply(404, {"error": "not found"})
                 return
@@ -275,7 +332,61 @@ def make_server(
             body = self.rfile.read(length) if 0 < length <= MAX_BODY else b""
             self._reply(*door.answer(self.headers, body, too_large=length > MAX_BODY))
 
-    return ThreadingHTTPServer((host, port), Handler)
+    tracking = _tracking(
+        _monthly(Handler, month, origin),
+        TrackDoor(tenant, tenants_root=tenants_root, ledger_root=ledger_root, tracker=tracker),
+    )
+    server = ThreadingHTTPServer((host, port), tracking)
+    server.flush_drives = tracking.tracks.flush  # type: ignore[attr-defined]  # the minute timer
+    return server
+
+
+def _monthly(handler: type, month: Any, origin: str) -> type:
+    """The door's handler, also showing a reviewer a month at the month
+    page's paths when the box has a doorkeeper (core/tools/month_page.py)."""
+    from . import month_page as mp
+
+    class Monthly(handler):  # type: ignore[valid-type, misc]
+        def do_POST(self) -> None:  # noqa: N802
+            if self.path.split("?")[0] not in mp.PATHS:
+                super().do_POST()
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(min(max(length, 0), mp.MAX_FORM + 1))
+            status, headers, data = mp.answer(month, self.path, self.headers, raw, origin)
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(data)
+
+    return Monthly
+
+
+def _tracking(handler: type, tracks: TrackDoor) -> type:
+    """The door's handler, also taking a phone tracker's positions at
+    TRACK_PATH when the box keeps drives (core/mileage)."""
+
+    class Tracking(handler):  # type: ignore[valid-type, misc]
+        def _track(self) -> bool:
+            if not tracks.on or self.path.split("?")[0] != TRACK_PATH:
+                return False
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length).decode("utf-8", "replace") if 0 < length <= 4096 else ""
+            tracks.take(urlsplit(self.path).query or body)
+            self._reply(200, None)
+            return True
+
+        def do_GET(self) -> None:  # noqa: N802
+            if not self._track():
+                super().do_GET()
+
+        def do_POST(self) -> None:  # noqa: N802
+            if not self._track():
+                super().do_POST()
+
+    Tracking.tracks = tracks  # type: ignore[attr-defined]
+    return Tracking
 
 
 class _Door:
@@ -330,11 +441,16 @@ class _Door:
 
 DOOR_INSTRUCTIONS = (
     "Tools over this tenant's back-office ledger, answered as the signed-in person. Every "
-    "money value is an exact decimal string; quote it as given and cite its source. One tool "
-    "writes: decide_card. It decides nothing by itself: it returns a link, the person opens "
-    "it on their phone and taps the button with Face ID or a fingerprint, and only then does "
-    "a second call decide the card. Never call decide_card unless the person asked for that "
-    "decision in their own words."
+    "money value is an exact decimal string; quote it as given. Speak to the person in their "
+    "own terms: who, what for, and how much. Card numbers, sources, tool names, and what a "
+    "lookup returned stay in your calls, never in your words. Two tools write. add_receipt, "
+    'where offered, answers "here\'s a receipt" with a link that opens their camera; the '
+    "amount comes from their words, never yours. decide_card decides a card. "
+    "At or under the ministry's dollar line, the person's word decides it. Above it, it "
+    "returns a link to show the person, and the tap finishes it: when they tap the button "
+    "with Face ID or a fingerprint, the card is decided and their page says so, with nothing "
+    "more needed from you. Never call decide_card unless the person asked for that decision "
+    "in their own words."
 )
 
 

@@ -60,3 +60,4 @@ age/
 
 # CI checks the private tenant token list out here (never committed)
 .private-tenant/
+tests/browser/node_modules/
