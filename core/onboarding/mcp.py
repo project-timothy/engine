@@ -120,11 +120,13 @@ def _plan(t: OnboardingTools, args: dict) -> dict:
                     "name": name,
                     "role": role,
                     **({"email": p.emails[pid]} if pid in p.emails else {}),
+                    **({"zone": p.zones[pid]} if pid in p.zones else {}),
                 }
                 for pid, name, role in p.people
             ],
             "second_person_above": p.self_approval_limit,
             "two_approvals_above": p.two_approvals_above,
+            "yes_by_word_up_to": p.yes_by_word_up_to,
             "spelling": p.spelling,
             "banned_words": list(p.banned),
         },

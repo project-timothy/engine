@@ -86,6 +86,9 @@ jobs:
       - name: Dead code (vulture; the whitelist holds inspected false positives)
         run: uv run vulture core auditor tenants vulture_whitelist.py --min-confidence 80
 
+      - name: Duplicate code ceiling (pylint over core; the count only goes down)
+        run: uv run python -m core.evals.duplicate_code
+
       - name: Tests + evals (with coverage floor)
         run: uv run coverage run -m pytest -q && uv run coverage report
 
@@ -137,6 +140,107 @@ jobs:
 
       - name: Tests + evals without the SDK
         run: uv run pytest -q
+
+  # The practice-box scenarios and the red team, run against this change itself
+  # (structure review proposal 4, 2026-10-14): the proving ground stands up the
+  # real doorkeeper and THIS engine on loopback and drives them as Ruth, Carol
+  # and an attacker would. An engine change that breaks a person's walk fails
+  # here, not on the box. The two repositories are private: read-only deploy
+  # keys reach them; without the keys (a fork) the job says so and passes.
+  scenarios:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SCENARIO_KEYS: ${{ secrets.PROVING_GROUND_DEPLOY_KEY != '' && secrets.DOORKEEPER_DEPLOY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          path: engine
+
+      - name: Without the deploy keys there is nothing to drive
+        if: env.HAS_SCENARIO_KEYS != 'true'
+        run: echo "::notice::scenarios skipped (no PROVING_GROUND_DEPLOY_KEY / DOORKEEPER_DEPLOY_KEY)"
+
+      - name: The proving ground (read-only deploy key)
+        if: env.HAS_SCENARIO_KEYS == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          repository: project-timothy/proving-ground
+          ref: main
+          ssh-key: ${{ secrets.PROVING_GROUND_DEPLOY_KEY }}
+          path: proving-ground
+
+      - name: The doorkeeper (read-only deploy key)
+        if: env.HAS_SCENARIO_KEYS == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          repository: project-timothy/doorkeeper
+          ref: main
+          ssh-key: ${{ secrets.DOORKEEPER_DEPLOY_KEY }}
+          path: doorkeeper
+
+      - name: Install uv
+        if: env.HAS_SCENARIO_KEYS == 'true'
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.9.27"
+
+      - name: Every scenario, signed in over HTTP
+        if: env.HAS_SCENARIO_KEYS == 'true'
+        working-directory: proving-ground
+        run: |
+          uv python install 3.12
+          ENGINE_CHECKOUT="$GITHUB_WORKSPACE/engine" DOORKEEPER_CHECKOUT="$GITHUB_WORKSPACE/doorkeeper" uv run pytest -q
+
+      - name: The red team (every attack must fail)
+        if: env.HAS_SCENARIO_KEYS == 'true'
+        working-directory: proving-ground
+        run: uv run python -m proving_ground redteam --engine "$GITHUB_WORKSPACE/engine" --doorkeeper "$GITHUB_WORKSPACE/doorkeeper" --workdir "$RUNNER_TEMP/redteam"
+
+  # Every page the engine serves a person (the receipt camera page, the
+  # catch-up page, the month page), photographed at a phone's width, light and
+  # dark, and kept with the run as the phone-screenshots artifact (structure
+  # review proposal 4). A page that scrolls sideways or throws fails the job.
+  pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: "0.9.27"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+
+      - name: A pinned browser
+        run: |
+          npm ci --ignore-scripts --prefix tests/browser
+          tests/browser/node_modules/.bin/playwright-core install --with-deps chromium-headless-shell
+
+      - name: The pages, rendered and photographed
+        run: |
+          uv python install 3.12
+          uv sync --locked
+          uv run python tests/browser/pages.py "$RUNNER_TEMP/pages"
+          mkdir -p "$RUNNER_TEMP/shots"
+          CHROME="$(find ~/.cache/ms-playwright -type f \( -name chrome-headless-shell -o -name headless_shell \) | head -1)" \
+            PW="$PWD/tests/browser/node_modules/playwright-core" \
+            node tests/browser/shots.cjs "$RUNNER_TEMP/pages" "$RUNNER_TEMP/shots"
+          echo "Phone screenshots, light and dark: the phone-screenshots artifact of this run ($(ls "$RUNNER_TEMP/shots" | wc -l) photos)." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: phone-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: error
 
   # The container is the product's host (phase 7 row 7.21). This job builds the
   # image and watches ONE whole cycle: supercronic reads the crontab that

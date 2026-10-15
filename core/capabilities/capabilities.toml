@@ -1,7 +1,8 @@
 # What Tim does, in the words a missionary or treasurer would use.
 # `engine capabilities` builds the capability page from the code (the tools,
 # the onboarding questions, the registered lanes); this file only gives each
-# lane and each tool its one plain sentence. tests/unit/test_capabilities.py
+# lane and each tool its one plain sentence, and each tool a way a person
+# might say it (`try`). tests/unit/test_capabilities.py
 # fails when a lane or a tool is added or removed without a line here, so the
 # page cannot drift.
 # `shown = false` keeps a lane off the page (test fixtures, plumbing).
@@ -30,8 +31,11 @@ says = "Collects documents from the ministry's mailbox for the other lanes."
 [lane.projects]
 says = "Notices when the list of projects or funds drifts out of step with the books."
 
+[lane.policy]
+says = "Turns the ministry's handbook into rules, and asks a person to say yes to each one before it counts."
+
 [lane.routing]
-says = "Sends each decision to the right person, reminds them, and covers for someone who is away."
+says = "Sends each decision to the right person, emails them when it waits (at most once a day), tells a reviewer when a month is ready, and covers for someone who is away."
 
 [lane.timesheets]
 says = "Files the hours people report."
@@ -40,36 +44,111 @@ says = "Files the hours people report."
 says = "A practice lane for testing the engine."
 shown = false
 
+[tool.start_here]
+says = "Who you are with Tim: your name, what you do, whose spending you look over and who looks over yours. And how to do anything with Tim, in plain answers."
+try = "Who am I in Tim, and how do I send a receipt?"
+
 [tool.deadlines]
 says = "What is coming due, and how many days are left."
+try = "What's coming due this month?"
 
 [tool.waiting_cards]
 says = "What is waiting for someone's yes or no."
+try = "Is anything waiting on me?"
 
 [tool.open_payables]
 says = "Which bills are still unpaid, the soonest first, and the total."
+try = "What bills do we still owe?"
 
 [tool.find_invoices]
 says = "Find a bill by who sent it or its number."
+try = "Find the bill from the water company."
 
 [tool.recent_runs]
 says = "Whether this morning's work ran, and how it went."
+try = "Did this morning's work run?"
 
 [tool.close_status]
 says = "Where the month's closing stands."
+try = "Where does closing September stand?"
 
 [tool.expense_reports]
 says = "Your expense reports, their totals, and whether you have been paid back."
+try = "Have I been paid back for August?"
+
+[tool.ask_the_rules]
+says = "Before you buy something, what your ministry's own rules say about it, with the handbook and page."
+try = "Can I buy a $1,400 projector for the school?"
+
+[tool.month_report]
+says = "A month of receipts in dollars. A receipt paid in another currency shows what you paid and its dollar value on that day."
+try = "Show me my October receipts."
+
+[tool.year_report]
+says = "Where your year stands: each month's receipts and total, what's still waiting, and totals by category."
+try = "Where's my year?"
+
+[tool.decide_card]
+says = "Say yes or no to something waiting on you. Under your ministry's limit, just say so; over it, Tim asks you to confirm with Face ID."
+try = "Approve Ruth's September report."
+
+[tool.add_receipt]
+says = "Add a receipt: say what you paid, then snap the photo from the link Tim sends."
+try = "Here's a receipt, 4,300 rupees for the bus to Pokhara."
+
+[tool.set_category]
+says = "Put a receipt under a category, like Travel or Meals."
+try = "That bus ticket goes under Travel."
+
+[tool.set_drive_purpose]
+says = "Say what a drive was for. Tim keeps the miles and times your phone tracked, never where you went."
+try = "Tuesday's drive was the church visit in Pokhara."
+
+[tool.set_amount]
+says = "Say how much a receipt was, after you've snapped it."
+try = "That last receipt was 1,250 rupees."
+
+[tool.catch_up_link]
+says = "Catching up? One link takes a whole pile at once (receipt photos, PDFs, your bank's statements, a school list) and works for a day."
+try = "I've got a year of receipts to catch up on."
+
+[tool.set_receipt_day]
+says = "Say which day a receipt is from, so it lands in its own month at that day's rate."
+try = "That one's from March 5."
+
+[tool.receipts_to_read]
+says = "Your own Claude reads the receipts you sent in a pile: the day, the amount, and who you paid."
+try = "Read my receipts."
+
+[tool.record_reading]
+says = "What a receipt reads is kept as a reading. The amount counts once you agree to it."
+try = "Read the next receipt and tell me what it says."
+
+[tool.agree_to_readings]
+says = "One yes for a month of receipts, once Tim has walked you through what it read."
+try = "Yes, September's right."
+
+[tool.send_month_for_review]
+says = "Send a month to your reviewer for their yes, all of it at once, when it's ready."
+try = "Send September for review."
+
+[tool.bank_statement]
+says = "Send the statements your bank's website exports: the ministry's account counts in full, and from your own account Tim keeps only the lines you pick."
+try = "Here are my bank statements."
+
+[tool.keep_own_lines]
+says = "Pick which lines of your own account were the ministry's. The rest never stay with Tim."
+try = "The taxi and the supermarket were ministry; the rest is mine."
+
+[tool.keep_school_list]
+says = "Send your list of scholarships and school fees, and each one counts in its own month with no receipt needed."
+try = "Here's my scholarship list."
+
+[tool.explain_bank_line]
+says = "Say what a bank line was for when you have no receipt for it."
+try = "The guest house was the team's hotel in Kathmandu."
 
 # Honest gaps, said plainly. Remove a line when it ships.
 [[not_yet]]
-says = "Take a photo of a receipt in the conversation. Today a receipt reaches Tim through a shared folder."
+says = "Read one receipt's photo the moment you take it. Today your own Claude reads a pile you send in a catch-up; for a single receipt, you say how much and Tim keeps your words."
 
-[[not_yet]]
-says = "Take your yes in the conversation. Today a person approves at the computer that keeps the books."
-
-[[not_yet]]
-says = "Keep amounts in currencies other than US dollars."
-
-[[not_yet]]
-says = "Show a sponsor or a pastor a monthly page of their own."

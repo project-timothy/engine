@@ -89,7 +89,7 @@ def test_v8_upgrades_a_v7_ledger_in_place_and_keeps_its_rows():
         "VALUES ('demo', 'x', 'fixture', 'm', 'n')"
     )
     conn.commit()
-    assert migrate(conn) == [8]
+    assert migrate(conn)[0] == 8  # and every later migration after it
     assert 8 in applied_versions(conn)
     assert conn.execute("SELECT COUNT(*) FROM job_records").fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM llm_calls").fetchone()[0] == 1

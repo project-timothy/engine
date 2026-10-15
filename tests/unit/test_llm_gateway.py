@@ -16,6 +16,7 @@ import io
 import json
 import tokenize
 import urllib.error
+import urllib.request
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,7 +40,7 @@ from core.llm import (
     Usage,
     complete,
 )
-from core.llm.adapters import anthropic_messages, openai_compat
+from core.llm.adapters import openai_compat
 from core.llm.adapters.anthropic_messages import AnthropicMessagesAdapter
 from core.llm.adapters.fixture import FixtureAdapter
 from core.llm.adapters.openai_compat import OpenAICompatAdapter
@@ -235,7 +236,7 @@ def test_anthropic_adapter_sends_schema_messages_attachments_and_parses_usage(
         seen.append((request, timeout))
         return _FakeHTTPResponse(recorded)
 
-    monkeypatch.setattr(anthropic_messages, "urlopen", fake_urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test-not-a-real-key")
     image = _png(tmp_path)
 
@@ -289,7 +290,7 @@ def test_anthropic_adapter_sends_a_pdf_as_a_document_block(tmp_path, monkeypatch
     recorded = (FIXTURES / "anthropic_messages_response.json").read_bytes()
     seen: list = []
     monkeypatch.setattr(
-        anthropic_messages,
+        urllib.request,
         "urlopen",
         lambda request, timeout=None: seen.append(request) or _FakeHTTPResponse(recorded),
     )
@@ -311,7 +312,7 @@ def test_anthropic_adapter_sends_an_image_only_pdf_as_rendered_pages(tmp_path, m
     recorded = (FIXTURES / "anthropic_messages_response.json").read_bytes()
     seen: list = []
     monkeypatch.setattr(
-        anthropic_messages,
+        urllib.request,
         "urlopen",
         lambda request, timeout=None: seen.append(request) or _FakeHTTPResponse(recorded),
     )
@@ -337,7 +338,7 @@ def test_anthropic_adapter_still_sends_a_pdf_with_a_text_layer_as_a_document(tmp
     recorded = (FIXTURES / "anthropic_messages_response.json").read_bytes()
     seen: list = []
     monkeypatch.setattr(
-        anthropic_messages,
+        urllib.request,
         "urlopen",
         lambda request, timeout=None: seen.append(request) or _FakeHTTPResponse(recorded),
     )
@@ -358,7 +359,7 @@ def test_anthropic_adapter_http_error_is_a_transport_error(monkeypatch):
             request.full_url, 529, "Overloaded", {}, io.BytesIO(b'{"error":"overloaded"}')
         )
 
-    monkeypatch.setattr(anthropic_messages, "urlopen", failing_urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", failing_urlopen)
     monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test-not-a-real-key")
     with pytest.raises(GatewayTransportError) as info:
         _call(AnthropicMessagesAdapter(api_key_env="TEST_ANTHROPIC_KEY"))
@@ -369,7 +370,7 @@ def test_anthropic_adapter_http_error_is_a_transport_error(monkeypatch):
 def test_anthropic_adapter_refuses_to_run_without_the_key(monkeypatch):
     monkeypatch.delenv("TEST_ANTHROPIC_KEY", raising=False)
     calls: list = []
-    monkeypatch.setattr(anthropic_messages, "urlopen", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: calls.append(a))
     with pytest.raises(GatewayTransportError) as info:
         _call(AnthropicMessagesAdapter(api_key_env="TEST_ANTHROPIC_KEY"))
     assert info.value.cause == "no_api_key"
@@ -421,7 +422,7 @@ def test_anthropic_adapter_leaves_room_for_thinking_by_default(monkeypatch):
         sent.append(json.loads(request.data))
         return _FakeHTTPResponse(_recorded_with())
 
-    monkeypatch.setattr(anthropic_messages, "urlopen", fake_urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test-not-a-real-key")
     _call(AnthropicMessagesAdapter(api_key_env="TEST_ANTHROPIC_KEY"))
     assert sent[0]["max_tokens"] == 16000
@@ -431,7 +432,7 @@ def test_anthropic_adapter_a_reply_cut_off_at_max_tokens_is_refused(monkeypatch)
     """A truncated reply is half a JSON document; it fails here by name
     instead of downstream as a parse error that reads like the model's."""
     monkeypatch.setattr(
-        anthropic_messages,
+        urllib.request,
         "urlopen",
         lambda request, timeout=None: _FakeHTTPResponse(_recorded_with(stop_reason="max_tokens")),
     )

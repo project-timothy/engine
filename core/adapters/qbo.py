@@ -24,7 +24,6 @@ import re
 import tempfile
 import urllib.error
 import urllib.parse
-import urllib.request
 from base64 import b64encode
 from collections.abc import Callable
 from decimal import Decimal
@@ -33,7 +32,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
+from ..engine import web
+
+TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"  # noqa: S105  (a public OAuth URL, not a secret)
 API_BASE = "https://quickbooks.api.intuit.com/v3/company"
 # Intuit retired minor versions 1-74 on 2025-08-01; every request below 75 is served as 75 since.
 MINOR_VERSION = "75"
@@ -54,6 +55,15 @@ def iso_since(value: object) -> str:
     from datetime import date
 
     date.fromisoformat(text)  # 2026-13-01 raises here
+    return text
+
+
+def qbo_id(value: object) -> str:
+    """``value`` when it is a QBO entity id (digits only), else ValueError: an
+    id is interpolated into a query, so nothing else may reach one."""
+    text = str(value)
+    if not text.isdigit():
+        raise ValueError(f"{text!r} is not a QBO id")
     return text
 
 
@@ -183,9 +193,9 @@ def report_rows(report: dict) -> list[dict]:
 
 
 def _default_transport(url: str, *, data: bytes | None, headers: dict) -> dict:
-    req = urllib.request.Request(url, data=data, headers=headers)
+    req = web.request(url, data=data, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with web.urlopen(req, timeout=60) as resp:
             return json.load(resp)
     except urllib.error.HTTPError as exc:  # surface the API's own message
         detail = exc.read().decode()[:300]
@@ -312,9 +322,9 @@ class QboClient:
         chunk_size = 40  # well inside QBO's query-length limits
         for start in range(0, len(unique), chunk_size):
             chunk = unique[start : start + chunk_size]
-            listed = ",".join(f"'{i}'" for i in chunk)
+            listed = ",".join(f"'{qbo_id(i)}'" for i in chunk)
             response = self._query(
-                f"SELECT Id, TotalAmt, Balance FROM Bill WHERE Id IN ({listed}) MAXRESULTS 1000"
+                f"SELECT Id, TotalAmt, Balance FROM Bill WHERE Id IN ({listed}) MAXRESULTS 1000"  # noqa: S608  (digit ids or ISO dates only, checked inline)
             )
             for obj in (response.get("QueryResponse") or {}).get("Bill", []):
                 found[str(obj.get("Id") or "")] = {  # #314 shape: null -> "", never "None"
@@ -326,7 +336,8 @@ class QboClient:
     def fetch_journal_entries(self, *, start: str, end: str) -> list[dict]:
         """Raw JournalEntry objects dated within [start, end] (ISO dates)."""
         return self._query_pages(
-            f"SELECT * FROM JournalEntry WHERE TxnDate >= '{start}' AND TxnDate <= '{end}' "
+            f"SELECT * FROM JournalEntry WHERE TxnDate >= '{iso_since(start)}' "  # noqa: S608  (digit ids or ISO dates only, checked inline)
+            f"AND TxnDate <= '{iso_since(end)}' "
             "ORDER BY TxnDate",
             "JournalEntry",
         )
@@ -335,7 +346,8 @@ class QboClient:
         """Raw Purchase objects dated within [start, end] (ISO dates), line
         detail included (the owner-transactions check reads account names)."""
         return self._query_pages(
-            f"SELECT * FROM Purchase WHERE TxnDate >= '{start}' AND TxnDate <= '{end}' "
+            f"SELECT * FROM Purchase WHERE TxnDate >= '{iso_since(start)}' "  # noqa: S608  (digit ids or ISO dates only, checked inline)
+            f"AND TxnDate <= '{iso_since(end)}' "
             "ORDER BY TxnDate",
             "Purchase",
         )
@@ -349,7 +361,7 @@ class QboClient:
             ("BillPayment", normalize_billpayment),
         ):
             for obj in self._query_pages(
-                f"SELECT * FROM {entity} WHERE TxnDate >= '{since}' ORDER BY TxnDate",
+                f"SELECT * FROM {entity} WHERE TxnDate >= '{iso_since(since)}' ORDER BY TxnDate",  # noqa: S608  (digit ids or ISO dates only, checked inline)
                 entity,
             ):
                 evidence.append(normalize(obj))
@@ -384,7 +396,8 @@ class QboClient:
             for ev in self.fetch_evidence(since=since)
         ]
         for b in self._query_pages(
-            f"SELECT * FROM Bill WHERE TxnDate >= '{since}' ORDER BY TxnDate", "Bill"
+            f"SELECT * FROM Bill WHERE TxnDate >= '{iso_since(since)}' ORDER BY TxnDate",  # noqa: S608  (digit ids or ISO dates only, checked inline)
+            "Bill",
         ):
             txns.append(
                 {
@@ -468,7 +481,7 @@ class QboClient:
             ("BillPayment", normalize_billpayment),
         ):
             for obj in self._query_pages(
-                f"SELECT * FROM {entity} WHERE TxnDate >= '{since}' ORDER BY TxnDate",
+                f"SELECT * FROM {entity} WHERE TxnDate >= '{iso_since(since)}' ORDER BY TxnDate",  # noqa: S608  (digit ids or ISO dates only, checked inline)
                 entity,
             ):
                 ev = normalize(obj)

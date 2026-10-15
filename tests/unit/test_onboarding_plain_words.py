@@ -119,7 +119,7 @@ def test_a_role_answer_naming_two_roles_or_none_refuses():
 def test_a_person_line_finds_the_role_inside_the_words_around_it():
     people = record(CHURCH, "people", "Ruth Hollis = missionary in Nepal\nDon Pruitt = board")
     assert people["people"] == [
-        {"name": "Ruth Hollis", "role": "missionary"},
+        {"name": "Ruth Hollis", "role": "missionary", "zone": "Asia/Kathmandu"},
         {"name": "Don Pruitt", "role": "board"},
     ]
 

@@ -41,7 +41,7 @@ req = urllib.request.Request(
     },
 )
 try:
-    tok = json.load(urllib.request.urlopen(req))
+    tok = json.load(urllib.request.urlopen(req))  # noqa: S310  (a fixed Intuit https URL)
 except urllib.error.HTTPError as e:
     sys.exit(f"exchange FAILED: HTTP {e.code}: {e.read().decode()[:300]}")
 

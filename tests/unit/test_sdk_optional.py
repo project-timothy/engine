@@ -271,7 +271,9 @@ def test_ci_runs_the_suite_with_and_without_the_extra():
     container job runs pytest a third time on ONE file (the sops cases this Mac
     skips). The 2026-09-18 code-quality pass then wrapped the with-extra run in
     `coverage run` so the coverage floor is enforced without paying for a third
-    four-minute suite, so a full-suite run is now spelled either way."""
+    four-minute suite, so a full-suite run is now spelled either way. The
+    scenarios job (2026-10-14) runs the PROVING GROUND's suite against this
+    engine, named by its ``*_CHECKOUT=`` paths; that is not this suite."""
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     syncs = [line.strip() for line in ci.splitlines() if "uv sync" in line]
     assert "run: uv sync --locked --extra claude" in syncs, syncs
@@ -282,6 +284,7 @@ def test_ci_runs_the_suite_with_and_without_the_extra():
         if ("uv run pytest" in line or "uv run coverage run -m pytest" in line)
         and "tests/" not in line
         and "core/" not in line
+        and "_CHECKOUT=" not in line
     ]
     assert len(whole_suite) == 2, f"both jobs run the full suite: {whole_suite}"
     assert ci.count("uv run ruff check") == 1, "the lints run once, not per job"

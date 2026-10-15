@@ -1,0 +1,316 @@
+# Tim's questions and answers, in the words a missionary, treasurer or pastor
+# would use (the owner, 2026-10-14: "people just ask").
+#
+# One source feeds three places: Tim's own answers (the start_here tool hands
+# a person the entries for the tools they have), the page anyone can share
+# (`engine faq`, docs/tim-faq.md), and the alpha packet.
+# tests/unit/test_faq.py holds it to the code: every tool the door offers is
+# explained by at least one entry, and an entry names only real tools.
+#
+# Each entry:
+#   ask     the question, the way a person would put it
+#   answer  short and plain; no machinery, no em dashes
+#   try     optional: a way to say it to your AI
+#   covers  the door tools it explains; empty = for everyone who uses Tim
+#   live    the day it worked on the practice box
+#
+# Order is the order on the page. The first entry is the first thing anyone
+# does after adding Tim.
+
+[[entry]]
+id = "always-allow"
+ask = "Claude asks \"Allow?\" before everything Tim does. Can I stop that?"
+answer = "Yes, once, and it's the first thing to do. In the Claude app, open the menu (top left), tap your initials (bottom left), then Settings, Connectors, Tim. At the top of the list, set All tools to Always allow. That one setting covers every tool, including ones Tim adds later. It's safe: Tim never moves money, a yes over your ministry's dollar line still asks for your Face ID, and your own account is yours alone."
+covers = []
+live = "2026-10-14"
+
+[[entry]]
+id = "add-tim"
+ask = "How do I add Tim to my AI?"
+answer = "First tap the welcome link your ministry emailed you; it sets up Face ID or your fingerprint. Then, in Claude (Pro or higher): Settings, Connectors, Add custom connector, name it Tim, and paste the address from your welcome page. In ChatGPT (Plus or higher): Settings, Apps & Connectors, Create. When it asks you to sign in, use the same Face ID or fingerprint."
+covers = []
+live = "2026-10-10"
+
+[[entry]]
+id = "sign-in"
+ask = "Do I need a password?"
+answer = "No. Tim signs you in with Face ID, your fingerprint, or your computer's own sign-in. If your phone can't, Tim emails you a code. A welcome link that stopped working sends you a new one if you put in your email."
+covers = []
+live = "2026-10-13"
+
+[[entry]]
+id = "who-am-i"
+ask = "Who am I signed in as?"
+answer = "Ask Tim. It says your name, what you do for the ministry, whose spending you look over, and who looks over yours."
+try = "Who am I in Tim?"
+covers = ["start_here"]
+live = "2026-10-14"
+
+[[entry]]
+id = "what-can-tim-do"
+ask = "What can Tim do for me?"
+answer = "Ask, and Tim answers for you: the receipts and reports you send if you file expenses, the months you look over if you review someone's. Tim keeps the books; you say what you want in plain words, and a yes when one is needed."
+try = "What can Tim do for me?"
+covers = ["start_here"]
+live = "2026-10-14"
+
+[[entry]]
+id = "who-sees-what"
+ask = "Can the other missionaries see my receipts?"
+answer = "No. You see your own. The people who look over your spending see your months, and nobody else does. The church's treasurer sees what a treasurer needs."
+covers = []
+live = "2026-10-09"
+
+[[entry]]
+id = "one-email"
+ask = "How many emails will Tim send me?"
+answer = "At most one a morning, and only when something needs you: a month ready to look over, a yes waiting on you, or, on Fridays, drives to sort. When there's more than one, they come together in the same email. Emails never carry an amount; Tim or the link in the email shows that."
+covers = []
+live = "2026-10-14"
+
+[[entry]]
+id = "send-a-receipt"
+ask = "How do I send a receipt?"
+answer = "Tell Tim what you paid and what for. Tim sends a link; tap it and the page opens your camera. Snap the receipt and you're done. Tim keeps the amount you said, in the currency you paid."
+try = "Here's a receipt, 4,300 rupees for the bus to Pokhara."
+covers = ["add_receipt"]
+live = "2026-10-12"
+
+[[entry]]
+id = "fix-an-amount"
+ask = "I said the wrong amount. How do I fix it?"
+answer = "Just say the right one. If it was a different receipt, say which (\"the bus ticket\")."
+try = "That last receipt was 1,250 rupees."
+covers = ["set_amount"]
+live = "2026-10-13"
+
+[[entry]]
+id = "categories"
+ask = "How do I put a receipt under the right category?"
+answer = "Say it in your own words. Tim knows the ministry's list, like Travel, Meals and Supplies, and puts it there. If you look over someone's month, you can move their receipt too, and the card shows the change before the yes."
+try = "That bus ticket goes under Travel."
+covers = ["set_category"]
+live = "2026-10-13"
+
+[[entry]]
+id = "other-currency"
+ask = "I paid in rupees. How does that turn into dollars?"
+answer = "Tim keeps what you paid as you said it, and works out its dollar value at the exchange rate on the receipt's own day. Both show on your month, with the rate."
+try = "Show me my October receipts."
+covers = ["month_report"]
+live = "2026-10-13"
+
+[[entry]]
+id = "my-month"
+ask = "What's in my month so far?"
+answer = "Ask Tim for the month. You'll see each receipt's day and dollars, any drives, any bank lines, the total, and where the review stands."
+try = "Show me my September receipts."
+covers = ["month_report"]
+live = "2026-10-13"
+
+[[entry]]
+id = "which-fund"
+ask = "Which fund does my receipt go to?"
+answer = "Your ministry's. If it keeps more than one fund, each line on your month says which; with one, Tim doesn't repeat it on every line."
+covers = ["month_report"]
+live = "2026-10-14"
+
+[[entry]]
+id = "codes"
+ask = "Why doesn't Tim read me codes like \"events#17\"?"
+answer = "Those are Tim's own bookmarks for a receipt. Your AI uses them behind the scenes and tells you about a receipt by its day, its amount, and who was paid."
+covers = ["month_report"]
+live = "2026-10-14"
+
+[[entry]]
+id = "drives"
+ask = "How do my ministry drives get paid back?"
+answer = "The tracker app on your phone sends Tim the miles and times, never where you went. On Fridays Tim asks what the week's drives were for. A ministry drive goes on your month with your receipts, priced at that day's mileage rate (\"Oct 12: 14 miles, visiting the church in Pokhara, $10.15 at 72.5 cents a mile\"), and your reviewer approves it with the rest. A drive you call personal never turns into money."
+try = "Tuesday's drive was the church visit in Pokhara."
+covers = ["set_drive_purpose"]
+live = "2026-10-14"
+
+[[entry]]
+id = "catch-up"
+ask = "I'm behind on receipts. How do I catch up?"
+answer = "Ask Tim for a catch-up link. Tap it, choose every receipt at once (photos from your camera roll, PDFs, or the statements your bank's website exports), and send. The link works for a day, so you can send more as you find them. Your reviewer can ask for the link for you, too."
+try = "I've got a year of receipts to catch up on."
+covers = ["catch_up_link"]
+live = "2026-10-14"
+
+[[entry]]
+id = "check-before-sending"
+ask = "Can I see what I picked before it sends?"
+answer = "Yes. On a catch-up link, the page lists every file you chose by name. Tap \"Send these\" when it's right, or \"Choose again\" if a personal photo slipped in."
+covers = ["catch_up_link"]
+live = "2026-10-14"
+
+[[entry]]
+id = "icloud"
+ask = "My statements are in iCloud Drive. How do I pick them?"
+answer = "Tap the button on your catch-up page, choose Choose File, then type the folder's name in the search box at the top. Select the files and tap Open."
+covers = ["catch_up_link"]
+live = "2026-10-14"
+
+[[entry]]
+id = "link-stopped"
+ask = "My link says it expired or didn't go through."
+answer = "Ask Tim for a new one; it takes a second. A camera link lasts a short while and a catch-up link lasts a day. A link also stops working if Tim's box restarts, so if a fresh link fails, ask once more."
+try = "Send me a new catch-up link."
+covers = ["catch_up_link", "add_receipt"]
+live = "2026-10-14"
+
+[[entry]]
+id = "own-month"
+ask = "How does a receipt from March end up in March?"
+answer = "Each receipt goes in its own month, by the day on the receipt, not the day you sent it. Your Claude reads the day off it, or you say it. A receipt in another currency is turned into dollars at that day's rate."
+try = "That one's from March 5."
+covers = ["set_receipt_day"]
+live = "2026-10-14"
+
+[[entry]]
+id = "who-reads"
+ask = "Who reads my receipts?"
+answer = "Your own Claude. Tim hands it the receipts you sent; it reads the day, the amount, and who you paid, and walks you through them. An amount counts only once you say it's right."
+try = "Read my receipts."
+covers = ["receipts_to_read", "record_reading"]
+live = "2026-10-14"
+
+[[entry]]
+id = "one-yes"
+ask = "Do I have to say yes to every receipt one at a time?"
+answer = "No. Tim walks you through a month (\"July: 14 receipts, $612.40, here's what I read\"). Fix anything that's off in plain words, then one yes covers the rest. Then say \"send July for review\" and your reviewer gets the month as one card."
+try = "Yes, July's right. Send it for review."
+covers = ["agree_to_readings", "send_month_for_review"]
+live = "2026-10-14"
+
+[[entry]]
+id = "approved-stays"
+ask = "My month was approved, then I found another receipt. Does it all need approving again?"
+answer = "No. The new receipt goes on a small card of its own, with a line saying what's already approved (\"Already approved Oct 13: 2 receipts, $42.31\"). What was approved stays approved. If an approved receipt changes, only that one comes back for a yes."
+covers = ["send_month_for_review"]
+live = "2026-10-14"
+
+[[entry]]
+id = "my-year"
+ask = "Where's my year?"
+answer = "Ask Tim. You'll see each month's receipts and total, what's still waiting on you, where each month's review stands, and your totals by category."
+try = "Where's my year?"
+covers = ["year_report"]
+live = "2026-10-14"
+
+[[entry]]
+id = "bank-statements"
+ask = "Can I send my bank statements?"
+answer = "Yes. Download the CSV file from your bank's website and send it through your catch-up link. Tim asks whose account it is. The ministry's account counts in full."
+try = "Here are my bank statements."
+covers = ["bank_statement"]
+live = "2026-10-14"
+
+[[entry]]
+id = "personal-spending"
+ask = "Will Tim see my personal spending?"
+answer = "Only to help you pick. From your own account, Tim keeps the lines you say were the ministry's and nothing else; the rest is never saved. Your reviewer never sees your own account."
+try = "The taxi and the supermarket were ministry; the rest is mine."
+covers = ["keep_own_lines"]
+live = "2026-10-14"
+
+[[entry]]
+id = "remitly"
+ask = "What about money I sent through Remitly?"
+answer = "It's money moving, not spending. Your receipts and your school list show where it went. Money the ministry paid you back isn't spending either."
+covers = ["bank_statement"]
+live = "2026-10-14"
+
+[[entry]]
+id = "card-in-rupees"
+ask = "I paid in rupees with my card. Which amount counts?"
+answer = "The dollars your card was charged, from the statement. The receipt rides the bank line it paid."
+covers = ["bank_statement"]
+live = "2026-10-14"
+
+[[entry]]
+id = "scholarships"
+ask = "Scholarships have no receipts. What do I send?"
+answer = "Your list: student, amount, date, school. Each payment counts in its own month at that day's rate, with no receipt needed."
+try = "Here's my scholarship list."
+covers = ["keep_school_list"]
+live = "2026-10-14"
+
+[[entry]]
+id = "no-receipt"
+ask = "A bank line has no receipt."
+answer = "Tell Tim what it was for. That's enough for the review."
+try = "The guest house was the team's hotel in Kathmandu."
+covers = ["explain_bank_line"]
+live = "2026-10-14"
+
+[[entry]]
+id = "approve"
+ask = "How do I approve someone's month?"
+answer = "Ask what's waiting on you, then say yes or no in your own words. Under your ministry's dollar line, your word decides it. Over it, Tim shows a button; tap it and confirm with Face ID or your fingerprint, and it's done."
+try = "Approve Ruth's September report."
+covers = ["waiting_cards", "decide_card"]
+live = "2026-10-11"
+
+[[entry]]
+id = "no-ai-month"
+ask = "I don't use an AI. How do I see a month?"
+answer = "Open the link in the email that says a month is ready. Your Face ID or fingerprint opens it, every time, and shows the receipts, drives and bank lines, the total, and where it stands. If the month is waiting on your yes, there's an Approve button. The link works for 7 days, and the next email brings a fresh one."
+covers = ["month_report"]
+live = "2026-10-14"
+
+[[entry]]
+id = "why-face-id"
+ask = "Why does Tim sometimes ask for Face ID?"
+answer = "Your ministry sets a dollar line. At or under it, saying yes to your AI is enough. Over it, Face ID proves it was you who said it, not someone else on your account."
+covers = ["decide_card"]
+live = "2026-10-11"
+
+[[entry]]
+id = "paid-back"
+ask = "Have I been paid back?"
+answer = "Ask Tim. Each report shows its total and where it stands: waiting for a yes, approved, or paid back."
+try = "Have I been paid back for August?"
+covers = ["expense_reports"]
+live = "2026-10-09"
+
+[[entry]]
+id = "dates"
+ask = "Will Tim remind me about my visa?"
+answer = "Yes. Tim keeps the dates that matter, like filings, renewals, passports and visas, and reminds you weeks ahead."
+try = "What's coming due this month?"
+covers = ["deadlines"]
+live = "2026-10-09"
+
+[[entry]]
+id = "bills"
+ask = "What bills does the church still owe?"
+answer = "Ask Tim. It lists the unpaid bills, the soonest first, with the total. Ask for one by who sent it, too."
+try = "Find the bill from the water company."
+covers = ["open_payables", "find_invoices"]
+live = "2026-10-09"
+
+[[entry]]
+id = "did-it-run"
+ask = "Did Tim do its morning work?"
+answer = "Ask. Tim says whether this morning's work ran and how it went, and where closing the month stands."
+try = "Where does closing September stand?"
+covers = ["recent_runs", "close_status"]
+live = "2026-10-09"
+
+[[entry]]
+id = "rules-after"
+ask = "Does Tim check my month against our ministry's rules?"
+answer = "Yes, once someone at your ministry has said yes to each rule. When your month goes to your reviewer, anything over a rule is listed at the top of the month, in the rule's own words, with the handbook and page it came from: a meal over the meal limit, a month over a newsletter cap, a bank line with no receipt where your handbook needs one. It doesn't stop the month; it tells your reviewer what to look at. A rule that asks for Face ID makes the yes take Face ID."
+try = "Walk me through October. Anything over our rules?"
+covers = ["month_report"]
+live = "2026-10-14"
+
+[[entry]]
+id = "rules-before"
+ask = "Can I ask Tim whether something is allowed before I buy it?"
+answer = "Yes. Tell Tim what it is and about how much, and Tim reads your ministry's own rules: what applies at that amount, in the rule's words, with the handbook and page. Over a line, Tim says who needs to OK it first. Under every line, Tim says nothing stands in the way and reminds you of the rule that covers it. It's advice; nothing is decided or held. Tim answers only from rules someone at your ministry has said yes to."
+try = "Can I buy a $1,400 projector for the school?"
+covers = ["ask_the_rules"]
+live = "2026-10-14"

@@ -57,8 +57,11 @@ def decide_in_ledger(
     at_terminal: bool,
     confirm_human_only: Callable[[dict, dict[str, str]], str | None],
     witness: Witnessed | None = None,
+    by_word: bool = False,
+    said: str = "",
 ) -> Outcome:
-    row = next((r for r in ledger.list_approvals(tenant) if r["id"] == card_id), None)
+    rows = ledger.list_approvals(tenant)
+    row = next((r for r in rows if r["id"] == card_id), None)
     pending = row is not None and row["status"] == "pending"
     by_door = witness is not None and not at_terminal
     if by_door and authority is None:
@@ -81,6 +84,9 @@ def decide_in_ledger(
             today=now.date(),
             now=now.isoformat(),
             witness=witness,
+            by_word=by_word,
+            said=said,
+            others=[r for r in rows if r["status"] == "pending" and r["id"] != card_id],
         )
         if ruling.refusal:
             raise ValueError(
@@ -102,7 +108,7 @@ def decide_in_ledger(
     if authority is not None and vote is not None and row is not None:
         ledger.update_pending_params(tenant, card_id, overrides)
         waiting = ", ".join(vote.waiting_on) or "the next approver"
-        how = " by Face ID" if by_door else ""
+        how = " by Face ID" if by_door else " by word" if by_word else ""
         ledger.commit(
             agent="queue",
             job="route",

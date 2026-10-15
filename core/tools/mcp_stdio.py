@@ -86,8 +86,10 @@ class McpServer:
             payload = self.tools.call(name, params.get("arguments") or {})
         except (KeyError, ValueError, FileNotFoundError) as exc:
             return {"content": [{"type": "text", "text": str(exc)}], "isError": True}
+        extra = payload.pop("_content", []) if isinstance(payload, dict) else []
         text = json.dumps(payload, indent=1, sort_keys=False)
-        return {"content": [{"type": "text", "text": text}], "isError": False}
+        # A tool may hand over images too (receipts to read, t-reader).
+        return {"content": [{"type": "text", "text": text}, *extra], "isError": False}
 
     def serve(self, stdin: IO[str] = sys.stdin, stdout: IO[str] = sys.stdout) -> int:
         for line in stdin:

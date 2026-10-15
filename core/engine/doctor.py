@@ -526,6 +526,22 @@ def _books_check(cfg: TenantConfig) -> Check:
     return Check("books", OK, f"{books.system}, {books.entity}{filed}; {code.label} codes{pattern}")
 
 
+def _rules_check(slug: str, tenants_root: Path | None) -> Check:
+    """The ministry's policy rules (core/policy): a file that is present must
+    load, layer under layer, with only-stricter holding."""
+    from ..policy import PolicyError
+    from .authority_gate import load_rules
+
+    try:
+        book = load_rules(slug, tenants_root=tenants_root)
+    except (PolicyError, KitError) as exc:
+        return Check("policy rules", MISSING, str(exc))
+    if book is None:
+        return Check("policy rules", SKIP, "no rules/ folder: no handbook rules apply")
+    layers = ", ".join(f"{layer.document} ({layer.layer})" for layer in book.layers)
+    return Check("policy rules", OK, f"{len(book.rules)} rules from {layers}")
+
+
 def _kit_checks(cfg: TenantConfig, directory: Path) -> list[Check]:
     """The tenant kit (docs/tenant-kit-design.md). Nothing reads it yet, so an
     absent part is `skip`; a part that is present must load, because a broken
@@ -623,6 +639,7 @@ def run_doctor(
     checks += _tier_checks(cfg, environment)
     checks += _document_checks(cfg)
     checks += _kit_checks(cfg, path.parent)
+    checks.append(_rules_check(slug, root))
     checks.append(_books_check(cfg))
     checks.append(_qbo_check(cfg))
     checks.append(_mail_check(cfg))

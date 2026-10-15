@@ -192,7 +192,7 @@ def _records_by_run(conn: sqlite3.Connection, run_ids: list[int]) -> dict[int, t
         columns += ", attempt, retry_state, retry_policy"
     placeholders = ",".join("?" for _ in run_ids)
     rows = conn.execute(
-        f"SELECT {columns} FROM job_records WHERE run_id IN ({placeholders}) ORDER BY id",
+        f"SELECT {columns} FROM job_records WHERE run_id IN ({placeholders}) ORDER BY id",  # noqa: S608  (fixed column names, ? placeholders)
         run_ids,
     ).fetchall()
     out: dict[int, tuple[str, int]] = {}

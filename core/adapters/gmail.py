@@ -26,7 +26,6 @@ import base64
 import json
 import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -35,9 +34,10 @@ from email.utils import parseaddr
 from typing import Any
 
 from ..contracts.mail import MailAttachmentRef, MailAuthError, MailError, MailSummary
+from ..engine import web
 
 GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
+TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105  (a public OAuth URL, not a secret)
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
 Transport = Callable[..., Any]  # returns parsed JSON (dict) or raw bytes
@@ -53,9 +53,9 @@ class GmailAuthError(GmailError, MailAuthError):
 
 
 def _default_transport(url: str, *, data: bytes | None = None, headers: dict | None = None):
-    req = urllib.request.Request(url, data=data, headers=headers or {})
+    req = web.request(url, data=data, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with web.urlopen(req, timeout=120) as resp:
             body = resp.read()
             ctype = resp.headers.get("Content-Type", "")
             return json.loads(body) if "application/json" in ctype else body

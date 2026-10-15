@@ -117,7 +117,8 @@ def _tools(church, person: str | None) -> catalog.Tools:
 
 def test_ruth_sees_her_own_report_and_never_the_bakers(church):
     rows = _tools(church, "ruth-hollis").call("expense_reports", {})["rows"]
-    assert [r["person"] for r in rows] == ["Ruth Hollis"]
+    # her filed report and the one still waiting for approval (#485)
+    assert {r["person"] for r in rows} == {"Ruth Hollis"}
 
 
 def test_ruth_sees_none_of_the_churchs_bills_and_the_total_counts_only_what_she_sees(church):
@@ -155,7 +156,8 @@ def test_the_treasurer_and_the_board_see_the_whole_church(church):
 
 def test_without_a_viewer_the_tools_answer_as_before(church):
     tools = _tools(church, None)
-    assert len(tools.call("expense_reports", {})["rows"]) == 2
+    # two filed reports and the two review cards still waiting (#485)
+    assert len(tools.call("expense_reports", {})["rows"]) == 4
     assert len(tools.call("deadlines", {"days": 60})["rows"]) == 2
 
 
@@ -208,7 +210,8 @@ def test_engine_mcp_as_a_person_answers_as_them_over_stdio(church, monkeypatch):
     names = {t["name"] for t in replies[2]["result"]["tools"]}
     assert "close_status" not in names, proc.stderr
     rows = json.loads(replies[3]["result"]["content"][0]["text"])["rows"]
-    assert [r["person"] for r in rows] == ["Ruth Hollis"]
+    # her filed report and the one still waiting for approval (#485)
+    assert {r["person"] for r in rows} == {"Ruth Hollis"}
 
 
 def test_engine_mcp_as_someone_unknown_refuses_before_serving(church):

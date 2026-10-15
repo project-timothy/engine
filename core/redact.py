@@ -56,7 +56,7 @@ from typing import Any
 
 KEY_MARK = "<redacted:key>"
 TIN_MARK = "<redacted:tin>"
-TOKEN_MARK = "<redacted:token>"
+TOKEN_MARK = "<redacted:token>"  # noqa: S105  (the redaction marker, not a secret)
 
 _KEY_PATTERNS = (
     # OpenAI and Anthropic style, and anything else that copied the prefix.

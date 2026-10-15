@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import sys
+import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -94,7 +95,7 @@ def _recorded(monkeypatch, response_name: str) -> list:
         seen.append((request, timeout))
         return _FakeHTTPResponse(payload)
 
-    monkeypatch.setattr(llm_client, "urlopen", fake_urlopen)
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     return seen
 
 

@@ -1,0 +1,8 @@
+{
+  "name": "engine-browser-test",
+  "private": true,
+  "description": "The browser that photographs the engine's pages, pinned (CI's pages job: npm ci here).",
+  "dependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

@@ -481,3 +481,70 @@ def _a_registration(ev: dict) -> None:
 @pytest.mark.parametrize("damage", [_no_signature, _a_registration])
 def test_evidence_that_signs_nothing_is_critical(tmp_path, damage):
     assert "evidence" in _critical(_door_card(tmp_path, damage=damage))
+
+
+# ---- the dollar line (the owner's decision of 2026-10-11; lens built 2026-10-13) --------
+
+LINE_AUTHORITY = (
+    '[safeguards]\nyes_by_word_up_to = 500\n[people.carol-jennings]\nroles = ["treasurer"]\n'
+)
+
+
+def _word_card(tmp_path, params: dict, authority: str | None = LINE_AUTHORITY):
+    tenants = tmp_path / "tenants"
+    (tenants / "t").mkdir(parents=True, exist_ok=True)
+    if authority is not None:
+        (tenants / "t" / "authority.toml").write_text(authority)
+    conn = make_ledger(tmp_path)
+    add_approval(
+        conn,
+        action_type="expenses.report_review",
+        params={"decided_via": "door-word", "decided_by": "carol-jennings", **params},
+        status="approved",
+        created_at=FRESH,
+        resolved_at=FRESH,
+    )
+    ctx = make_context(tmp_path, tenants_dir=tenants)
+    with ctx.ledger:
+        return [f for f in approvals.check(ctx) if f.condition.startswith("word-")]
+
+
+def test_a_word_yes_under_the_line_is_quiet(tmp_path):
+    assert _word_card(tmp_path, {"total_cents": "18640", "yes_by_word_up_to": "500"}) == []
+
+
+def test_a_word_yes_at_the_line_exactly_is_quiet(tmp_path):
+    assert _word_card(tmp_path, {"amount": "500.00", "yes_by_word_up_to": "500"}) == []
+
+
+def test_a_word_yes_over_the_line_is_critical(tmp_path):
+    [f] = _word_card(tmp_path, {"total_cents": "68640", "yes_by_word_up_to": "500"})
+    assert (f.condition, f.severity) == ("word-yes-over-the-line", "CRITICAL")
+    assert "$686.40" in f.detail and "$500.00" in f.detail
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"yes_by_word_up_to": "500"},  # no amount to hold to the line
+        {"total_cents": "18640"},  # no line on the card
+        {"amount": "lots", "yes_by_word_up_to": "500"},
+    ],
+)
+def test_a_word_yes_the_auditor_cannot_hold_to_a_line_is_critical(tmp_path, params):
+    [f] = _word_card(tmp_path, params)
+    assert f.severity == "CRITICAL"
+
+
+def test_a_line_changed_since_the_yes_is_a_warning(tmp_path):
+    [f] = _word_card(
+        tmp_path,
+        {"total_cents": "18640", "yes_by_word_up_to": "500"},
+        authority=LINE_AUTHORITY.replace("= 500", "= 250"),
+    )
+    assert (f.condition, f.severity) == ("word-line-changed", "WARN")
+
+
+def test_a_face_id_yes_is_not_this_checks_business(tmp_path):
+    params = {"decided_via": "door", "total_cents": "68640", "yes_by_word_up_to": "500"}
+    assert _word_card(tmp_path, params) == []

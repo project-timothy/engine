@@ -26,10 +26,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import urllib.request
 from collections.abc import Callable
 from datetime import date, timedelta
 
+from ...engine import web
 from ...engine.authority_gate import lane_decision
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobOutput
 from ...engine.result import Anomaly
@@ -65,11 +65,11 @@ def mx_hosts_from_doh(answer: dict) -> list[str]:
 
 def doh_mx(domain: str) -> list[str]:
     """The domain's public mail records, over DNS-over-HTTPS (standard library)."""
-    req = urllib.request.Request(
+    req = web.request(
         f"https://cloudflare-dns.com/dns-query?name={domain}&type=MX",
         headers={"Accept": "application/dns-json"},
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with web.urlopen(req, timeout=10) as resp:
         return mx_hosts_from_doh(json.loads(resp.read()))
 
 

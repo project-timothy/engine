@@ -46,6 +46,7 @@ case.
 
 from __future__ import annotations
 
+import contextlib
 import struct
 import zlib
 from collections.abc import Iterator
@@ -215,10 +216,8 @@ def render_pdf(
     finally:
         closer = getattr(document, "close", None)
         if closer is not None:
-            try:
+            with contextlib.suppress(Exception):  # a close that fails changes nothing
                 closer()
-            except Exception:  # pragma: no cover - a close that fails changes nothing
-                pass
 
 
 def write_pages(rendered: RenderedPages, out_dir: Path) -> tuple[Path, ...]:

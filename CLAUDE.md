@@ -33,6 +33,7 @@ every past incident is a regression test.
 - **Who merges (2026-09-27):** an agent merges only a PR opened by the host's own lanes, and only on green gates stated with their numbers. A PR from any other author, a contributor or a fork, waits for a maintainer's review and merge; no agent merges it, whatever its checks say. A host deploys only from the repository it trusts (its private main), never from a branch or repository an outside author can write to.
 - **Commit hygiene:** feature branch per work item, conventional commit messages, PRs into the active phase branch. Never commit directly to `main`. Verify merged commits are ancestors of the target branch before calling work landed (2026-06-08 stacked-PR lesson).
 - **One-way doors stop and flag.** Ledger schema changes, new external dependencies, anything touching money movement: stop and flag in the PR rather than deciding.
+- **Reuse once it's proven (2026-10-11).** Check `docs/components.md` before writing a helper; when working code is about to appear in a second place, share it instead of copying it and say so in the PR. Regenerate the list with `uv run python -m core.evals.components`; the duplicate-code ceiling in `scripts/check.sh` only goes down.
 - **Secrets never enter the repo.** Tenant config names a secret's environment variable; resolution is at runtime.
 
 ## Layout

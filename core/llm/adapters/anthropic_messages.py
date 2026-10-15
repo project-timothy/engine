@@ -29,8 +29,8 @@ import json
 import os
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
+from core.engine import web
 from core.llm.gateway import Attachment, GatewayTransportError, PromptBundle, RawReply, Usage
 from core.llm.rasterize import render_attachment
 
@@ -140,7 +140,7 @@ class AnthropicMessagesAdapter:
                 "format": {"type": "json_schema", "schema": constrained_schema(schema)}
             },
         }
-        request = Request(
+        request = web.request(
             self._endpoint,
             data=json.dumps(body).encode("utf-8"),
             headers={
@@ -151,7 +151,7 @@ class AnthropicMessagesAdapter:
             method="POST",
         )
         try:
-            with urlopen(request, timeout=bundle.timeout_s) as response:
+            with web.urlopen(request, timeout=bundle.timeout_s) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500] if exc.fp else ""

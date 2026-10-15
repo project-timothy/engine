@@ -147,7 +147,7 @@ def _bash(command: str) -> tuple[Any, str]:
         return None, f"Bash command is not one plain argv: {exc}"
     if not argv:
         return None, "Bash command is empty"
-    bad = shell_operator(argv, shell=True)
+    bad = shell_operator(argv, shell=True)  # noqa: S604  (our own checker's flag; nothing runs a shell)
     if bad:
         return None, f"shell operator {bad!r} in the Bash command; one plain argv only"
     if argv[0] == "git":

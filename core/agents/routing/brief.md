@@ -17,6 +17,19 @@ The clock behind every card on a route (docs/tenant-kit-design.md, section 3,
      `[routing].backup = true`;
   4. upward to `[routing].upward_role`, organization shape only, worded about
      the document and its date.
+- **notices**: the emails the box sends (#453's delivery half, 2026-10-13).
+  A reviewer (a `review` grant over the person's unit, not the person, not
+  someone the card already waits on) hears once per card that a person's
+  month is ready (`month_ready`, naming the person and the month). Anyone a
+  pending card waits on, and whose grant decides it, hears at most once a
+  day that a yes is waiting (`waiting`, naming nothing). On Fridays, a
+  person with a drive in the last seven days that nobody has said what it
+  was for hears once that day (`drives_week`, naming nothing, never a place
+  or a count of miles). Each is a
+  `route.notice` event (id, to, kind, about, month, day): never a figure or
+  what a card is. `engine notices <tenant>` prints the last week's as JSON
+  lines; the doorkeeper's `send-notices` words each one and sends it once to
+  the address on the roster.
 - **delegate** / **revoke**: record a dated delegation (`route.delegated`) or
   its end (`route.revoked`). Called by `engine queue delegate|revoke`, which
   checks that a person at a terminal is giving away a role they hold
@@ -24,10 +37,10 @@ The clock behind every card on a route (docs/tenant-kit-design.md, section 3,
 
 ## Boundaries (never)
 
-- Never decides a card, never moves money, never sends anything. Reminders
-  are ledger events, read by `engine queue waiting` and the process owner's
-  brief line; delivering them by mail or Telegram waits for the notification
-  channel (#453).
+- Never decides a card, never moves money, never sends anything itself.
+  Reminders are ledger events, read by `engine queue waiting` and the
+  process owner's brief line; notices are events the box's doorkeeper words
+  and mails (no figures, the roster's own addresses only).
 - Never writes `authority.toml`. Delegations are dated ledger events that
   lapse on their date without anyone revoking them.
 - Never names who has not acted to anyone but that person and the process
@@ -36,4 +49,4 @@ The clock behind every card on a route (docs/tenant-kit-design.md, section 3,
 ## Inputs and outputs
 
 - In: `authority.toml` (`[routing]`, people, roles), the pending cards.
-- Out: `route.reminder`, `route.delegated`, `route.revoked` events.
+- Out: `route.reminder`, `route.notice`, `route.delegated`, `route.revoked` events.

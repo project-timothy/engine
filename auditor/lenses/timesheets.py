@@ -39,7 +39,7 @@ def _events(ctx: AuditContext, event_types: tuple[str, ...]) -> list[dict]:
     placeholders = ",".join("?" for _ in event_types)
     payloads = []
     for row in ctx.ledger.query(
-        f"SELECT event_type, payload_json FROM events WHERE tenant = ? "
+        f"SELECT event_type, payload_json FROM events WHERE tenant = ? "  # noqa: S608  (? placeholders only)
         f"AND event_type IN ({placeholders}) ORDER BY id",
         (ctx.tenant.slug, *event_types),
     ):

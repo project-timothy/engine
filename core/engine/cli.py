@@ -323,6 +323,41 @@ def _cmd_route(args: argparse.Namespace, root: Path) -> int:  # noqa: C901  # on
     return 0
 
 
+def _cmd_tracker(args: argparse.Namespace) -> int:
+    """A token for one person's phone tracker (core/mileage): shown once, kept
+    only as its hash in the tenant's trackers.toml."""
+    from ..mileage.trackers import add_tracker
+    from .config import tenant_dir
+
+    token = add_tracker(tenant_dir(args.tenant), args.person)
+    print(f"Tracker for {args.person}. In the Traccar Client app on their phone:")
+    print(f"  Device identifier: {token}")
+    print(
+        f"  Server URL: https://{args.domain}/track"
+        if args.domain
+        else "  Server URL: https://<the box>/track"
+    )
+    print("The box keeps miles and times only; this identifier is shown once.")
+    return 0
+
+
+def _cmd_notices(args: argparse.Namespace) -> int:
+    """The notices the routing lane recorded in the last week, one JSON line
+    each, for ``doorkeeper send-notices`` (which sends each once)."""
+    import json
+    from datetime import date, timedelta
+
+    from ..agents.routing.jobs import notices_since
+    from ..ledger import Ledger
+    from .runner import resolve_ledger_root
+
+    since = (date.today() - timedelta(days=args.days)).isoformat()
+    with Ledger.open(resolve_ledger_root(args.tenant, args.ledger_dir)) as ledger:
+        for notice in notices_since(ledger.read_event_log(), since):
+            print(json.dumps(notice, sort_keys=True))
+    return 0
+
+
 def _cmd_queue(args: argparse.Namespace) -> int:
     from ..ledger import Ledger
     from .runner import resolve_ledger_root
@@ -951,18 +986,33 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
             if cfg.deadlines.file
             else tenant_dir(args.tenant) / "obligations.toml"
         )
+    if args.today is not None:
+        # A replay reads a past day's books as of that day (2026-10-12). The
+        # HTTP door is what people use, so it always keeps the real clock.
+        if args.http:
+            print("error: --today is for stdio replays only, never --http", file=sys.stderr)
+            return 2
+        from datetime import date
+
+        try:
+            date.fromisoformat(args.today)
+        except ValueError:
+            print(f"error: --today {args.today!r} is not a day (YYYY-MM-DD)", file=sys.stderr)
+            return 2
     if args.http:
         return _serve_mcp_http(args, cfg, ob)
     tools = Tools(
         args.tenant,
         ledger_root=resolve_ledger_root(args.tenant, args.ledger_dir),
         obligations_file=ob,
-        today=local_today(cfg.identity.timezone),
+        today=args.today or local_today(cfg.identity.timezone),
         lead_days=tuple(cfg.deadlines.lead_days),
         viewer=viewer,
+        ministry=cfg.identity.legal_name,
     )
     who = f" as {args.as_person}" if viewer else ""
-    print(f"engine mcp: serving {args.tenant} read-only{who} on stdio", file=sys.stderr)
+    when = f", as of {args.today}" if args.today else ""
+    print(f"engine mcp: serving {args.tenant} read-only{who} on stdio{when}", file=sys.stderr)
     return McpServer(tools).serve()
 
 
@@ -970,9 +1020,14 @@ def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
     """``engine mcp <tenant> --http``: the read tools on one HTTP endpoint,
     each request answered as the person its bearer token signs in
     (core/tools/mcp_http.py). Bind to localhost behind a TLS proxy."""
+    import threading
+    import time
     from urllib.parse import urlsplit
 
+    from ..mileage import Tracker
+    from ..tools.decide import finisher_for
     from ..tools.mcp_http import Introspection, RefuseAll, TokenFile, Verifier, make_server
+    from ..tools.receipts import ReceiptDesk
     from ..tools.witness_desk import WitnessDesk
     from .clock import local_today
     from .runner import resolve_ledger_root
@@ -1007,10 +1062,11 @@ def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
         desk = WitnessDesk(url=origin, secret_file=args.introspect_secret)
     elif args.tokens:
         verifier, who = TokenFile(args.tokens), "invitation tokens"
+    ledger_root = resolve_ledger_root(args.tenant, args.ledger_dir)
     server = make_server(
         args.tenant,
         tenants_root=None,
-        ledger_root=resolve_ledger_root(args.tenant, args.ledger_dir),
+        ledger_root=ledger_root,
         obligations_file=ob,
         verifier=verifier,
         resource=args.resource,
@@ -1020,12 +1076,31 @@ def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
         today=lambda: local_today(cfg.identity.timezone),
         lead_days=tuple(cfg.deadlines.lead_days),
         desk=desk,
+        # On the box (a sign-in service vouches for people), a person who
+        # files expenses can hand Tim a receipt from their phone's camera.
+        receipts=ReceiptDesk() if desk is not None else None,
+        # And their phone's tracker app reports drives: miles and times only.
+        tracker=Tracker() if desk is not None else None,
     )
+    if desk is not None:
+
+        def _flush_every_minute() -> None:
+            while True:
+                time.sleep(60)
+                server.flush_drives()
+
+        threading.Thread(target=_flush_every_minute, daemon=True, name="drives").start()
     print(
         f"engine mcp: serving {args.tenant} on http://{args.bind}:{server.server_address[1]}"
         f"/mcp for {args.resource}; admitting {who}",
         file=sys.stderr,
     )
+    # A person's tap finishes their decision (engine #480): one thread hears
+    # each yes from the doorkeeper the moment it lands and writes it.
+    finisher = finisher_for(args.tenant, tenants_root=None, ledger_root=ledger_root, desk=desk)
+    if finisher is not None:
+        finisher.start()
+        print("engine mcp: the door's finisher is waiting for taps", file=sys.stderr)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -1057,11 +1132,45 @@ def _cmd_capabilities(args: argparse.Namespace) -> int:
 
     from ..capabilities import build, markdown
 
-    page = build()
+    page = build(args.shape)
     if args.format == "json":
         print(json.dumps(page, indent=1))
     else:
         print(markdown(page), end="")
+    return 0
+
+
+def _cmd_faq(args: argparse.Namespace) -> int:
+    """``engine faq``: the questions people ask about Tim, with Tim's answers."""
+    import json
+
+    from ..capabilities.faq import load_faq, markdown
+
+    entries = load_faq()
+    print(json.dumps(entries, indent=1) if args.format == "json" else markdown(entries), end="")
+    return 0
+
+
+def _cmd_rules(args: argparse.Namespace) -> int:
+    """``engine rules <tenant>``: every policy rule that applies, highest
+    layer first, in Tim's words with the words it came from."""
+    from ..policy import PolicyError
+    from .authority_gate import load_rules
+
+    root = Path(args.root) if args.root else None
+    try:
+        book = load_rules(args.tenant, tenants_root=root)
+    except (TenantNotFoundError, PolicyError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if book is None:
+        print(f"{args.tenant} has no rules/ folder: no handbook rules apply.")
+        return 0
+    for layer in book.layers:
+        print(f"{layer.document} ({layer.layer})")
+        for rule in layer.rules:
+            print(f"  {rule.id}: {rule.says}")
+            print(f'    {rule.cite()}: "{rule.source.quote}"')
     return 0
 
 
@@ -1349,6 +1458,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("agents", help="list discoverable agents and their jobs")
 
+    tracker_p = sub.add_parser(
+        "tracker", help="a token for one person's phone tracker app (miles and times only)"
+    )
+    tracker_p.add_argument("tenant")
+    tracker_p.add_argument("person", help="their id under [people] in authority.toml")
+    tracker_p.add_argument("--domain", default="", help="the box's domain, for the server URL")
+
+    notices_p = sub.add_parser(
+        "notices", help="the emails the box should send, as JSON lines for the doorkeeper"
+    )
+    notices_p.add_argument("tenant")
+    notices_p.add_argument("--days", type=int, default=7)
+    notices_p.add_argument("--ledger-dir", default=None)
+
     queue_p = sub.add_parser("queue", help="review the approval queue")
     queue_sub = queue_p.add_subparsers(dest="queue_command", required=True)
     q_list = queue_sub.add_parser("list", help="list approval items")
@@ -1611,6 +1734,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="with --http: a sign-in service named in the resource metadata (repeatable)",
     )
+    mcp_p.add_argument(
+        "--today",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="stdio only: the day due dates count from, for a replay of a past day's books",
+    )
     mcp_p.add_argument("--bind", default="127.0.0.1", help="with --http: the address to bind")
     mcp_p.add_argument("--port", type=int, default=8765, help="with --http: the port")
     mcp_p.add_argument(
@@ -1655,6 +1784,20 @@ def build_parser() -> argparse.ArgumentParser:
         "capabilities", help="what Tim can do today, built from the code (markdown or json)"
     )
     caps_p.add_argument("--format", choices=("md", "json"), default="md")
+    caps_p.add_argument(
+        "--shape",
+        default=None,
+        help="only the setup questions this shape is asked (e.g. nonprofit-solo)",
+    )
+
+    faq_p = sub.add_parser("faq", help="the questions people ask about Tim, with Tim's answers")
+    faq_p.add_argument("--format", choices=("md", "json"), default="md")
+
+    rules_p = sub.add_parser(
+        "rules", help="the ministry's policy rules, layer by layer, each with its source"
+    )
+    rules_p.add_argument("tenant")
+    rules_p.add_argument("--root", default=None, help="tenants directory (default: ./tenants)")
 
     doctor_p = sub.add_parser(
         "doctor",
@@ -1846,6 +1989,8 @@ def _refresh_view(args: argparse.Namespace) -> None:
 _COMMANDS = {
     "run": _cmd_run,
     "queue": _cmd_queue,
+    "notices": _cmd_notices,
+    "tracker": _cmd_tracker,
     "shadow-diff": _cmd_shadow_diff,
     "sweep": _cmd_sweep,
     "status": _cmd_status,
@@ -1856,6 +2001,8 @@ _COMMANDS = {
     "mcp": _cmd_mcp,
     "door-token": _cmd_door_token,
     "capabilities": _cmd_capabilities,
+    "faq": _cmd_faq,
+    "rules": _cmd_rules,
     "doctor": _cmd_doctor,
     "voice-check": _cmd_voice_check,
     "onboard": _cmd_onboard,

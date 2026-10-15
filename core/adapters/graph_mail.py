@@ -25,12 +25,12 @@ import base64
 import json
 import urllib.error
 import urllib.parse
-import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from ..contracts.mail import MailAttachmentRef, MailAuthError, MailError, MailSummary
+from ..engine import web
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -173,9 +173,9 @@ def device_code_consent(
 
 
 def _default_transport(url: str, *, data: bytes | None = None, headers: dict | None = None):
-    req = urllib.request.Request(url, data=data, headers=headers or {})
+    req = web.request(url, data=data, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with web.urlopen(req, timeout=120) as resp:
             body = resp.read()
             ctype = resp.headers.get("Content-Type", "")
             return json.loads(body) if "application/json" in ctype else body

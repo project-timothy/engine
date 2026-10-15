@@ -7,18 +7,22 @@ tenant every job returns at once and records nothing.
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
-from ...authority import CardRule
+from ...authority import UNDESCRIBED, CardRule, Request, card_request, evaluate
 from ...authority.routing import LEVELS, Delegation, check_delegation, level_due
 from ...engine.authority_gate import load_delegations, waiting
 from ...engine.clock import local_today
 from ...engine.contracts import EventSpec, JobContext, JobHandler, JobOutput
+from ...engine.registry import load_card_authority
 from ...engine.runkey import RunKey
+from ..expenses.jobs import DRIVE_EVENT, PURPOSE_EVENT, drive_id
+from ..expenses.jobs import REVIEW_CARD as MONTH_CARD  # a person's month, waiting for its yes
 
 REMINDER_EVENT = "route.reminder"
 DELEGATED_EVENT = "route.delegated"
 REVOKED_EVENT = "route.revoked"
+NOTICE_EVENT = "route.notice"  # one email the box sends (doorkeeper send-notices)
 
 
 def _today(ctx: JobContext) -> date:
@@ -198,8 +202,161 @@ def _revoke_run(ctx: JobContext) -> JobOutput:
     )
 
 
+# ---- notices: the emails the box sends (#453's delivery half) ---------------
+
+
+def _noticed(ctx: JobContext) -> set[str]:
+    rows = ctx.ledger.conn.execute(
+        "SELECT payload_json FROM events WHERE tenant = ? AND event_type = ?",
+        (ctx.tenant_slug, NOTICE_EVENT),
+    ).fetchall()
+    return {str(json.loads(r["payload_json"] or "{}").get("id", "")) for r in rows}
+
+
+def _slug(name: str) -> str:
+    return "-".join("".join(c if c.isalnum() else " " for c in name.casefold()).split())
+
+
+def _notices_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "routing-notices")
+    key.param("today")
+    key.config("identity.timezone")
+    if ctx.authority is not None:
+        key.value("authority", ctx.authority.sha256)
+        key.rows(
+            "pending",
+            (
+                (r["id"], json.dumps(r["params"], sort_keys=True))
+                for r in ctx.ledger.list_approvals(ctx.tenant_slug, status="pending")
+            ),
+        )
+        key.value("noticed", sorted(_noticed(ctx)))
+        key.value("today", _today(ctx).isoformat())
+        key.value("unspoken", sorted(_unspoken_this_week(ctx, _today(ctx))))
+    return key.digest()
+
+
+CHECK_IN_DAY = 4  # Friday
+
+
+def _unspoken_this_week(ctx: JobContext, today: date) -> set[str]:
+    """Whose drives of the last seven days nobody has said what they were
+    for: a person's id, as authority.toml names them."""
+    log = ctx.ledger.read_event_log()
+    spoken = {e["payload"].get("drive") for e in log if e.get("event_type") == PURPOSE_EVENT}
+    since = (today - timedelta(days=6)).isoformat()
+    return {
+        _slug(str(e["payload"].get("person", "")))
+        for e in log
+        if e.get("event_type") == DRIVE_EVENT
+        and since <= str(e["payload"].get("start", ""))[:10] <= today.isoformat()
+        and drive_id(e["payload"]) not in spoken
+    }
+
+
+def _notices_run(ctx: JobContext) -> JobOutput:
+    """The emails the box sends, decided here and worded by the doorkeeper
+    (2026-10-13): a reviewer hears once that a person's month is ready,
+    and so does whoever approves it, whose email carries the month's link
+    and stands in for that day's "waiting" (the owner, 2026-10-14); anyone a
+    card waits on hears at most once a day that a yes is waiting,
+    and on Fridays someone whose drives this week nobody has spoken for is
+    asked, once, to tell Tim which were for the ministry.
+    A notice names people and a month, never a figure or what a card is."""
+    if ctx.authority is None:
+        return JobOutput(status="ok", summary="routing: no authority.toml, no notices")
+    policy = ctx.authority.policy
+    today = _today(ctx)
+    noticed = _noticed(ctx)
+    now = datetime.now(UTC).isoformat()
+    notices: list[dict] = []
+    waits: dict[str, set[int]] = {}  # person -> the cards waiting on them
+    told: dict[str, set[int]] = {}  # person -> month cards whose email goes today
+    for item in waiting(policy, ctx.ledger, ctx.tenant_slug, today=today, now=now):
+        rules = load_card_authority(_agent_of(ctx, item["card"]))
+        rule = rules.get(str(item["action_type"]), UNDESCRIBED)
+        deciders = [
+            p
+            for p in item["waiting_on"]
+            if evaluate(policy, card_request(rule, p, item["params"])).allowed
+        ]
+        for p in deciders:
+            waits.setdefault(p, set()).add(int(item["card"]))
+        if item["action_type"] != MONTH_CARD:
+            continue
+        about, month = (
+            _slug(str(item["params"].get("person", ""))),
+            str(item["params"].get("month", "")),
+        )
+        for p, who in policy.people.items():
+            if who.kind != "person" or p == about:
+                continue
+            review = Request(p, "review", "expense.report", scope=about)
+            if p not in deciders and not evaluate(policy, review).allowed:
+                continue
+            notice_id = f"month:{item['card']}:{p}"
+            notices.append(
+                {"id": notice_id, "to": p, "kind": "month_ready", "about": about, "month": month}
+            )
+            if notice_id not in noticed:
+                told.setdefault(p, set()).add(int(item["card"]))
+    if today.weekday() == CHECK_IN_DAY:
+        for p in sorted(_unspoken_this_week(ctx, today)):
+            if p in policy.people and policy.people[p].kind == "person":
+                notices.append(
+                    {
+                        "id": f"drives:{today.isoformat()}:{p}",
+                        "to": p,
+                        "kind": "drives_week",
+                        "about": "",
+                        "month": "",
+                    }
+                )
+    for p in sorted(waits):
+        if waits[p] <= told.get(p, set()):
+            continue  # the month's own email, with its link, says it today
+        notices.append(
+            {
+                "id": f"waiting:{today.isoformat()}:{p}",
+                "to": p,
+                "kind": "waiting",
+                "about": "",
+                "month": "",
+            }
+        )
+    events = [
+        EventSpec(
+            key=f"notice:{n['id']}",
+            event_type=NOTICE_EVENT,
+            payload={**n, "day": today.isoformat()},
+        )
+        for n in notices
+        if n["id"] not in noticed
+    ]
+    return JobOutput(
+        status="ok", summary=f"routing: {len(events)} notice(s) for the box to send", events=events
+    )
+
+
+def _agent_of(ctx: JobContext, card: int) -> str:
+    row = ctx.ledger.conn.execute(
+        "SELECT agent FROM approval_queue WHERE id = ?", (card,)
+    ).fetchone()
+    return str(row["agent"]) if row else ""
+
+
+def notices_since(events: list[dict], day: str) -> list[dict]:
+    """The notices recorded on or after ``day``, for ``engine notices``."""
+    return [
+        {k: e["payload"][k] for k in ("id", "to", "kind", "about", "month")}
+        for e in events
+        if e.get("event_type") == NOTICE_EVENT and str(e["payload"].get("day", "")) >= day
+    ]
+
+
 JOBS: dict[str, JobHandler] = {
     "tick": JobHandler(key=_tick_key, run=_tick_run),
+    "notices": JobHandler(key=_notices_key, run=_notices_run),
     "delegate": JobHandler(key=_delegation_key, run=_delegate_run),
     "revoke": JobHandler(key=_delegation_key, run=_revoke_run),
 }

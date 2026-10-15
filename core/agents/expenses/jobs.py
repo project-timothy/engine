@@ -16,8 +16,10 @@ import json
 import re
 import shutil
 import zipfile
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from ...authority import CardRule
 from ...engine import clock
@@ -25,10 +27,39 @@ from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobHandler,
 from ...engine.fileops import CannotVerify, CopyMismatch, place_copy
 from ...engine.result import Anomaly
 from ...engine.runkey import RunKey
+from ...institution import HELD, SENT, claim_sink, submit
+from ...policy import Spent, check_month
+from ...tools.viewer import unit_of
 from ..ap.extraction import ExtractionError, build_extractor, resolved_tier
 from ..ap.schema import amount_to_cents
+from ..policy.jobs import rules_in_force
+from . import categories as cats
+from . import fx, records, statements
 from . import inbox as inbox_boundary
 from .dedup import duplicate_groups
+from .records import (
+    AMOUNT_EVENT,
+    CATEGORY_EVENT,
+    DATED_EVENT,
+    DRIVE_EVENT,
+    LANDED_EVENT,
+    LINE_EVENT,
+    LINE_PURPOSE_EVENT,
+    PRICED_EVENT,
+    PROPOSED_EVENT,
+    PURPOSE_EVENT,
+    READ_EVENT,
+    REFERENCE_EVENT,
+    REVIEW_CARD,
+    SCHOOL_EVENT,
+    SEND_CARD,
+    SENT_EVENT,
+    STATUS_OPEN,
+    STATUS_RECORDED,
+    STATUS_REIMBURSED,
+    TRANSFER_EVENT,
+    drive_id,
+)
 from .scan_split import (
     GroupingError,
     build_grouper,
@@ -43,13 +74,10 @@ from .schema import (
     ReportManifest,
     normalize_category,
     parse_amount_tag,
+    parse_foreign_claim,
     parse_project_tag,
 )
 
-LANDED_EVENT = "expense.receipt_landed"
-PROPOSED_EVENT = "expense.extract_proposed"
-REFERENCE_EVENT = "expense.reference_detected"
-PRICED_EVENT = "expense.owner_priced"  # an owner-supplied amount for one receipt
 SPLIT_EVENT = "expense.scan_split"
 # Issue #112: the Taildrop receipt-inbox pre-stage.
 INBOX_CLASSIFIED_EVENT = "expense.inbox_classified"
@@ -66,14 +94,10 @@ INBOX_FILED_RECORD = "expense.inbox_filed.recorded"
 INBOX_SKIPPED_RECORD = "expense.inbox_skipped.recorded"
 UNKNOWN_FOLDER_EVENT = "expense.unknown_person_folder"
 
-REVIEW_CARD = "expenses.report_review"
 DRAFT_CARD = "expenses.report_draft"
 CONFIRM_CARD = "expenses.reimbursement_record"
+HELD_EVENT = "institution.claim.held"
 BUILT_EVENT = "expense.report_built"
-
-STATUS_OPEN = "Open"
-STATUS_RECORDED = "Reimbursed-Recorded"
-STATUS_REIMBURSED = "Reimbursed"
 
 
 def _now() -> str:
@@ -976,9 +1000,14 @@ def _extract_run(ctx: JobContext) -> JobOutput:
 
 def _unconsumed(ctx: JobContext) -> list[dict]:
     """Landed receipts no manifest has consumed and no reference event
-    reclassified, joined to their proposals when one exists."""
+    reclassified, joined to their proposals when one exists. A door receipt
+    whose amount the person said after the photo carries it as
+    ``claim_name``, the name it would have had with the claim in it."""
     consumed = _consumed_shas(ctx) | _reference_shas(ctx)
     proposals = _proposals_by_sha(ctx)
+    log = ctx.ledger.read_event_log()
+    said = amounts_said(log)
+    dated = records.days(log)
     out = []
     for sha, landed in sorted(_landed_by_sha(ctx).items()):
         if sha in consumed:
@@ -986,13 +1015,257 @@ def _unconsumed(ctx: JobContext) -> list[dict]:
         item = dict(landed)
         item.update(proposals.get(sha, {}))
         item["sha256"] = sha
+        name = str(landed.get("file", ""))
+        if sha in dated:
+            # A receipt sent later is filed by its own day (t-catch-up):
+            # its month, its line, and its rate are that day's.
+            name = records.dated_name(name, dated[sha])
+            item["month"] = dated[sha][:7]
+        elif records.UNDATED in name:
+            item["month"] = ""  # in no month until its day is known
+        if sha in said:
+            item["claim_name"] = claim_name(name, said[sha])
+        elif name != landed.get("file"):
+            item["claim_name"] = name
         out.append(item)
     return out
+
+
+def _drive_items(ctx: JobContext, month: str, person: str = "") -> list[dict]:
+    """The month's ministry drives not yet in a report, each a line priced at
+    the rate in force on its own day (the owner, 2026-10-14). A drive the
+    person called personal, or hasn't spoken for, never becomes money."""
+    from ...institution import mileage_rate
+
+    said = {str(e["payload"].get("drive")): e["payload"] for e in _events_of(ctx, PURPOSE_EVENT)}
+    consumed = _consumed_shas(ctx)
+    listed = list(ctx.tenant.expenses.category_accounts)
+    category = cats.canonical("Mileage", listed) or cats.canonical("Travel", listed) or ""
+    out = []
+    for e in _events_of(ctx, DRIVE_EVENT):
+        drive = e["payload"]
+        day = str(drive.get("start", ""))[:10]
+        word = said.get(drive_id(drive), {})
+        sha = records.drive_sha(drive_id(drive))
+        if day[:7] != month or not word.get("ministry") or sha in consumed:
+            continue
+        if person and drive.get("person") != person:
+            continue
+        miles = Decimal(str(drive.get("miles", "0")))
+        rate, rate_from = mileage_rate(ctx.tenant.institution, date.fromisoformat(day))
+        words = str(word.get("said", "")).replace(";", ",")
+        out.append(
+            {
+                "sha256": sha,
+                "file": f"{day} drive, {miles} miles",
+                "drive": True,
+                "person": str(drive.get("person", "")),
+                "month": month,
+                "expense_date": day,
+                "miles": str(miles),
+                "rate": str(rate),
+                "rate_from": rate_from,
+                "note": words,
+                "amount_cents": int(records.drive_dollars(miles, rate) * 100),
+                "category": category,
+                "project": "",
+                "filed_to": "",
+                "flags": [],
+            }
+        )
+    return out
+
+
+def _bank_items(ctx: JobContext, month: str, person: str = "") -> list[dict]:
+    """The month's statement lines and school payments that are spending
+    (t-statements, the owner's decisions of 2026-10-14), each a line of the
+    person's card: what the person paid for the ministry, owed back, and
+    what the ministry paid itself, on the card for the reviewer's yes but
+    never owed. A line still waiting on its receipt or its purpose stays off
+    the card until it has one; money that only moved is never a line."""
+    listed = list(ctx.tenant.expenses.category_accounts)
+    log = ctx.ledger.read_event_log()
+    out = []
+    for ln in statements.month_lines(log, month, reported=_consumed_shas(ctx), categories=listed):
+        if ln["role"] not in statements.SPENDING or ln["reported"]:
+            continue
+        if ln["waiting_on"] == statements.WAITING or (person and ln["person"] != person):
+            continue
+        item = {
+            "sha256": ln["sha256"],
+            "file": f"{ln['day']} {ln['words']}",
+            "bank": True,
+            "paid_by": "ministry" if ln["role"] == statements.MINISTRY_PAID else "person",
+            "person": ln["person"],
+            "month": month,
+            "expense_date": ln["day"],
+            "vendor": ln["words"],
+            "note": ln["words"],
+            "amount_cents": ln["cents"],
+            "category": ln["category"],
+            "project": "",
+            "filed_to": ln["receipt_file"],
+            "flags": [],
+        }
+        if ln.get("school") and ln.get("said_currency"):
+            # Priced the one way a foreign amount is: at its day's rate.
+            item |= {"claim_name": ln["claim_name"], "amount_cents": None}
+        out.append(item)
+    return out
+
+
+def _with_statements(ctx: JobContext, month: str, person: str, mine: list[dict]) -> list[dict]:
+    """A person's month with its statement lines: a receipt standing behind
+    a line rides that line, never a line of its own; drives and lines join."""
+    behind = statements.attached(ctx.ledger.read_event_log())
+    return [
+        *(i for i in mine if str(i.get("sha256")) not in behind),
+        *_drive_items(ctx, month, person),
+        *_bank_items(ctx, month, person),
+    ]
+
+
+def _is_door_receipt(name: str) -> bool:
+    return bool(re.match(r"^\d{4}-\d{2}-\d{2}_receipt_", name))
+
+
+_TAG = re.compile(r"^(?:\$\d+\.\d{2}|[A-Z]{3}\d+\.\d{2})$")
+
+
+def amounts_said(events: list[dict], kind: str = AMOUNT_EVENT) -> dict[str, str]:
+    """Each door receipt's latest amount tag of ``kind`` ("$43.00",
+    "NPR4300.00"): the person's words (``AMOUNT_EVENT``) or a photo's
+    reading (``READ_EVENT``)."""
+    return {
+        str(e["payload"]["sha256"]): str(e["payload"]["tag"])
+        for e in events
+        if e.get("event_type") == kind and e.get("payload", {}).get("sha256")
+    }
+
+
+def claim_name(name: str, tag: str) -> str:
+    """A door receipt's name as if the claim had been said with it, for the
+    pricing that reads claims from names."""
+    return f"{name[:10]}_receipt_{tag}{Path(name).suffix}"
+
+
+def _name_of(item: dict) -> str:
+    return str(item.get("claim_name") or item.get("file", ""))
+
+
+def _fx_inputs(ctx: JobContext, items: list[dict]) -> tuple[list[str], str]:
+    """What a foreign receipt's price reads, for a run key: the rates
+    already recorded for these receipts, and today's date while any rate is
+    the time while any rate is still pending (so a pending rate is asked
+    for again on the next run, never skipped as an idempotent re-run)."""
+    rates = fx.stored(ctx.ledger.read_event_log())
+    used, pending = [], False
+    for i in items:
+        claim = parse_foreign_claim(_name_of(i))
+        if claim is None:
+            continue
+        day, _amount, currency = claim
+        if (currency, day) in rates:
+            used.append(fx.rate_key(currency, day))
+        else:
+            pending = True
+    asked = datetime.now(UTC).isoformat() if pending else ""
+    return sorted(set(used)), asked
+
+
+def _price_claims(ctx: JobContext, items: list[dict]) -> tuple[list[dict], list[EventSpec]]:
+    """Price door receipts from the person's own words (alpha step 3). A
+    claim in dollars is the amount when nothing else priced the receipt; a
+    claim in another currency is always priced at the rate on the
+    receipt's own date (fx.priced), recorded once and kept on the line. With
+    no rate yet, the line stays unpriced and says so; nothing is guessed."""
+    rates = fx.stored(ctx.ledger.read_event_log())
+    events: list[EventSpec] = []
+    for want in sorted({w for i in items if (w := fx.needed(_name_of(i)))}):
+        if want in rates:
+            continue
+        rate = fx.fetch(*want)
+        if rate is not None:
+            rates[want] = rate
+            events.append(
+                EventSpec(key=rate.key(), event_type=fx.RATE_EVENT, payload=rate.payload())
+            )
+    out = []
+    for item in items:
+        name = _name_of(item)
+        if not _is_door_receipt(name):
+            out.append(item)
+            continue
+        item = dict(item)
+        flags = [str(f) for f in item.get("flags", [])]
+        fields = fx.priced(name, rates)
+        if not fields:
+            said = parse_amount_tag(name)
+            if not item.get("amount_cents") and said is not None:
+                item["amount_cents"] = said
+                flags.append("amount as the person said it")
+        else:
+            read = item.get("amount_cents")
+            pending = fields.pop("rate_pending", False)
+            item.update(fields)
+            currency, day = fields["said_currency"], fields["fx_date"]
+            if pending:
+                flags.append(
+                    f"{currency} {Decimal(fields['said_amount']):,.2f}: rate pending for {day}"
+                )
+            elif read and int(read) != fields["amount_cents"]:
+                flags.append(f"the photo read {int(read) / 100:,.2f}; the person said {currency}")
+        item["flags"] = flags
+        out.append(item)
+    return out, events
+
+
+def _line_words(i: dict, label: str = "", *, funds: int = 2) -> str:
+    """One line of a review card, a foreign amount shown as said with its rate.
+    A door receipt reads in a reviewer's words: its day, what it was, its
+    category ("Uncategorized" when nobody has placed it), and its fund when
+    the card's lines span more than one (``funds``; the 10/14 practice run: a
+    church with one fund read "General fund" on every line). A drive reads
+    its miles, what it was for, and its rate per mile."""
+    if i.get("bank"):
+        words = f"{i['expense_date']}: ${int(i['amount_cents']) / 100:,.2f}"
+        if i.get("said_currency"):
+            words += (
+                f" ({i['said_currency']} {Decimal(i['said_amount']):,.2f} at "
+                f"{Decimal(i['fx_rate']):,.2f} per dollar on {i['fx_date']})"
+            )
+        paid = f", {statements.MINISTRY_PAID}" if i.get("paid_by") == "ministry" else ""
+        return f"{words}, {i['note']}, {i.get('category') or cats.UNCATEGORIZED}{paid}"
+    if i.get("drive"):
+        cents = f"{Decimal(i['rate']) * 100:f}".rstrip("0").rstrip(".")
+        return (
+            f"{i['expense_date']}: {i['miles']} miles, {i['note']}, "
+            f"${int(i['amount_cents']) / 100:,.2f} at {cents} cents a mile"
+        )
+    if _is_door_receipt(str(i["file"])):
+        words = f"{_name_of(i)[:10]}: ${int(i['amount_cents']) / 100:,.2f}"
+        if i.get("said_currency"):
+            words += (
+                f" ({i['said_currency']} {Decimal(i['said_amount']):,.2f} at "
+                f"{Decimal(i['fx_rate']):,.2f} per dollar on {i['fx_date']})"
+            )
+        where = f", {i['project']} {label}".rstrip() if i.get("project") and funds > 1 else ""
+        return f"{words}, {i.get('category') or cats.UNCATEGORIZED}{where}"
+    words = f"{i['file']} ${int(i['amount_cents']) / 100:,.2f}"
+    if i.get("said_currency"):
+        words += (
+            f" ({i['said_currency']} {Decimal(i['said_amount']):,.2f} at "
+            f"{Decimal(i['fx_rate']):,.2f} per dollar on {i['fx_date']})"
+        )
+    return f"{words} {i.get('category') or '?'} ({i.get('project') or '?'})"
 
 
 def _report_content_hash(items: list[dict]) -> str:
     parts = [
         f"{i['sha256']}:{i.get('amount_cents')}:{i.get('category')}:{i.get('project')}"
+        + (f":{i['claim_name']}" if i.get("claim_name") else "")
+        + (f":{i['note']}" if i.get("drive") or i.get("bank") else "")  # words on its line
+        + (f":{i['paid_by']}" if i.get("bank") else "")
         for i in items
     ]
     return hashlib.sha256("|".join(sorted(parts)).encode()).hexdigest()
@@ -1010,12 +1283,24 @@ def _report_key(ctx: JobContext) -> str:
     # August's result verbatim; a new month is a new run by definition.
     key.add("month", str(key.param("month") or _tenant_month(ctx)))
     key.add("content", _report_content_hash(_unconsumed(ctx)))
+    bank = _bank_items(ctx, str(key.param("month") or _tenant_month(ctx)))
+    if bank:  # a tenant with no statements keeps the key it always had
+        key.add("bank", _report_content_hash(bank))
+    rates, pending_day = _fx_inputs(ctx, _unconsumed(ctx))
+    key.value("fx", rates)
+    key.value("placed", sorted(_categories_by_sha(ctx).items()))
+    key.add("fx_pending_day", pending_day)
     key.value("approved", sorted(c["idempotency_key"] for c in _approved_cards(ctx, REVIEW_CARD)))
     # 03-F6: a stranded report (rows committed, nothing recorded) is a run
     # input; once recovered the key moves on and the next run builds.
     key.value("stranded", [r["id"] for r in _stranded_reports(ctx)])
+    rules = _rules_in_force_key(ctx)
+    if rules is not None:  # a ministry with no rules in force keeps the key it had
+        key.value("rules", rules)
+        key.config("fiscal")
     key.param("filing_dir")
     key.config("expenses", "identity")  # persons, prefix, the metadata legal name
+    key.config("books.cost_object")  # the fund or project label on a card line
     return key.digest()
 
 
@@ -1343,7 +1628,232 @@ def _price_items(
     return out, events, None
 
 
-def _build_report(ctx: JobContext, person: str, month: str, items: list[dict]) -> JobOutput:
+_FX_FIELDS = ("said_amount", "said_currency", "fx_rate", "fx_date", "fx_source")
+
+
+def _pending_review_keys(ctx: JobContext, person: str, month: str) -> list[str]:
+    """The keys of this person's month's review cards still waiting, so a
+    new card for the same month retires the old one instead of piling up."""
+    prefix = f"apr:{ctx.tenant_slug}:expenses:{REVIEW_CARD}:"
+    rows = ctx.ledger.conn.execute(
+        "SELECT idempotency_key FROM approval_queue "
+        "WHERE tenant = ? AND action_type = ? AND status = 'pending'",
+        (ctx.tenant_slug, REVIEW_CARD),
+    ).fetchall()
+    keys = [str(r[0])[len(prefix) :] for r in rows if str(r[0]).startswith(prefix)]
+    return sorted(k for k in keys if k.startswith(f"expreport:{person}:{month}:"))
+
+
+def _warnings(items: list[dict]) -> list[str]:
+    """What a reviewer should know before a yes: each line's own flags, and
+    scans that look like the same receipt twice."""
+    warnings = [str(f) for i in items for f in i.get("flags", [])]
+    dupes = duplicate_groups(
+        [
+            {
+                "file": i.get("file"),
+                "amount": i.get("amount_cents"),
+                "date": i.get("expense_date"),
+            }
+            for i in items
+        ]
+    )
+    for group in dupes:
+        warnings.append("possible duplicate scans: " + ", ".join(sorted(group)))
+    return warnings
+
+
+def _already_words(ctx: JobContext, person: str, month: str, approved: list[dict], yes) -> str:
+    """One line naming what the person's month already holds a yes for:
+    "Already approved Oct 13: 2 receipts, $42.31". Receipts already in a
+    report count on the day their report was built."""
+    zone = ZoneInfo(ctx.tenant.identity.timezone)
+    days: dict[str, list[int]] = {}
+
+    def add(on: str, cents: int) -> None:
+        when = datetime.fromisoformat(on).astimezone(zone).date().isoformat()
+        days.setdefault(when, []).append(cents)
+
+    for i in approved:
+        add(yes[str(i["sha256"])].on, int(i["amount_cents"]))
+    for r in ctx.ledger.conn.execute(
+        "SELECT l.amount_cents, r.created_at FROM expense_line l "
+        "JOIN expense_report r ON r.id = l.report_id "
+        "WHERE r.tenant = ? AND r.person = ? AND r.month = ? AND r.shadow = 0",
+        (ctx.tenant_slug, person, month),
+    ).fetchall():
+        add(str(r[1]), int(r[0]))
+    said = []
+    for when, cents in sorted(days.items()):
+        day = date.fromisoformat(when)
+        n = len(cents)
+        said.append(
+            f"{day:%b} {day.day}: {n} receipt{'s' if n != 1 else ''}, ${sum(cents) / 100:,.2f}"
+        )
+    return "Already approved " + "; ".join(said) if said else ""
+
+
+def _legacy_yes(ctx: JobContext, person: str, month: str, items: list[dict]) -> dict | None:
+    """An approved card from before cards named their receipts: it covers the
+    month's receipts when its key carries their content, as it always did."""
+    key = f"expreport:{person}:{month}:{_report_content_hash(items)[:16]}"
+    return next(
+        (
+            c
+            for c in _approved_cards(ctx, REVIEW_CARD)
+            if c["idempotency_key"].endswith(key) and not records.card_receipts(c["params"])
+        ),
+        None,
+    )
+
+
+def _rules_in_force_key(ctx: JobContext) -> list[str] | None:
+    """The fingerprints of the ministry's rules in force, or None when it has
+    none (its run keys and cards stay exactly as they were)."""
+    authority = ctx.authority
+    if authority is None or (authority.rules is None and not authority.rules_error):
+        return None
+    if authority.rules_error:
+        return [f"unreadable:{authority.rules_error}"]
+    shas = sorted(r.sha for r in rules_in_force(ctx.ledger, ctx.tenant_slug, authority.rules))
+    return shas or None
+
+
+def _spent_words(i: dict) -> str:
+    """A line the way a reviewer names it: what it was and its day ("Meals,
+    Oct 12"). A door receipt is named by its category, as on the card."""
+    door = "file" in i and _is_door_receipt(str(i["file"]))
+    what = i.get("category") if door else i.get("note") or i.get("vendor")
+    what = " ".join(str(what or "A receipt").split())
+    what = what if len(what) <= 40 else what[:39].rstrip() + "…"
+    try:
+        day = date.fromisoformat((_name_of(i) if door else str(i.get("expense_date", "")))[:10])
+    except ValueError:
+        return what
+    return f"{what}, {day:%b} {day.day}"
+
+
+def _policy_findings(
+    ctx: JobContext, person: str, month: str, items: list[dict]
+) -> tuple[str, bool] | None:
+    """What the ministry's rules in force say about this person's month (the
+    whole month: this card's lines, earlier yeses, and lines already in a
+    report), in plain words with each rule's page; and whether a rule asks
+    for the person's own Face ID. None when no rule is in force."""
+    authority = ctx.authority
+    if _rules_in_force_key(ctx) is None:
+        return None
+    if authority.rules_error:
+        return f"The ministry's rules could not be checked: {authority.rules_error}", False
+    who = unit_of(person)
+    held = authority.policy.people.get(who)
+    roles = held.roles if held else ()
+    spent = [
+        Spent(
+            key=str(i["sha256"]),
+            words=_spent_words(i),
+            kind=str(i.get("category") or ""),
+            cents=int(i["amount_cents"]),
+            receipt=bool(i.get("drive")) or not i.get("bank") or bool(i.get("filed_to")),
+            bank=bool(i.get("bank")),
+        )
+        for i in items
+        if i.get("amount_cents") is not None
+    ]
+    start = ctx.tenant.fiscal.year_start_month
+    year, mon = int(month[:4]), int(month[5:7])
+    first = f"{year if mon >= start else year - 1}-{start:02d}"
+    year_before: dict[str, int] = {}
+    for r in ctx.ledger.conn.execute(
+        "SELECT r.month, l.receipt_sha256, l.vendor, l.note, l.expense_date, l.amount_cents, "
+        "l.category FROM expense_line l JOIN expense_report r ON r.id = l.report_id "
+        "WHERE r.tenant = ? AND r.person = ? AND r.shadow = 0 AND r.month >= ? AND r.month <= ?",
+        (ctx.tenant_slug, person, first, month),
+    ).fetchall():
+        if r["month"] < month:
+            year_before[r["category"]] = year_before.get(r["category"], 0) + int(r["amount_cents"])
+        else:
+            spent.append(
+                Spent(
+                    str(r["receipt_sha256"]),
+                    _spent_words(dict(r)),
+                    str(r["category"]),
+                    int(r["amount_cents"]),
+                    receipt=True,
+                )
+            )
+    in_force = rules_in_force(ctx.ledger, ctx.tenant_slug, authority.rules)
+    found = check_month(in_force, spent, person=who, roles=roles, year_before=year_before)
+    return "; ".join(f.says for f in found) or "none", any(f.face_id for f in found)
+
+
+def _review_card(
+    ctx: JobContext, person: str, month: str, items: list[dict], waiting: list[dict], yes
+) -> JobOutput:
+    """The card for what in a person's month still waits on a yes: every
+    line, what the yes commits, what it leaves alone, and what only moved."""
+    approved = [i for i in items if str(i["sha256"]) in yes]
+    card_key = f"expreport:{person}:{month}:{_report_content_hash(waiting)[:16]}"
+    rules = _rules_in_force_key(ctx)
+    if rules is not None:  # new rules in force are a new card (the old one retires)
+        card_key += ":r" + hashlib.sha256("".join(rules).encode()).hexdigest()[:8]
+    label = ctx.tenant.books.cost_object.label
+    funds = len({i.get("project") for i in items if i.get("project")})
+    lines_text = "; ".join(_line_words(i, label, funds=funds) for i in waiting)
+    older = [k for k in _pending_review_keys(ctx, person, month) if k != card_key]
+    shas = {str(i["sha256"]) for i in waiting}
+    params = {
+        "person": person,
+        "month": month,
+        # What the yes commits: the ministry owes back only what the
+        # person paid; a line the ministry paid itself is on the card
+        # for the yes, never owed (t-statements).
+        "total_cents": str(
+            sum(int(i["amount_cents"]) for i in waiting if i.get("paid_by") != "ministry")
+        ),
+        "lines": lines_text,
+        "warnings": "; ".join(_warnings(waiting)) or "none",
+        "receipts": ",".join(sorted(shas)),
+    }
+    already = _already_words(ctx, person, month, approved, yes)
+    if already:
+        params["already"] = already
+    policy = _policy_findings(ctx, person, month, items)
+    if policy is not None:
+        params["policy"], face_id = policy
+        if face_id:
+            params["policy_face_id"] = "true"
+    moved = statements.moved_words(
+        [
+            ln
+            for ln in statements.month_lines(ctx.ledger.read_event_log(), month)
+            if ln["person"] == person
+        ]
+    )
+    if moved:
+        params["moved"] = moved
+    return JobOutput(
+        status="ok",
+        summary=f"expenses report: {len(waiting)} line(s) for {person} {month} awaiting review",
+        approvals=[
+            ApprovalSpec(
+                key=card_key,
+                action_type=REVIEW_CARD,
+                params=params,
+                reason="only owner-approved values enter the workbook or the ledger (invariant 2)",
+                supersedes_keys=older,
+            )
+        ],
+    )
+
+
+def _build_report(
+    ctx: JobContext,
+    person: str,
+    month: str,
+    items: list[dict],
+    changed: frozenset[str] = frozenset(),
+) -> JobOutput:
     events: list[EventSpec] = []
     actions: list[str] = []
     filing = _filing_dir(ctx)
@@ -1357,54 +1867,24 @@ def _build_report(ctx: JobContext, person: str, month: str, items: list[dict]) -
             f"({names}); resolve extraction first",
         )
 
-    content = _report_content_hash(items)
-    total = sum(int(i["amount_cents"]) for i in items)
-    warnings: list[str] = []
-    for i in items:
-        warnings.extend(str(f) for f in i.get("flags", []))
-    dupes = duplicate_groups(
-        [
-            {
-                "file": i.get("file"),
-                "amount": i.get("amount_cents"),
-                "date": i.get("expense_date"),
-            }
-            for i in items
-        ]
-    )
-    for group in dupes:
-        warnings.append("possible duplicate scans: " + ", ".join(sorted(group)))
+    # A yes is to the receipts its card named (records, 2026-10-14): a late
+    # receipt waits on a card of its own, and the month builds once every
+    # receipt in it holds a yes its facts still match.
+    yes_cards = _approved_cards(ctx, REVIEW_CARD)
+    yes = records.yeses(yes_cards, ctx.ledger.read_event_log(), changed)
+    legacy = _legacy_yes(ctx, person, month, items)
+    waiting = [] if legacy else [i for i in items if str(i["sha256"]) not in yes]
+    if waiting:
+        return _review_card(ctx, person, month, items, waiting, yes)
 
-    card_key = f"expreport:{person}:{month}:{content[:16]}"
-    approved_card = next(
-        (c for c in _approved_cards(ctx, REVIEW_CARD) if c["idempotency_key"].endswith(card_key)),
-        None,
-    )
-    if approved_card is None:
-        lines_text = "; ".join(
-            f"{i['file']} ${int(i['amount_cents']) / 100:,.2f} "
-            f"{i.get('category') or '?'} ({i.get('project') or '?'})"
-            for i in items
-        )
+    items = [i for i in items if i.get("paid_by") != "ministry"]  # yes'd, never owed
+    if not items:
         return JobOutput(
             status="ok",
-            summary=f"expenses report: {len(items)} line(s) for {person} {month} awaiting review",
-            approvals=[
-                ApprovalSpec(
-                    key=card_key,
-                    action_type=REVIEW_CARD,
-                    params={
-                        "person": person,
-                        "month": month,
-                        "total_cents": str(total),
-                        "lines": lines_text,
-                        "warnings": "; ".join(warnings) or "none",
-                    },
-                    reason="only owner-approved values enter the workbook or the "
-                    "ledger (invariant 2)",
-                )
-            ],
+            summary=f"expenses report: {person} {month} approved; the ministry owes nothing back",
         )
+    content = _report_content_hash(items)
+    total = sum(int(i["amount_cents"]) for i in items)
 
     if ctx.shadow:
         return JobOutput(
@@ -1417,7 +1897,10 @@ def _build_report(ctx: JobContext, person: str, month: str, items: list[dict]) -
     # approved card may carry split:<sha16> directives. Owner values enter
     # only through the card; code enforces the arithmetic — parts that do
     # not sum exactly to the receipt refuse the whole build, nothing writes.
-    splits = _split_directives(approved_card)
+    covering = {y.card for s, y in yes.items() if s in {str(i["sha256"]) for i in items}}
+    splits: dict[str, str] = {}
+    for card in [legacy] if legacy else [c for c in yes_cards if int(c["id"]) in covering]:
+        splits.update(_split_directives(card))
     lines: list[ManifestLine] = []
     for i in items:
         sha = str(i["sha256"])
@@ -1434,6 +1917,8 @@ def _build_report(ctx: JobContext, person: str, month: str, items: list[dict]) -
                 ManifestLine(
                     amount_cents=int(i["amount_cents"]),
                     category=str(i.get("category") or ""),
+                    note=str(i["note"]) if i.get("drive") or i.get("bank") else "",
+                    **{k: str(i.get(k) or "") for k in _FX_FIELDS},
                     **base,
                 )
             )
@@ -1537,7 +2022,8 @@ def _build_report(ctx: JobContext, person: str, month: str, items: list[dict]) -
         ctx.ledger.conn.execute(
             "INSERT OR IGNORE INTO expense_line (idempotency_key, report_id, tenant, "
             "receipt_file, receipt_sha256, vendor, expense_date, amount_cents, category, "
-            "project, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "project, note, said_amount, said_currency, fx_rate, fx_date, fx_source, "
+            "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 f"{report_key}:line:{line.receipt_sha256}" + (f":{line.part}" if line.part else ""),
                 report_id,
@@ -1550,6 +2036,7 @@ def _build_report(ctx: JobContext, person: str, month: str, items: list[dict]) -
                 line.category,
                 line.project,
                 line.note,
+                *(getattr(line, k) for k in _FX_FIELDS),
                 now,
             ),
         )
@@ -1611,15 +2098,7 @@ def _report_run(ctx: JobContext) -> JobOutput:
                     summary=f"expenses report: nothing unconsumed for {person} {month}",
                 ),
             )
-        priced, price_events, price_error = _price_items(
-            mine, _price_directives(ctx), person, month
-        )
-        if price_error is not None:
-            return _with_recovery(recovery, price_error)
-        output = _build_report(ctx, person, month, priced)
-        if price_events:
-            output = output.model_copy(update={"events": [*price_events, *output.events]})
-        return _with_recovery(recovery, output)
+        return _with_recovery(recovery, _report_for(ctx, person, month, mine))
 
     # Survey mode (decision 4's month-end half): one draft card per person
     # holding unconsumed receipts, so the close never waits on loose paper.
@@ -1646,6 +2125,597 @@ def _report_run(ctx: JobContext) -> JobOutput:
             f"receipts in {month}",
             approvals=approvals,
         ),
+    )
+
+
+def _categories_by_sha(ctx: JobContext) -> dict[str, str]:
+    """The category each receipt was last placed in, by the person's words or a
+    reviewer's (``expense.category_set``); later events win."""
+    out: dict[str, str] = {}
+    for e in _events_of(ctx, CATEGORY_EVENT):
+        payload = e.get("payload", {})
+        if payload.get("sha256"):
+            out[str(payload["sha256"])] = str(payload.get("category", ""))
+    return out
+
+
+def _placed(ctx: JobContext, items: list[dict], extra: dict[str, str] | None = None) -> list[dict]:
+    placed = {**_categories_by_sha(ctx), **(extra or {})}
+    return [
+        {**i, "category": placed[str(i.get("sha256"))]} if str(i.get("sha256")) in placed else i
+        for i in items
+    ]
+
+
+def _report_for(
+    ctx: JobContext,
+    person: str,
+    month: str,
+    mine: list[dict],
+    placed: dict[str, str] | None = None,
+) -> JobOutput:
+    """One person's month: door claims priced (and any new rate recorded),
+    categories placed, owner price directives applied, then the report built
+    or its card raised. ``placed``: categories this run is recording. The
+    person's ministry drives ride the same card."""
+    mine = _with_statements(ctx, month, person, mine)
+    mine, rate_events = _price_claims(ctx, _placed(ctx, mine, placed))
+    priced, price_events, price_error = _price_items(mine, _price_directives(ctx), person, month)
+    if price_error is not None:
+        return price_error.model_copy(update={"events": [*rate_events, *price_error.events]})
+    recorded, prices = _categories_by_sha(ctx), _owner_prices_by_sha(ctx)
+    changed = {s for s, c in (placed or {}).items() if recorded.get(s) != c}
+    for e in price_events:
+        was = prices.get(str(e.payload["sha256"]), {})
+        if any(was.get(k) != e.payload.get(k) for k in ("amount_cents", "category", "note")):
+            changed.add(str(e.payload["sha256"]))
+    output = _build_report(ctx, person, month, priced, frozenset(changed))
+    events = [*rate_events, *price_events, *output.events]
+    return output.model_copy(update={"events": events}) if events else output
+
+
+# ---- job: month -------------------------------------------------------------
+
+
+def _month_of(ctx: JobContext) -> str:
+    """The month this run reviews: the one named, else the month that just
+    ended on the tenant's own clock (the review follows the month)."""
+    named = str(ctx.params.get("month") or "")
+    if named:
+        return named
+    first = datetime.strptime(_tenant_month(ctx) + "-01", "%Y-%m-%d")
+    return (first - timedelta(days=1)).strftime("%Y-%m")
+
+
+def _month_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expmonth")
+    key.param("month")
+    for name in sorted(k for k, _v in ctx.params.items() if k.startswith("price:")):
+        key.param(name)  # owner price directives, as the report job reads them
+    month = _month_of(ctx)
+    key.add("month_resolved", month)
+    items = [i for i in _unconsumed(ctx) if str(i.get("month")) == month]
+    key.add("content", _report_content_hash(items))
+    key.add("drives", _report_content_hash(_drive_items(ctx, month)))
+    bank = _bank_items(ctx, month)
+    if bank:  # a tenant with no statements keeps the key it always had
+        key.add("bank", _report_content_hash(bank))
+    rates, pending_day = _fx_inputs(ctx, items)
+    key.value("fx", rates)
+    key.value("placed", sorted(_categories_by_sha(ctx).items()))
+    key.add("fx_pending_day", pending_day)
+    key.value("approved", sorted(c["idempotency_key"] for c in _approved_cards(ctx, REVIEW_CARD)))
+    key.value("stranded", [r["id"] for r in _stranded_reports(ctx)])
+    rules = _rules_in_force_key(ctx)
+    if rules is not None:  # a ministry with no rules in force keeps the key it had
+        key.value("rules", rules)
+        key.config("fiscal")
+    key.param("filing_dir")
+    key.config("expenses", "identity")
+    key.config("books.cost_object")  # the fund or project label on a card line
+    key.config("institution")
+    return key.digest()
+
+
+def _month_run(ctx: JobContext) -> JobOutput:
+    """The missionary's month (alpha step 3): every person holding receipts
+    for the month gets one report and one review card, so the reviewer's yes
+    is the only step left. Approved cards build their report on the next run.
+    A ministry whose institution takes its claims ([institution] submit_to)
+    gets no report here: the send job carries those receipts, so none is
+    ever both claimed from the institution and paid by the books."""
+    month = _month_of(ctx)
+    institution = ctx.tenant.institution
+    if institution.submit_to:
+        return JobOutput(
+            status="ok",
+            summary=f"expenses month {month}: receipts go to "
+            f"{institution.name or 'the institution'} on each person's yes (the send job)",
+        )
+    recovery = _recover_stranded(ctx)
+    by_person: dict[str, list[dict]] = {}
+    for i in _unconsumed(ctx):
+        if str(i.get("month")) == month:
+            by_person.setdefault(str(i.get("person")), []).append(i)
+    for d in [*_drive_items(ctx, month), *_bank_items(ctx, month)]:
+        by_person.setdefault(d["person"], [])
+    summaries, actions, events, approvals, anomalies = [], [], [], [], []
+    seen: set[str] = set()
+    for person, mine in sorted(by_person.items()):
+        out = _report_for(ctx, person, month, mine)
+        summaries.append(out.summary)
+        actions += out.actions
+        approvals += out.approvals
+        anomalies += out.anomalies
+        for e in out.events:
+            if e.key not in seen:
+                seen.add(e.key)
+                events.append(e)
+    return _with_recovery(
+        recovery,
+        JobOutput(
+            status="ok",
+            summary=f"expenses month {month}: "
+            + ("; ".join(summaries) if summaries else "no receipts"),
+            actions=actions,
+            events=events,
+            approvals=approvals,
+            anomalies=anomalies,
+        ),
+    )
+
+
+# ---- job: categorize --------------------------------------------------------
+
+
+def _categorize_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expcat")
+    sha = str(key.param("sha"))
+    for name in ("category", "by", "said", "filing_dir"):
+        key.param(name)
+    for name in sorted(k for k, _v in ctx.params.items() if k.startswith("price:")):
+        key.param(name)  # a month raised again reads owner price directives too
+    # The same words twice is one change; a move back after another move is new.
+    key.add(
+        "before",
+        sum(
+            1 for e in _events_of(ctx, CATEGORY_EVENT) if e.get("payload", {}).get("sha256") == sha
+        ),
+    )
+    key.config("expenses", "identity", "books.cost_object")
+    return key.digest()
+
+
+def _categorize_run(ctx: JobContext) -> JobOutput:
+    """Place one receipt in a category (the owner's decisions of 2026-10-13):
+    by the person's own words when it lands, or by a reviewer, or the person,
+    asking their AI. A category moves no money, so the word decides; the
+    change is recorded with who said it, and a month already waiting for its
+    yes is raised again showing it, before anyone says yes."""
+    sha = str(ctx.params.get("sha") or "")
+    by = str(ctx.params.get("by") or "")
+    said = str(ctx.params.get("said") or "")
+    listed = list(ctx.tenant.expenses.category_accounts)
+    category = cats.canonical(str(ctx.params.get("category") or ""), listed)
+    if category is None:
+        names = ", ".join(listed) or "none yet"
+        return JobOutput(
+            status="ok",
+            summary=f"expenses categorize: no category {ctx.params.get('category')!r} "
+            f"(the ministry's are {names})",
+        )
+    receipt = next((i for i in _unconsumed(ctx) if i["sha256"] == sha), None)
+    if receipt is None:
+        return JobOutput(
+            status="ok", summary="expenses categorize: no such receipt waiting in a month"
+        )
+    before = sum(
+        1 for e in _events_of(ctx, CATEGORY_EVENT) if e.get("payload", {}).get("sha256") == sha
+    )
+    event = EventSpec(
+        key=f"expcat:{sha}:{before}",
+        event_type=CATEGORY_EVENT,
+        payload={"sha256": sha, "category": category, "by": by, "said": said},
+    )
+    person, month = str(receipt.get("person")), str(receipt.get("month"))
+    output = JobOutput(
+        status="ok",
+        summary=f"expenses categorize: {receipt.get('file')} -> "
+        f"{category or cats.UNCATEGORIZED} (by {by or 'nobody named'})",
+        events=[event],
+    )
+    if not _pending_review_keys(ctx, person, month):
+        return output
+    mine = [i for i in _unconsumed(ctx) if i.get("person") == person and i.get("month") == month]
+    again = _report_for(ctx, person, month, mine, placed={sha: category})
+    return again.model_copy(
+        update={"summary": f"{output.summary}; {again.summary}", "events": [event, *again.events]}
+    )
+
+
+# ---- job: send --------------------------------------------------------------
+
+
+def _claim_states(ctx: JobContext) -> dict[str, tuple[str, int]]:
+    """Each receipt's latest send outcome and how many times it was held."""
+    out: dict[str, tuple[str, int]] = {}
+    for e in ctx.ledger.read_event_log():
+        kind = e.get("event_type")
+        if kind not in (SENT_EVENT, HELD_EVENT):
+            continue
+        sha = str(e.get("payload", {}).get("receipt", ""))
+        held = out.get(sha, ("", 0))[1] + (kind == HELD_EVENT)
+        out[sha] = (SENT if kind == SENT_EVENT else HELD, held)
+    return out
+
+
+def _words_by_sha(ctx: JobContext) -> dict[str, str]:
+    """The person's own words for each receipt, as the door recorded them."""
+    return {
+        str(e["payload"]["sha256"]): str(e["payload"].get("said", ""))
+        for e in _events_of(ctx, CATEGORY_EVENT)
+        if e.get("payload", {}).get("sha256") and e["payload"].get("said")
+    }
+
+
+def _send_cards(ctx: JobContext, status: str) -> list[dict]:
+    prefix = f"apr:{ctx.tenant_slug}:expenses:{SEND_CARD}:"
+    rows = ctx.ledger.conn.execute(
+        "SELECT * FROM approval_queue WHERE tenant = ? AND action_type = ? AND status = ?",
+        (ctx.tenant_slug, SEND_CARD, status),
+    ).fetchall()
+    return [
+        {
+            "id": r["id"],
+            "key": str(r["idempotency_key"]).removeprefix(prefix),
+            "receipts": {
+                s for s in json.loads(r["params_json"] or "{}").get("receipts", "").split(",") if s
+            },
+        }
+        for r in rows
+    ]
+
+
+def _unsent(ctx: JobContext) -> list[dict]:
+    states = _claim_states(ctx)
+    return [i for i in _unconsumed(ctx) if states.get(i["sha256"], ("", 0))[0] != SENT]
+
+
+def _send_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expsend")
+    key.config("institution", "expenses", "identity")
+    items = _unsent(ctx)
+    key.add("content", _report_content_hash(items))
+    key.value("words", sorted(_words_by_sha(ctx).items()))
+    key.value(
+        "cards", sorted((c["id"], s) for s in ("pending", "approved") for c in _send_cards(ctx, s))
+    )
+    rates, pending_day = _fx_inputs(ctx, items)
+    key.value("fx", rates)
+    key.add("fx_pending_day", pending_day)
+    # A held claim is tried again on the next run, never skipped as a re-run.
+    states = _claim_states(ctx)
+    held = any(states.get(i["sha256"], ("", 0))[0] == HELD for i in items)
+    key.add("held_retry", datetime.now(UTC).isoformat() if held else "")
+    return key.digest()
+
+
+def _claim_of(item: dict, words: dict[str, str]):
+    from ...contracts.institution import Claim
+
+    name = str(item.get("file", ""))
+    cents = item.get("amount_cents")
+    usd = f"{Decimal(int(cents)) / 100:.2f}" if cents is not None else ""
+    if item.get("said_currency"):
+        amount, currency = str(item["said_amount"]), str(item["said_currency"])
+    else:
+        amount, currency = usd, "USD" if usd else ""
+    return Claim(
+        receipt=str(item["sha256"]),
+        person=str(item.get("person", "")),
+        day=name[:10] if _is_door_receipt(name) else "",
+        amount=amount,
+        currency=currency,
+        usd=usd,
+        said=words.get(str(item["sha256"]), ""),
+        photo=str(item.get("filed_to") or name),
+    )
+
+
+def _claim_line(claim) -> str:
+    """One receipt on the person's card, the way they said it."""
+    if claim.currency and claim.currency != "USD":
+        paid = f"{claim.currency} {Decimal(claim.amount):,.2f}"
+    else:
+        paid = f"${Decimal(claim.amount):,.2f}" if claim.amount else "amount not known yet"
+    return f"{claim.day or 'undated'}: {paid}" + (f", {claim.said}" if claim.said else "")
+
+
+def _send_run(ctx: JobContext) -> JobOutput:
+    """A missionary's receipts to their institution (Robb's idea 1, decided
+    2026-10-13). Receipts not yet sent wait on one card per person; their
+    yes sends them on the next run, each claim as they said it, priced in
+    dollars at its own day's rate when that rate is known. A claim the
+    institution doesn't take is held in plain words and sent on a later run
+    with no second yes. Every send is to the institution's own door, behind
+    the person's card (invariant 7)."""
+    institution = ctx.tenant.institution
+    if not institution.submit_to:
+        return JobOutput(status="ok", summary="expenses send: no institution takes claims here")
+    who = institution.name or "the institution"
+    unsent = {i["sha256"]: i for i in _unsent(ctx)}
+    yes = set().union(*(c["receipts"] for c in _send_cards(ctx, "approved")))
+    priced, events = _price_claims(ctx, [unsent[s] for s in sorted(unsent)])
+    words = _words_by_sha(ctx)
+    claims = {i["sha256"]: _claim_of(i, words) for i in priced}
+    actions: list[str] = []
+
+    ready = [claims[s] for s in sorted(yes) if s in claims]
+    if ready and ctx.shadow:
+        actions.append(f"would send {len(ready)} claim(s) to {who}")
+    elif ready:
+        sink = claim_sink(institution, store=ctx.ledger.root / "institution")
+        states = _claim_states(ctx)
+        for out in submit(sink, ready, institution=institution.name):
+            if out.status == SENT:
+                actions.append(f"sent {out.receipt[:12]} to {who} as {out.reference}")
+                events.append(
+                    EventSpec(
+                        key=f"instsent:{out.receipt}",
+                        event_type=SENT_EVENT,
+                        payload={"receipt": out.receipt, "reference": out.reference},
+                    )
+                )
+            else:
+                n = states.get(out.receipt, ("", 0))[1]
+                actions.append(f"held {out.receipt[:12]}: {who} isn't answering")
+                events.append(
+                    EventSpec(
+                        key=f"instheld:{out.receipt}:{n}",
+                        event_type=HELD_EVENT,
+                        payload={"receipt": out.receipt, "say": out.say},
+                    )
+                )
+
+    approvals = []
+    by_person: dict[str, list] = {}
+    for sha, claim in claims.items():
+        if sha not in yes:
+            by_person.setdefault(claim.person, []).append(claim)
+    pending = _send_cards(ctx, "pending")
+    for person, mine in sorted(by_person.items()):
+        mine.sort(key=lambda c: (c.day, c.receipt))
+        shas = {c.receipt for c in mine}
+        digest = hashlib.sha256(",".join(sorted(shas)).encode()).hexdigest()[:16]
+        n = len(mine)
+        approvals.append(
+            ApprovalSpec(
+                key=f"instsend:{_person_slug(person)}:{digest}",
+                action_type=SEND_CARD,
+                params={
+                    "person": person,
+                    "institution": who,
+                    "count": str(n),
+                    "what": f"{n} receipt{'s' if n != 1 else ''} to send to {who}",
+                    "receipts": ",".join(sorted(shas)),
+                    "lines": "; ".join(_claim_line(c) for c in mine),
+                },
+                reason=f"{person}'s receipts not yet sent; approve to send them to {who}",
+                supersedes_keys=[c["key"] for c in pending if c["receipts"] < shas],
+            )
+        )
+    return JobOutput(
+        status="ok",
+        summary=f"expenses send: {len(ready)} to {who} on a yes, "
+        f"{sum(len(m) for m in by_person.values())} waiting on a card",
+        actions=actions,
+        events=events,
+        approvals=approvals,
+    )
+
+
+# ---- job: amount ------------------------------------------------------------
+
+
+def _amount_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expamount")
+    sha = str(key.param("sha"))
+    for name in ("tag", "said", "by", "read", "payee", "category", "filing_dir"):
+        key.param(name)
+    key.add(
+        "before",
+        sum(
+            1
+            for e in ctx.ledger.read_event_log()
+            if e.get("event_type") in (AMOUNT_EVENT, READ_EVENT)
+            and e.get("payload", {}).get("sha256") == sha
+        ),
+    )
+    key.config("expenses")
+    return key.digest()
+
+
+def _amount_run(ctx: JobContext) -> JobOutput:
+    """A door receipt's amount after its photo (board item t-receipt-photo,
+    2026-10-13): what its photo reads (``read=photo``, a proposal) or what
+    the person said (their words, or their yes to the reading). The door
+    reads the words with code (core/tools/receipts.claim_in) and passes the
+    claim as a tag; nothing here prices anything, the month does that from
+    the tag the way it prices a claim said with the photo."""
+    sha = str(ctx.params.get("sha") or "")
+    tag = str(ctx.params.get("tag") or "")
+    if not _TAG.match(tag):
+        return JobOutput(status="ok", summary=f"expenses amount: {tag!r} is not an amount")
+    receipt = next((i for i in _unconsumed(ctx) if i["sha256"] == sha), None)
+    if receipt is None or not _is_door_receipt(str(receipt.get("file", ""))):
+        return JobOutput(status="ok", summary="expenses amount: no such door receipt waiting")
+    read = ctx.params.get("read") == "photo"
+    kind = READ_EVENT if read else AMOUNT_EVENT
+    before = sum(
+        1
+        for e in ctx.ledger.read_event_log()
+        if e.get("event_type") == kind and e.get("payload", {}).get("sha256") == sha
+    )
+    payload = {"sha256": sha, "tag": tag}
+    if read:  # who it reads as paid, and for what: proposals beside the amount
+        payload |= {k: str(ctx.params[k]) for k in ("payee", "category") if ctx.params.get(k)}
+    else:
+        payload |= {
+            "by": str(ctx.params.get("by") or ""),
+            "said": str(ctx.params.get("said") or ""),
+        }
+    return JobOutput(
+        status="ok",
+        summary=f"expenses amount: {receipt.get('file')} "
+        + (
+            f"reads {tag} (a proposal)"
+            if read
+            else f"is {tag} (said by {payload['by'] or 'nobody named'})"
+        ),
+        events=[
+            EventSpec(key=f"expamount:{kind}:{sha}:{before}", event_type=kind, payload=payload)
+        ],
+    )
+
+
+# ---- job: date --------------------------------------------------------------
+
+
+def _date_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expdate")
+    sha = str(key.param("sha"))
+    for name in ("day", "said", "by", "read"):
+        key.param(name)
+    key.add("before", sum(1 for e in _events_of(ctx, DATED_EVENT) if _payload_sha(e) == sha))
+    key.config("expenses")
+    return key.digest()
+
+
+def _payload_sha(e: dict) -> str:
+    return str(e.get("payload", {}).get("sha256", ""))
+
+
+def _date_run(ctx: JobContext) -> JobOutput:
+    """A receipt's own day, for one sent later (t-catch-up, 2026-10-14): what
+    the person said, or what its photo reads (``read=photo``). It files the
+    receipt in that day's month and prices it at that day's rate; nothing
+    here prices anything."""
+    sha = str(ctx.params.get("sha") or "")
+    day = str(ctx.params.get("day") or "")
+    try:
+        date.fromisoformat(day)
+    except ValueError:
+        return JobOutput(status="ok", summary=f"expenses date: {day!r} is not a day")
+    if len(day) != 10 or not any(i["sha256"] == sha for i in _unconsumed(ctx)):
+        return JobOutput(status="ok", summary="expenses date: no such receipt waiting")
+    before = sum(1 for e in _events_of(ctx, DATED_EVENT) if _payload_sha(e) == sha)
+    payload = {
+        "sha256": sha,
+        "day": day,
+        "said": str(ctx.params.get("said") or ""),
+        "by": str(ctx.params.get("by") or ""),
+        "read": str(ctx.params.get("read") or ""),
+    }
+    return JobOutput(
+        status="ok",
+        summary=f"expenses date: {sha[:12]} is from {day}",
+        events=[EventSpec(key=f"expdate:{sha}:{before}", event_type=DATED_EVENT, payload=payload)],
+    )
+
+
+# ---- job: drive -------------------------------------------------------------
+
+
+def _drive_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expdrive")
+    for name in ("person", "start", "end", "miles"):
+        key.param(name)
+    key.config("expenses")
+    return key.digest()
+
+
+def _drive_run(ctx: JobContext) -> JobOutput:
+    """One drive the box's tracker ended (core/mileage; Robb's idea 2,
+    2026-10-13): the person as the expense tree names them, when it started
+    and ended, and its miles. Nothing about where; what it was for comes
+    from the person's own words in the weekly check-in."""
+    who = str(ctx.params.get("person") or "")
+    name = next(
+        (
+            p.name
+            for p in _persons(ctx)
+            if re.sub(r"[^a-z0-9]+", "-", p.name.casefold()).strip("-") == who
+        ),
+        "",
+    )
+    try:
+        miles = Decimal(str(ctx.params.get("miles")))
+        start = datetime.fromisoformat(str(ctx.params.get("start")))
+        end = datetime.fromisoformat(str(ctx.params.get("end")))
+    except (ArithmeticError, ValueError):
+        return JobOutput(status="ok", summary="expenses drive: not a drive")
+    if not name or miles <= 0 or end < start:
+        return JobOutput(status="ok", summary=f"expenses drive: nobody files expenses as {who!r}")
+    payload = {
+        "person": name,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "miles": str(miles),
+    }
+    return JobOutput(
+        status="ok",
+        summary=f"expenses drive: {name}, {miles} miles",
+        events=[
+            EventSpec(
+                key=f"drive:{who}:{payload['start']}", event_type=DRIVE_EVENT, payload=payload
+            )
+        ],
+    )
+
+
+_PERSONAL = ("personal", "private", "not ministry", "not for the ministry", "my own")
+
+
+def is_personal(said: str) -> bool:
+    """Words that say a drive wasn't the ministry's."""
+    text = said.casefold()
+    return any(word in text for word in _PERSONAL)
+
+
+def _purpose_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "exppurpose")
+    drive = str(key.param("drive"))
+    for name in ("said", "by"):
+        key.param(name)
+    key.add(
+        "before",
+        sum(1 for e in _events_of(ctx, PURPOSE_EVENT) if e["payload"].get("drive") == drive),
+    )
+    key.config("expenses")
+    return key.digest()
+
+
+def _purpose_run(ctx: JobContext) -> JobOutput:
+    """What one drive was for, as the person said it (t-mileage part 2): a
+    purpose, or that it was personal. The latest word wins. Code reads the
+    words; nothing here prices anything."""
+    drive = str(ctx.params.get("drive") or "")
+    said = str(ctx.params.get("said") or "").strip()
+    if not said or not any(drive_id(e["payload"]) == drive for e in _events_of(ctx, DRIVE_EVENT)):
+        return JobOutput(status="ok", summary="expenses drive purpose: no such drive")
+    before = sum(1 for e in _events_of(ctx, PURPOSE_EVENT) if e["payload"].get("drive") == drive)
+    payload = {
+        "drive": drive,
+        "ministry": not is_personal(said),
+        "said": said,
+        "by": str(ctx.params.get("by") or ""),
+    }
+    return JobOutput(
+        status="ok",
+        summary=f"expenses drive purpose: {'ministry' if payload['ministry'] else 'personal'}",
+        events=[
+            EventSpec(key=f"purpose:{drive}:{before}", event_type=PURPOSE_EVENT, payload=payload)
+        ],
     )
 
 
@@ -1760,9 +2830,23 @@ def _purchase_payload(
     }
 
 
+_REPORT_FIELDS = frozenset(
+    {"qbo_purchase_id", "reimbursed_channel", "instrument_ref", "reimbursed_date", "cleared_date"}
+)
+
+
+def _sets(fields: dict) -> str:
+    """``col = ?`` for each field. A column name is interpolated into the SQL,
+    so only expense_report's settable columns may arrive; values stay ? marks."""
+    unknown = set(fields) - _REPORT_FIELDS
+    if unknown:
+        raise ValueError(f"expense_report has no settable {sorted(unknown)}")
+    return ", ".join(f"{k} = ?" for k in fields)
+
+
 def _set_report_status(ctx: JobContext, report_id: int, status: str, **fields) -> None:
-    sets = ", ".join(f"{k} = ?" for k in fields)
-    sql = f"UPDATE expense_report SET status = ?, updated_at = ?{', ' + sets if sets else ''} "
+    sets = _sets(fields)
+    sql = f"UPDATE expense_report SET status = ?, updated_at = ?{', ' + sets if sets else ''} "  # noqa: S608  (columns from _REPORT_FIELDS only)
     sql += "WHERE id = ?"
     ctx.ledger.conn.execute(sql, (status, _now(), *fields.values(), report_id))
     ctx.ledger.conn.commit()
@@ -1770,9 +2854,9 @@ def _set_report_status(ctx: JobContext, report_id: int, status: str, **fields) -
 
 def _update_report(ctx: JobContext, report_id: int, **fields) -> None:
     """Field update that leaves the status alone."""
-    sets = ", ".join(f"{k} = ?" for k in fields)
+    sets = _sets(fields)
     ctx.ledger.conn.execute(
-        f"UPDATE expense_report SET updated_at = ?, {sets} WHERE id = ?",
+        f"UPDATE expense_report SET updated_at = ?, {sets} WHERE id = ?",  # noqa: S608  (columns from _REPORT_FIELDS only)
         (_now(), *fields.values(), report_id),
     )
     ctx.ledger.conn.commit()
@@ -2564,11 +3648,160 @@ def _inbox_run(ctx: JobContext) -> JobOutput:  # noqa: C901  # complexity 25, tr
     )
 
 
+# ---- jobs: statement, school, line purpose (t-statements) -----------------
+
+
+def _filer(ctx: JobContext, name: str) -> str:
+    """The person as the expense tree names them, or ""."""
+    return next((p.name for p in _persons(ctx) if p.name == name), "")
+
+
+def _statement_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expstatement")
+    for name in ("person", "account", "lines", "transfers", "by", "said"):
+        key.param(name)
+    key.config("expenses")
+    return key.digest()
+
+
+def _statement_run(ctx: JobContext) -> JobOutput:
+    """Statement lines kept (t-statements, 2026-10-14): every line of the
+    ministry's account, or the lines the person picked from their own; and
+    the ministry's lines that landed in the person's own account (paid
+    back, never spending). The door parsed the file and keeps no copy; a
+    line's fingerprint is its event key, so a statement sent twice is the
+    same lines."""
+    person = _filer(ctx, str(ctx.params.get("person") or ""))
+    account = str(ctx.params.get("account") or "")
+    try:
+        rows = json.loads(str(ctx.params.get("lines") or "[]"))
+        moved = json.loads(str(ctx.params.get("transfers") or "[]"))
+        lines = [(statements.Line.of(r), str(r.get("looks", ""))) for r in rows]
+    except (ValueError, KeyError, TypeError):
+        return JobOutput(status="ok", summary="expenses statement: not statement lines")
+    if not person or account not in statements.ACCOUNTS:
+        return JobOutput(status="ok", summary="expenses statement: nobody's account")
+    by, said = str(ctx.params.get("by") or ""), str(ctx.params.get("said") or "")
+    events = []
+    for line, looks in lines:
+        payload = line.payload(person, account) | {"by": by}
+        if account == statements.OWN:
+            payload |= {"looks": looks, "said": said}
+        events.append(
+            EventSpec(key=f"bank:{payload['sha256']}", event_type=LINE_EVENT, payload=payload)
+        )
+    kept = {e.payload["sha256"]: e.payload for e in events}
+    for e in _events_of(ctx, LINE_EVENT):
+        kept.setdefault(str(e["payload"].get("sha256")), e["payload"])
+    for sha in moved:
+        line = kept.get(str(sha))
+        if line is None or line.get("account") != statements.MINISTRY:
+            continue
+        events.append(
+            EventSpec(
+                key=f"bank-transfer:{sha}",
+                event_type=TRANSFER_EVENT,
+                payload={"sha256": str(sha), "person": person, "day": line["day"]},
+            )
+        )
+    return JobOutput(
+        status="ok",
+        summary=f"expenses statement: {len(lines)} line(s) of {person}'s {account} account kept",
+        events=events,
+    )
+
+
+def _school_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "expschool")
+    for name in ("person", "rows", "by", "said"):
+        key.param(name)
+    key.config("expenses")
+    return key.digest()
+
+
+def _school_run(ctx: JobContext) -> JobOutput:
+    """The person's school list (t-statements): each scholarship or school
+    fee a line with no receipt, as they listed it."""
+    person = _filer(ctx, str(ctx.params.get("person") or ""))
+    try:
+        rows = [
+            statements.SchoolPayment(
+                str(r["day"]),
+                str(r["student"]),
+                str(r["school"]),
+                Decimal(str(r["amount"])),
+                str(r["currency"]),
+            )
+            for r in json.loads(str(ctx.params.get("rows") or "[]"))
+        ]
+    except (ValueError, KeyError, TypeError, ArithmeticError):
+        return JobOutput(status="ok", summary="expenses school: not a school list")
+    if not person:
+        return JobOutput(status="ok", summary="expenses school: nobody's list")
+    by, said = str(ctx.params.get("by") or ""), str(ctx.params.get("said") or "")
+    events = [
+        EventSpec(
+            key=f"school:{r.sha(person)}",
+            event_type=SCHOOL_EVENT,
+            payload=r.payload(person) | {"by": by, "said": said},
+        )
+        for r in rows
+    ]
+    return JobOutput(
+        status="ok", summary=f"expenses school: {len(rows)} payment(s) for {person}", events=events
+    )
+
+
+def _line_purpose_key(ctx: JobContext) -> str:
+    key = RunKey(ctx, "explinepurpose")
+    sha = str(key.param("sha"))
+    for name in ("said", "category", "by"):
+        key.param(name)
+    key.add("before", sum(1 for e in _events_of(ctx, LINE_PURPOSE_EVENT) if _payload_sha(e) == sha))
+    key.config("expenses")
+    return key.digest()
+
+
+def _line_purpose_run(ctx: JobContext) -> JobOutput:
+    """What one statement line was for, in the person's own words, and the
+    category those words point to (t-statements)."""
+    sha = str(ctx.params.get("sha") or "")
+    said = str(ctx.params.get("said") or "").strip()
+    if not said or not any(_payload_sha(e) == sha for e in _events_of(ctx, LINE_EVENT)):
+        return JobOutput(status="ok", summary="expenses line purpose: no such line")
+    before = sum(1 for e in _events_of(ctx, LINE_PURPOSE_EVENT) if _payload_sha(e) == sha)
+    payload = {
+        "sha256": sha,
+        "said": said,
+        "category": str(ctx.params.get("category") or ""),
+        "by": str(ctx.params.get("by") or ""),
+    }
+    return JobOutput(
+        status="ok",
+        summary=f"expenses line purpose: {sha[:12]} said",
+        events=[
+            EventSpec(
+                key=f"bank-purpose:{sha}:{before}", event_type=LINE_PURPOSE_EVENT, payload=payload
+            )
+        ],
+    )
+
+
 JOBS: dict[str, JobHandler] = {
     "inbox": JobHandler(key=_inbox_key, run=_inbox_run),
     "intake": JobHandler(key=_intake_key, run=_intake_run),
     "extract": JobHandler(key=_extract_key, run=_extract_run),
     "report": JobHandler(key=_report_key, run=_report_run),
+    "month": JobHandler(key=_month_key, run=_month_run),
+    "date": JobHandler(key=_date_key, run=_date_run),
+    "categorize": JobHandler(key=_categorize_key, run=_categorize_run),
+    "drive": JobHandler(key=_drive_key, run=_drive_run),
+    "drive_purpose": JobHandler(key=_purpose_key, run=_purpose_run),
+    "amount": JobHandler(key=_amount_key, run=_amount_run),
+    "statement": JobHandler(key=_statement_key, run=_statement_run),
+    "school": JobHandler(key=_school_key, run=_school_run),
+    "line_purpose": JobHandler(key=_line_purpose_key, run=_line_purpose_run),
+    "send": JobHandler(key=_send_key, run=_send_run),
     "match": JobHandler(key=_match_key, run=_match_run),
 }
 
@@ -2582,6 +3815,9 @@ CARD_AUTHORITY: dict[str, CardRule] = {
         "approve", "expense.report", amount="total_cents", cents=True, submitter="person"
     ),
     DRAFT_CARD: CardRule("approve", "expense.report", submitter="person"),
+    # Sending claims commits none of the ministry's money: the institution
+    # approves and pays in its own system. The person decides their own.
+    SEND_CARD: CardRule("submit", "expense.report", money=False, submitter="person"),
     CONFIRM_CARD: CardRule(
         "approve", "payment", amount="total_cents", cents=True, submitter="person"
     ),

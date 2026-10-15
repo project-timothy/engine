@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import json
 import urllib.error
-import urllib.request
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Any
 
+from ..engine import web
 from .graph_mail import GRAPH_BASE, GraphMailError
 
 Transport = Callable[..., Any]
@@ -33,9 +33,9 @@ class GraphCalendarError(GraphMailError):
 
 def _default_transport(method: str, url: str, *, body: dict | None, headers: dict):
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    req = web.request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with web.urlopen(req, timeout=60) as resp:
             raw = resp.read()
             return json.loads(raw) if raw else None
     except urllib.error.HTTPError as exc:

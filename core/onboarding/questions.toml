@@ -4,13 +4,14 @@
 # engine holds the rules. `sizes` and `families` limit a question to the
 # shapes it fits (absent = every shape). `defaults` gives a per-shape
 # default; `default` is the fallback. Kinds: choice, text, timezone, month,
-# amount, list, role (one of the shape's people roles), people (name = role lines).
+# amount, list, role (one of the shape's people roles), people (name = role lines),
+# looks_after (name = the people they look after, every name already given).
 # No question names the machinery: the person never hears "role", "scope" or
 # "permission" unless they ask.
 
 [[question]]
 id = "who"
-ask = "Who is this for?"
+ask = "What kind of work will Tim keep the books for?"
 kind = "choice"
 choices = [
     { label = "Just me, running a business", value = "commercial-solo" },
@@ -24,13 +25,14 @@ choices = [
 [[question]]
 id = "legal_name"
 ask = "What is the legal name, the one on your tax filings?"
-help = "For a ministry, the name on its IRS determination letter."
+help = "For a ministry, the name on its IRS determination letter. Not sure? Use the name on the ministry's bank account, or ask your sending organization."
 kind = "text"
 
 [[question]]
 id = "your_name"
-ask = "And what's your name?"
-kind = "text"
+ask = "And what's your name and email? Like: Pat Lee, pat@example.org"
+help = "Tim sends your sign-in link to that email. Without one, you get the link another way."
+kind = "person"
 
 [[question]]
 id = "your_role"
@@ -69,14 +71,15 @@ choices = [
 
 [[question]]
 id = "entity_nonprofit"
-ask = "Is it a church, or a charity that files a Form 990?"
+ask = "Is it a church, or another kind of charity?"
 kind = "choice"
 families = ["nonprofit"]
 default = "public-charity"
 defaults = { nonprofit-small = "church" }
 choices = [
     { label = "A church", value = "church" },
-    { label = "A charity that files a Form 990", value = "public-charity" },
+    { label = "Another charity (it files a Form 990 each year)", value = "public-charity", was = ["A charity that files a Form 990"] },
+    { label = "Not sure", value = "public-charity" },
 ]
 
 [[question]]
@@ -93,8 +96,8 @@ choices = [
 
 [[question]]
 id = "reviewer"
-ask = "Does anyone look over your spending, like a sponsor, a board member or an accountant? Their name, or leave it blank."
-help = "They'll get a short monthly review of what was paid, instead of okaying each item. Add their email and Tim can invite them."
+ask = "Does anyone look over your spending, like a sponsor, a board member or an accountant? Their name and email, like: Dale Ortiz, dale@example.org. Or leave it blank."
+help = "They'll get an email when each month is ready and look it over by asking Tim, instead of okaying each item. Without an email, they won't hear anything from Tim."
 kind = "person"
 sizes = ["solo"]
 optional = true
@@ -116,6 +119,15 @@ default = "10000"
 defaults = { commercial-small = "5000", nonprofit-small = "2500" }
 
 [[question]]
+id = "yes_by_word_up_to"
+ask = "Up to what amount can someone okay a request just by telling their AI? Above it, they confirm on their phone with Face ID."
+help = "0 means every okay takes Face ID. You can change it later."
+kind = "amount"
+sizes = ["small", "organization"]  # a solo worker gets the solo default, unasked
+default = "500"
+defaults = { commercial-solo = "250", nonprofit-solo = "250", commercial-organization = "1000", nonprofit-organization = "1000" }
+
+[[question]]
 id = "people"
 ask = "Who else is involved, and what do they do? One per line, like: Sam Lee = board"
 help = "You can add people later; just ask."
@@ -125,8 +137,17 @@ optional = true
 default = ""
 
 [[question]]
+id = "looks_after"
+ask = "Does anyone look after other people's spending, like a regional director over the missionaries in her region? One per line, like: Ann Lee = Sam Ortiz, Mei Tan"
+help = "They'll see and okay the reports of the people they look after, and no one else's. Leave it blank if one office okays everything."
+kind = "looks_after"
+sizes = ["organization"]
+optional = true
+default = ""
+
+[[question]]
 id = "banned_words"
-ask = "Are there words you never want to see in something written for you?"
+ask = "Any words Tim should never use in what it writes for you, like 'missionary' for work in a sensitive country? Leave it blank if there are none."
 kind = "list"
 optional = true
 default = ""

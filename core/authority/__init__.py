@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from .errors import AuthorityError
@@ -134,6 +135,10 @@ class Safeguards:
     second_approver_above: Decimal = Decimal("0")
     authority_confirm: str = "second_person"
     report_self_approvals: str = "always"
+    yes_by_word_up_to: Decimal = Decimal("0")
+    """A person's yes said to their own AI through the box's door decides a
+    money card up to this much, with no Face ID (the owner's decision of
+    2026-10-11). 0: every yes through the door takes Face ID."""
 
 
 @dataclass(frozen=True)
@@ -269,6 +274,7 @@ def parse_policy(data: dict) -> Policy:
         second_approver_above=_amount(sg, "second_approver_above"),
         authority_confirm=_choice(sg, "authority_confirm", AUTHORITY_CONFIRM, "second_person"),
         report_self_approvals=_choice(sg, "report_self_approvals", REPORT_SELF_APPROVALS, "always"),
+        yes_by_word_up_to=_amount(sg, "yes_by_word_up_to"),
     )
     roles = {
         name: Role(
@@ -496,15 +502,35 @@ def card_amount(rule: CardRule, params: dict) -> Decimal | None:
     return value / 100 if rule.cents else value
 
 
+def card_party(rule: CardRule, params: dict) -> tuple[str, str]:
+    """Whom a card is about, as its params name them: the person (the
+    rule's submitter) and, for a card no person filed, the vendor or the
+    payee a bill pays. Either may be ""."""
+    who = str(params.get(rule.submitter, "")) if rule.submitter else ""
+    return who, str(params.get("vendor") or params.get("payee") or "")
+
+
+def card_month(params: dict) -> str:
+    """The month a card is for, as people say it ("August 2026"), from its
+    ``month`` param ("2026-08"); "" when it has none."""
+    try:
+        return datetime.strptime(str(params.get("month", "")), "%Y-%m").strftime("%B %Y")
+    except ValueError:
+        return ""
+
+
 def card_request(rule: CardRule, principal: str, params: dict) -> Request:
     """The request deciding a card is evaluated as. Deciding happens on a
     card, so ``via_card`` is always true; a submitter is matched to people
-    by their id (the slug of their name)."""
+    by their id (the slug of their name), and the card is decided in that
+    person's unit, the unit it is seen in (core/tools/catalog), so an
+    ``@own`` approver decides the cards of the people they look after."""
     submitter = _slug(str(params.get(rule.submitter, ""))) if rule.submitter else ""
     return Request(
         principal,
         rule.action,
         rule.resource,
+        scope=submitter,
         amount=card_amount(rule, params),
         submitter=submitter,
         via_card=True,
@@ -586,6 +612,8 @@ __all__ = [
     "Role",
     "Safeguards",
     "card_amount",
+    "card_month",
+    "card_party",
     "card_request",
     "change_record",
     "check_change",

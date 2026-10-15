@@ -14,7 +14,7 @@ import re
 
 import pytest
 
-from core.tools.decide import plain_refusal, plain_words
+from core.tools.decide import SUMMARY_CAP, plain_refusal, plain_words
 
 MACHINERY = re.compile(
     r"[a-z]+\.[a-z_]+|\b[a-z]+-[a-z]+\b|\bgrant\b|\bforbid\b|\bterminal\b|\bwitness\b|"
@@ -66,9 +66,9 @@ def test_a_refusal_says_what_it_is_about():
 
 
 def test_the_approve_page_reads_the_card_in_plain_words():
-    assert plain_words(ROW, "approve") == (
-        "Approve an expense report for Ruth Hollis, $186.40 (card #7)."
-    )
+    # No "(card #7)": on the real-phone check (2026-10-10) the number read as
+    # noise to the treasurer; the signed challenge binds the card id anyway.
+    assert plain_words(ROW, "approve") == "Approve an expense report for Ruth Hollis, $186.40."
     assert plain_words(ROW, "reject").startswith("Reject an expense report")
 
 
@@ -79,6 +79,60 @@ def test_a_bill_names_its_vendor():
         "action_type": "ap.payment_recommendation",
         "params": {"vendor": "Marion Roofing", "amount": "3000.00"},
     }
-    assert (
-        plain_words(row, "approve") == "Approve a payment to Marion Roofing, $3,000.00 (card #3)."
+    assert plain_words(row, "approve") == "Approve a payment to Marion Roofing, $3,000.00."
+
+
+MONTH = {
+    "id": 9,
+    "agent": "expenses",
+    "action_type": "expenses.report_review",
+    "params": {
+        "person": "Ruth Hollis",
+        "month": "2026-09",
+        "total_cents": "5410",
+        "lines": "2026-09-03: $42.10, Meals; 2026-09-15: $12.00, Fuel, Kathmandu Field; "
+        "2026-09-09: $28.21 (NPR 4,300.00 at 152.45 per dollar on 2026-09-09), Supplies",
+    },
+}
+
+
+def test_the_approve_page_shows_each_receipt_under_the_card():
+    # The owner, 2026-10-14 (usability walk call 3): the approval page named the
+    # total but not what was in it. The lines ride in the signed summary, so
+    # what the person read is what their Face ID said yes to.
+    said = plain_words(MONTH, "approve")
+    head, *lines = said.split("\n")
+    assert head.startswith("Approve an expense report for Ruth Hollis")
+    assert lines == [
+        "Sep 3: $42.10, Meals",
+        "Sep 15: $12.00, Fuel, Kathmandu Field",
+        "Sep 9: $28.21 (4,300 Nepali rupees at 152.45 per dollar on Sep 9), Supplies",
+    ]
+    assert not MACHINERY.search(said), said
+
+
+def test_a_long_month_stops_at_the_cap_and_says_how_many_more():
+    many = "; ".join(
+        f"2026-09-{n % 30 + 1:02d}: $1{n}.00, Meals at the guest house by the school"
+        for n in range(60)
     )
+    row = {**MONTH, "params": {**MONTH["params"], "lines": many}}
+    said = plain_words(row, "approve")
+    assert len(said) <= SUMMARY_CAP
+    assert said.endswith("more receipts.")
+    shown = said.count("\n") - 1
+    assert said.endswith(f"and {60 - shown} more receipts.")
+
+
+def test_a_card_with_no_lines_reads_as_one_line():
+    assert "\n" not in plain_words(ROW, "approve")
+
+
+def test_a_currency_reads_by_its_name_and_an_unknown_code_stays():
+    from core.tools.receipts import currency_name
+
+    assert currency_name("NPR") == "Nepali rupees"
+    assert currency_name("ZMW") == "Zambian kwacha"
+    assert currency_name("XYZ") == ""
+    row = {**MONTH, "params": {**MONTH["params"], "lines": "2026-09-04: $9.00 (EUR 8.31 at 0.92)"}}
+    assert plain_words(row, "approve").endswith("Sep 4: $9.00 (EUR 8.31 at 0.92)")

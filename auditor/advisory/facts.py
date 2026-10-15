@@ -109,7 +109,7 @@ def _coding_drift(ledger: LedgerReader, slug: str) -> dict:
 def _aging(ledger: LedgerReader, slug: str, now: datetime) -> dict:
     placeholders = ",".join("?" for _ in OPEN_STATUSES)
     rows = ledger.query(
-        f"SELECT vendor, invoice_number, invoice_date, amount_cents, status "
+        f"SELECT vendor, invoice_number, invoice_date, amount_cents, status "  # noqa: S608  (? placeholders and fixed column names only)
         f"FROM ap_invoices WHERE tenant = ? AND status IN ({placeholders})",
         (slug, *OPEN_STATUSES),
     )
@@ -140,7 +140,7 @@ def _aging(ledger: LedgerReader, slug: str, now: datetime) -> dict:
 def _close_readiness(ledger: LedgerReader, slug: str, now: datetime) -> dict:
     committed_placeholders = ",".join("?" for _ in COMMITTED_STATUSES)
     committed = ledger.query(
-        f"SELECT COUNT(*) AS n, COALESCE(SUM(amount_cents), 0) AS cents FROM ap_invoices "
+        f"SELECT COUNT(*) AS n, COALESCE(SUM(amount_cents), 0) AS cents FROM ap_invoices "  # noqa: S608  (? placeholders and fixed column names only)
         f"WHERE tenant = ? AND status IN ({committed_placeholders})",
         (slug, *COMMITTED_STATUSES),
     )[0]
@@ -170,7 +170,7 @@ def _treatment_questions(
         row_names = sorted(alias for alias, canon in canonical.items() if canon == name)
         placeholders = ",".join("?" for _ in row_names)
         rows = ledger.query(
-            f"SELECT COUNT(*) AS n, COALESCE(SUM(amount_cents), 0) AS cents "
+            f"SELECT COUNT(*) AS n, COALESCE(SUM(amount_cents), 0) AS cents "  # noqa: S608  (? placeholders and fixed column names only)
             f"FROM ap_invoices WHERE tenant = ? AND vendor IN ({placeholders})",
             (slug, *row_names),
         )
@@ -249,7 +249,7 @@ def _year_end_cpa(
         )
         params = (slug, str(tax_year))
     rows = ledger.query(
-        "SELECT vendor, COALESCE(cost_type, '') AS cost_type, "
+        "SELECT vendor, COALESCE(cost_type, '') AS cost_type, "  # noqa: S608  (? placeholders and fixed column names only)
         "COALESCE(SUM(amount_cents), 0) AS cents, COUNT(*) AS n "
         f"FROM ap_invoices WHERE tenant = ? AND status = 'Paid'{year_clause} "
         "GROUP BY vendor, cost_type ORDER BY vendor",
@@ -277,7 +277,7 @@ def _year_end_cpa(
             )
             report_params = (slug, str(tax_year))
         rows += ledger.query(
-            "SELECT person AS vendor, '' AS cost_type, "
+            "SELECT person AS vendor, '' AS cost_type, "  # noqa: S608  (? placeholders and fixed column names only)
             "COALESCE(SUM(total_cents), 0) AS cents, COUNT(*) AS n "
             "FROM expense_report WHERE tenant = ? "
             f"AND status IN ('Reimbursed-Recorded', 'Reimbursed'){report_year} "

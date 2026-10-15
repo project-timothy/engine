@@ -31,6 +31,7 @@ auditor = "auditor.cli:main"
 [dependency-groups]
 dev = [
     "coverage==7.16.1",
+    "pylint==4.1.3",
     "pytest==9.1.1",
     "ruff==0.12.2",
     "vulture==2.16",
@@ -56,7 +57,21 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "W", "C90"]
+select = ["E", "F", "I", "B", "UP", "W", "C90", "S"]
+# Security lint (flake8-bandit), on since the security review prep of
+# 2026-10-13. Two rules are off everywhere, on purpose: S603 flags every
+# subprocess call, and every one here passes an argument list, never a shell
+# (S602/S604, the rules that catch a shell, stay on); S607 flags a program
+# found on PATH (git, gh, uv), and the runner hands a job only PATH and HOME,
+# so the host's PATH is the trust boundary either way. Every other finding is
+# fixed, or carries a noqa that says why it is safe on that line.
+ignore = ["S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests and evals assert, fake passwords, and build throwaway SQL and paths.
+"tests/**" = ["S101", "S105", "S106", "S108", "S310", "S324", "S608", "S110"]
+"**/evals/**" = ["S101", "S105", "S106", "S108", "S310", "S324", "S608", "S110"]
+"evals/**" = ["S101", "S105", "S106", "S108", "S310", "S324", "S608", "S110"]
 
 [tool.coverage.run]
 source = ["core", "auditor", "tenants"]
