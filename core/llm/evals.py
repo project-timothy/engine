@@ -13,6 +13,15 @@ nobody has ever tested. This module is the answer.
         documents/*.pdf     the file each case attaches (minimal_pdf of the case text)
         results/<id>.json   what one model scored, by model id
 
+A conversation's set (``talk``, Tim's own voice, issue #681) differs in
+three ways. A case carries ``messages``, the conversation up to her latest
+message, in place of a document; the job names ``system_from``, the
+function that builds the system text as it is today, so the set always
+measures the brief that ships; and a case whose expectation is not itself a
+valid reply (``{"call": {}}``: any tool call, never words) names the
+``seed`` a seeded fixture run answers. ``talk_hard``, his other speed, is
+gated by the same set (:data:`SHARED_SETS`).
+
 A case's ``expect`` is a SUBSET, all the way down (:func:`_matches`): it
 states the part under test and stays silent about the rest, which is what a
 reply holding a list of objects needs (row 7.13b, the combined-scan grouper:
@@ -89,6 +98,13 @@ PAGE_BREAK = "\f"
 ``conftest.minimal_pdf`` writes the PDF by."""
 
 DEFAULT_TIMEOUT_S = 180
+
+SHARED_SETS = {"talk_hard": "talk"}
+"""A job gated by another job's set: Tim's voice at its strong speed is
+still his voice, so the model a hard question steps up to passes the same
+conversation set as the everyday one."""
+
+ROLES = ("user", "assistant")
 
 _SLUG_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _MIMES = {
@@ -184,6 +200,8 @@ class EvalCase:
     text: str
     document: str
     expect: dict[str, Any]
+    messages: tuple[dict[str, str], ...] = ()
+    seed: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -197,6 +215,21 @@ class EvalJob:
     decimal_fields: tuple[str, ...]
     cases: tuple[EvalCase, ...]
     directory: Path
+    system_from: str = ""
+
+    def system_text(self) -> str:
+        """The system text every case is sent: ``system``, or what the
+        ``module:attr`` function ``system_from`` builds today."""
+        if not self.system_from:
+            return self.system
+        module_name, _, attr = self.system_from.partition(":")
+        try:
+            build = getattr(importlib.import_module(module_name), attr)
+        except (ImportError, AttributeError, ValueError) as exc:
+            raise EvalSetError(
+                f"{self.job}: cannot import system_from {self.system_from!r}: {exc}"
+            ) from exc
+        return str(build())
 
     def output_model(self) -> type[BaseModel]:
         """The pydantic model the job's site validates its replies into,
@@ -220,6 +253,24 @@ class EvalJob:
         return self.directory / DOCUMENTS_DIRNAME / case.document
 
 
+def _case_messages(job: str, path: Path, raw: Any) -> tuple[dict[str, str], ...]:
+    """A conversation case's messages, each a user or assistant turn with
+    its text; the last is hers."""
+    if raw is None:
+        return ()
+    turns = tuple(raw) if isinstance(raw, list) else ()
+    plain = all(
+        isinstance(m, dict) and m.get("role") in ROLES and isinstance(m.get("content"), str)
+        for m in turns
+    )
+    if not turns or not plain or turns[-1]["role"] != "user":
+        raise EvalSetError(
+            f"{job}/{path.name}: messages must be a list of user and assistant turns "
+            "with their content, ending with the person's"
+        )
+    return tuple({"role": m["role"], "content": m["content"]} for m in turns)
+
+
 def load_job(job: str, root: Path | None = None) -> EvalJob:
     directory = job_dir(job, root)
     spec_path = directory / JOB_FILE
@@ -236,6 +287,8 @@ def load_job(job: str, root: Path | None = None) -> EvalJob:
                 text=str(raw.get("text", "")),
                 document=str(raw.get("document", "")),
                 expect=dict(raw.get("expect") or {}),
+                messages=_case_messages(job, path, raw.get("messages")),
+                seed=dict(raw["seed"]) if raw.get("seed") is not None else None,
             )
         )
     if not cases:
@@ -248,6 +301,7 @@ def load_job(job: str, root: Path | None = None) -> EvalJob:
         decimal_fields=tuple(spec.get("decimal_fields") or ()),
         cases=tuple(sorted(cases, key=lambda c: c.name)),
         directory=directory,
+        system_from=str(spec.get("system_from", "")),
     )
 
 
@@ -419,9 +473,12 @@ def document_pages(text: str) -> int:
 
 
 def _messages(spec: EvalJob, case: EvalCase) -> list[Message]:
+    system = Message("system", spec.system_text())
+    if case.messages:
+        return [system, *(Message(m["role"], m["content"]) for m in case.messages)]
     ask = spec.user.replace(DOCUMENT_TEXT_TOKEN, case.text)
     ask = ask.replace(PAGE_COUNT_TOKEN, str(document_pages(case.text)))
-    return [Message("system", spec.system), Message("user", ask)]
+    return [system, Message("user", ask)]
 
 
 def _attachments(spec: EvalJob, case: EvalCase) -> list[Attachment]:
@@ -434,7 +491,8 @@ def _attachments(spec: EvalJob, case: EvalCase) -> list[Attachment]:
 
 
 def seeded_fixture_adapter(case: EvalCase) -> Adapter:
-    """A fixture adapter answering this case's own expectation.
+    """A fixture adapter answering this case's own expectation, or its
+    ``seed`` where the expectation is not itself a valid reply.
 
     It proves the case set parses, the contract validates, and the checks
     line up. It proves nothing about a model, which is why every results
@@ -442,7 +500,8 @@ def seeded_fixture_adapter(case: EvalCase) -> Adapter:
     """
     from core.llm.adapters.fixture import FixtureAdapter
 
-    return FixtureAdapter({"*": json.dumps(case.expect, sort_keys=True)})
+    answer = case.seed if case.seed is not None else case.expect
+    return FixtureAdapter({"*": json.dumps(answer, sort_keys=True)})
 
 
 def run_eval_set(
@@ -568,13 +627,14 @@ def check_eval_gate(settings: Any, *, tenant: str = "", root: Path | None = None
     base = eval_sets_root(root)
     gated = set(gated_jobs(base))
     for job, tier_name in sorted(settings.jobs.items()):
-        if tier_name == LLM_DETERMINISTIC or job not in gated:
+        scored_by = SHARED_SETS.get(job, job)
+        if tier_name == LLM_DETERMINISTIC or scored_by not in gated:
             continue
         tier = settings.tiers.get(tier_name)
         if tier is None:  # the reference check already refused this file
             continue
-        path = results_path(job, tier.model, base)
-        command = _command(job, tier_name, tenant)
+        path = results_path(scored_by, tier.model, base)
+        command = _command(scored_by, tier_name, tenant)
         if not path.exists():
             raise EvalGateError(
                 f"[llm.jobs].{job} = {tier_name!r} runs model {tier.model!r} on adapter "

@@ -1,0 +1,12 @@
+{
+  "name": "thb_guesthouse",
+  "note": "a tilted receipt: the total, its currency, and its day read off the picture",
+  "document": "thb_guesthouse.png",
+  "text": "BAAN SUAN GUESTHOUSE\nChiang Mai, Thailand\n2026-08-21\n2 nights 1,600.00\nLaundry 120.00\nTotal THB 1,720.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "1720.00",
+    "currency": "THB",
+    "invoice_date": "2026-08-21"
+  }
+}

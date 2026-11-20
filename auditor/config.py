@@ -84,6 +84,9 @@ class AuditorTenantConfig:
     check_gaps_window_days: int = 90
     check_gaps_min_observed: int = 3
     check_gaps_series: list[str] = field(default_factory=list)  # e.g. ["1xxx"]; [] = all
+    # First number of each checkbook sharing a band (two owners, two books):
+    # numbers are compared only inside their own book. [] = one book per band.
+    check_gaps_book_starts: list[int] = field(default_factory=list)
     reconcile_enabled: bool = True
     reconcile_unknown_window_days: int = 30
     triage_enabled: bool = True
@@ -231,6 +234,7 @@ def load_auditor_tenant(slug: str, *, tenants_dir: str | Path | None = None) -> 
         check_gaps_window_days=int(check_gaps.get("window_days", 90)),
         check_gaps_min_observed=int(check_gaps.get("min_observed", 3)),
         check_gaps_series=[str(s) for s in check_gaps.get("series", [])],
+        check_gaps_book_starts=sorted(int(n) for n in check_gaps.get("book_starts", [])),
         reconcile_enabled=bool(reconcile.get("enabled", True)),
         reconcile_unknown_window_days=int(reconcile.get("unknown_window_days", 30)),
         triage_enabled=bool(triage.get("enabled", True)),

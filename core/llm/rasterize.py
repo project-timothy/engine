@@ -47,6 +47,7 @@ case.
 from __future__ import annotations
 
 import contextlib
+import io
 import struct
 import zlib
 from collections.abc import Iterator
@@ -98,20 +99,28 @@ def pdf_text(path: Path) -> str:
     ``core.agents.ap.extraction.read_document_text`` calls this for its PDF
     branch, so "does this document have text" has exactly one answer.
     """
+    return "\n".join(pdf_pages(path))
+
+
+def pdf_pages(source: Path | bytes, *, name: str = "") -> list[str]:
+    """A PDF's text layer page by page (``pdf_text`` joins them), from a file
+    or from bytes already in hand; ``[]`` when anything at all goes wrong
+    reading it. ``policy watch`` reads a handbook this way, so a quote's page
+    is the file's own."""
     try:
         from pypdf import PdfReader
     except ModuleNotFoundError:  # pragma: no cover - dependency-gated
-        return ""
+        return []
     from core.engine.timebox import pdf_deadline
 
     try:
-        with pdf_deadline(Path(path).name):
-            reader = PdfReader(str(path))
-            return "\n".join((page.extract_text() or "") for page in reader.pages)
+        with pdf_deadline(name or (source.name if isinstance(source, Path) else "document")):
+            reader = PdfReader(io.BytesIO(source) if isinstance(source, bytes) else str(source))
+            return [(page.extract_text() or "") for page in reader.pages]
     except Exception:
         # A file pypdf cannot parse has no text layer as far as any caller is
         # concerned; the rasterizer gets its turn and the model gets the file.
-        return ""
+        return []
 
 
 def has_text_layer(path: Path) -> bool:

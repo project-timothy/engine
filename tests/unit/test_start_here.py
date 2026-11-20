@@ -47,9 +47,13 @@ def test_it_says_whose_spending_the_reviewer_looks_over(solo):  # noqa: F811
     assert you["looks_over"] == ["Daniel Reyes"]
 
 
+def _ids(reply: dict) -> list[str]:
+    return [a["id"] for a in reply["answers"] + reply.get("more", [])]
+
+
 def test_each_person_hears_the_answers_for_their_own_tools(solo):  # noqa: F811
-    daniel = [a["id"] for a in _tools(solo, "daniel-reyes").call("start_here")["answers"]]
-    linda = [a["id"] for a in _tools(solo, "linda-park").call("start_here")["answers"]]
+    daniel = _ids(_tools(solo, "daniel-reyes").call("start_here"))
+    linda = _ids(_tools(solo, "linda-park").call("start_here"))
     assert daniel[0] == linda[0] == "always-allow"
     assert "send-a-receipt" in daniel and "send-a-receipt" not in linda
     assert "who-am-i" in daniel and "who-am-i" in linda
@@ -65,3 +69,19 @@ def test_a_couple_reads_as_a_couple():
 
     assert display_name("tom-and-jen-baker") == "Tom and Jen Baker"
     assert display_name("carol-jennings") == "Carol Jennings"
+
+
+def test_it_fits_in_one_piece_and_hands_any_other_answer_on_asking(solo):  # noqa: F811
+    """pass^5 on 2026-11-17: all 97 answers ran 65 KB, too big for the
+    person's AI to take in one piece, so it read a cut-off preview."""
+    import json
+
+    tools = _tools(solo, "daniel-reyes")
+    first = tools.call("start_here")
+    assert len(json.dumps(first)) < 25_000
+    assert first["answers"][0]["id"] == "always-allow" and "answer" in first["answers"][0]
+    asked = next(m for m in first["more"] if m["id"] == "send-a-receipt")
+    assert set(asked) == {"id", "ask"}
+    got = tools.call("start_here", {"about": ["send-a-receipt"]})
+    assert [a["id"] for a in got["answers"]] == ["send-a-receipt"] and got["answers"][0]["answer"]
+    assert "more" not in got

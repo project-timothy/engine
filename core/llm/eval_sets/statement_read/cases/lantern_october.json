@@ -1,0 +1,50 @@
+{
+  "name": "lantern_october",
+  "note": "one bank's layout, a signed Amount column and its totals: the lines, balances, and period read off the picture",
+  "document": "lantern_october.png",
+  "text": "LANTERN PRAIRIE BANK                              Member FDIC\nHope Springs Ministries Inc.          Business Checking ...4417\nStatement period 10/01/2026 - 10/31/2026\nBeginning balance                              $2,418.36\nDeposits and credits                           $2,150.00\nWithdrawals and debits                         $1,053.57\nEnding balance                                 $3,514.79\n\nDATE   DESCRIPTION                                 AMOUNT\n10/01  ONLINE GIFT M HOLLIS                          150.00\n10/03  CHECK 1742                                   -320.00\n10/06  PRAIRIE GAS #22 SALINA KS                     -48.17\n10/09  DEPOSIT CEDAR HOLLOW CHURCH                 1,800.00\n10/14  ONLINE TRANSFER TO SAVINGS                   -600.00\n10/17  PAPER & INK SUPPLY                            -73.40\n10/22  ONLINE GIFT J ARNOLD                          200.00\n10/28  MONTHLY SERVICE FEE                           -12.00",
+  "expect": {
+    "doc_type": "bank_statement",
+    "currency": "USD",
+    "period_start": "2026-10-01",
+    "period_end": "2026-10-31",
+    "opening_balance": "2418.36",
+    "closing_balance": "3514.79",
+    "total_in": "2150.00",
+    "total_out": "1053.57",
+    "lines": [
+      {
+        "day": "2026-10-01",
+        "amount": "150.00"
+      },
+      {
+        "day": "2026-10-03",
+        "amount": "-320.00"
+      },
+      {
+        "day": "2026-10-06",
+        "amount": "-48.17"
+      },
+      {
+        "day": "2026-10-09",
+        "amount": "1800.00"
+      },
+      {
+        "day": "2026-10-14",
+        "amount": "-600.00"
+      },
+      {
+        "day": "2026-10-17",
+        "amount": "-73.40"
+      },
+      {
+        "day": "2026-10-22",
+        "amount": "200.00"
+      },
+      {
+        "day": "2026-10-28",
+        "amount": "-12.00"
+      }
+    ]
+  }
+}

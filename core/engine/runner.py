@@ -34,12 +34,14 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from ..ledger import Ledger
 from ..llm import telemetry
@@ -288,8 +290,15 @@ class LedgerLocked(RuntimeError):
         )
 
 
+DOOR_WAIT = 3.0
+"""Seconds a person's own write waits for the books to come free before
+"busy" (the owner's read of 2026-11-19: a receipt landing at the same moment
+as hers turned her away). Only the door waits; a scheduled run or the CLI
+never does, so what the 08:00 run does is unchanged."""
+
+
 @contextmanager
-def ledger_write_lock(root: Path) -> Iterator[None]:
+def ledger_write_lock(root: Path, *, wait: float = 0.0) -> Iterator[None]:
     """One ledger, one writer (#136).
 
     A launchd run and an interactive run on the same ledger could both pass
@@ -299,15 +308,22 @@ def ledger_write_lock(root: Path) -> Iterator[None]:
     approval taken mid-run). flock dies with the process, so there is no
     stale-lock janitor. Contention raises ``LedgerLocked`` instead of
     waiting: the caller reports a structured refusal and nothing is recorded,
-    so the next attempt proceeds normally.
+    so the next attempt proceeds normally. ``wait``: seconds to keep
+    trying first (:data:`DOOR_WAIT` at the door; 0, never waiting, for
+    every run of its own).
     """
     root.mkdir(parents=True, exist_ok=True)
     handle = open(root / ".engine-run.lock", "w")
     try:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise LedgerLocked(root) from None
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise LedgerLocked(root) from None
+                time.sleep(0.05)
         yield
     finally:
         handle.close()
@@ -551,7 +567,10 @@ def run(
     params: dict | None = None,
     ledger_dir: str | Path | None = None,
     tenants_root: Path | None = None,
+    wait: float = 0.0,
 ) -> RunResult:
+    """One job, run once under the ledger lock. ``wait``: seconds to wait
+    for the lock (:func:`door_run` passes :data:`DOOR_WAIT`)."""
     params = params or {}
     tenant: TenantConfig = load_tenant(tenant_slug, tenants_root=tenants_root)
     authority = load_policy(tenant_slug, tenants_root=tenants_root)
@@ -571,7 +590,7 @@ def run(
     # One ledger, one run (#136): the refusal is an error result, which is
     # never recorded, so the next run executes normally.
     try:
-        with ledger_write_lock(root):
+        with ledger_write_lock(root, wait=wait):
             return _run_locked(
                 tenant_slug,
                 agent,
@@ -595,6 +614,12 @@ def run(
             anomalies=[Anomaly(code=LOCK_ANOMALY, detail=str(exc))],
             summary=f"refused: another run holds the ledger lock at {root}",
         )
+
+
+def door_run(tenant_slug: str, agent: str, job: str, **kw: Any) -> RunResult:
+    """:func:`run` for a person's own write through the door: it waits
+    :data:`DOOR_WAIT` for the books. Every door tool runs its jobs here."""
+    return run(tenant_slug, agent, job, wait=DOOR_WAIT, **kw)
 
 
 def _decided_stamp(ap: ApprovalSpec) -> dict[str, str]:

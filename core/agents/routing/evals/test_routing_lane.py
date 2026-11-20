@@ -13,13 +13,18 @@ from pathlib import Path
 import pytest
 
 from core.agents.brief import jobs as brief_jobs
-from core.engine import cli
+from core.engine import cli, clock
 from core.engine.cli import main
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
+from core.ledger import ledger as ledger_module
 
 REPO = Path(__file__).resolve().parents[4]
-TODAY = datetime.now(UTC).date()
+# One frozen instant, a Wednesday at midday in the demo tenant's zone, for
+# TODAY, the ledger's stamps, and the lane's clock: a suite that runs across
+# midnight UTC once opened cards a day after TODAY (CI 11/16).
+FROZEN = datetime(2026, 3, 4, 18, 0, tzinfo=UTC)
+TODAY = FROZEN.date()
 
 POLICY = """
 [money]
@@ -76,6 +81,8 @@ def world(tmp_path, monkeypatch):
     shutil.copytree(REPO / "tenants" / "demo", root / "demo")
     monkeypatch.setenv("ENGINE_TENANTS_ROOT", str(root))
     monkeypatch.setattr(cli, "_operator_at_terminal", lambda: True)
+    monkeypatch.setattr(clock, "utc_now", lambda: FROZEN)
+    monkeypatch.setattr(ledger_module, "_now", FROZEN.isoformat)
     w = {"tmp": tmp_path, "root": root, "data": tmp_path / "data"}
     _write(w)
     # A first run, so cards have a run to hang on.
@@ -303,3 +310,13 @@ def test_a_far_deadline_is_the_clock(world):
     _tick(world, 10)
     assert _reminders(world) == []
     assert date.fromisoformat(far) > TODAY
+
+
+def test_a_card_stamped_on_the_lane_clock_keeps_its_day(world):
+    """CI 11/16: the suite crossed midnight UTC, so a card stamped after it
+    opened a day later than TODAY and its first reminder never came. The card's
+    stamp and the lane's today come from one frozen clock."""
+    card = _card(world)
+    with _ledger(world) as ledger:
+        (row,) = [r for r in ledger.list_approvals("demo") if r["id"] == card]
+    assert row["created_at"][:10] == TODAY.isoformat()

@@ -21,6 +21,12 @@ missing number is one ``check-gap`` finding per run of holes, WARN, when
 the upper neighbour's date falls inside the window (90 days). Bank-assigned
 electronic ids share the shape (a 9xxx series on some banks) and gap on
 design; ``[auditor.check_gaps].series`` names the paper series to watch.
+
+Two checkbooks can share a band (two owners: one book used up to 1260, the
+other started at 1301). ``[auditor.check_gaps].book_starts`` names the first
+number of each later book; a number belongs to the book whose start is the
+highest at or below it, and gaps are measured only inside one book, so the
+unwritten rest of one book is never a hole (2026-11-18).
 """
 
 from __future__ import annotations
@@ -112,12 +118,14 @@ def check(ctx: AuditContext) -> list[Finding]:
     watched = set(ctx.tenant.check_gaps_series)
     cutoff = ctx.now.date() - timedelta(days=ctx.tenant.check_gaps_window_days)
 
-    by_series: dict[str, list[int]] = {}
+    starts = ctx.tenant.check_gaps_book_starts
+    by_book: dict[tuple[str, int], list[int]] = {}
     for n in sorted(seen):
-        by_series.setdefault(_series(n), []).append(n)
+        book = max((s for s in starts if s <= n), default=0)
+        by_book.setdefault((_series(n), book), []).append(n)
 
     findings: list[Finding] = []
-    for series, numbers in sorted(by_series.items()):
+    for (series, _book), numbers in sorted(by_book.items()):
         if watched and series not in watched:
             continue
         if len(numbers) < ctx.tenant.check_gaps_min_observed:

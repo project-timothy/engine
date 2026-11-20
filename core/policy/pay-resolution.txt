@@ -1,0 +1,12 @@
+${ministry}
+Resolution of the Board of Directors: Pay for ${name}
+
+RESOLVED, that ${ministry} (the "ministry") pays ${name}, whom the ministry sends and commissions for its work, ${yearly} a year, paid as ${monthly} on the ${day} of each month from ${first} through ${last}, from the gifts the ministry holds for that work.
+
+RESOLVED FURTHER, that ${name} is paid as an independent contractor under the ministry's commissioning agreement, that the ministry withholds no tax from this pay, and that the ministry reports this pay, and only this pay, on Form 1099-NEC.
+
+RESOLVED FURTHER, that ministry expenses ${name} accounts for under the ministry's accountable plan are reimbursed separately and are not pay, and that any amount the accountable plan treats as not accounted for within its time is added to this pay.
+
+RESOLVED FURTHER, that a director who is a family member of ${name} abstains from this resolution, and that it is adopted by a director with no family tie to ${name}.
+
+Adopted by the ${adopted_by} on the date of the approving director's confirmation.

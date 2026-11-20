@@ -214,9 +214,53 @@ def test_the_school_list_adds_scholarships_with_no_receipt(solo, feed):  # noqa:
     [month] = door.call("month_report", {"month": "2026-08"})["people"]
     school = {b["words"]: b for b in month["bank"]}
     assert school["Bikash Tamang, Shree Janata School"]["dollars"] == "85.00"
+    # Listed in dollars, it says so (the dress rehearsal: an empty said read as rupees missing).
+    assert school["Bikash Tamang, Shree Janata School"]["said"] == "$85.00"
     asha = school["Asha Gurung, Shree Janata School"]
     assert asha["dollars"] == "86.64" and asha["said"] == "NPR 12,000.00"
-    assert asha["waiting_on"] is None and asha["role"] == "owed back"
+    # No cash under it and nobody said they paid it: the ministry's money (w-school-cash).
+    assert asha["waiting_on"] is None and asha["role"] == "the ministry paid"
+    assert asha["category"] is None  # the starter list has no Scholarships
+
+
+def test_a_scholarship_ministry_files_its_school_list_under_scholarships(solo, feed):  # noqa: F811
+    """A scholarship ministry adds Scholarships to its own list (2026-10-15):
+    each school payment reads there with nobody placing it."""
+    config = Path(solo["root"]) / "living-water" / "tenant.toml"
+    marker = "[expenses.category_accounts]\n"
+    config.write_text(
+        config.read_text().replace(marker, marker + 'Scholarships = "Scholarships"\n')
+    )
+    feed("2026-08-18", npr=NPR_AUG_18)
+    door, desk, token = _daniel(solo)
+    _send(solo, desk, token, SCHOOL_CSV.encode())
+    [held] = door.call("bank_statement", {})["statements"]
+    door.call("keep_school_list", {"statement": held["statement"], "said": "add them"})
+    _month(solo, "2026-08")
+    [month] = door.call("month_report", {"month": "2026-08"})["people"]
+    assert {b["category"] for b in month["bank"]} == {"Scholarships"}
+
+
+def test_the_school_list_counts_against_the_scholarship_budget(solo, feed):  # noqa: F811
+    """The dress rehearsal (2026-10-15): "how much is left for scholarships?"
+    read only receipts, so every school payment and every card-paid receipt
+    dropped out of the year and the whole budget read as left."""
+    config = Path(solo["root"]) / "living-water" / "tenant.toml"
+    marker = "[expenses.category_accounts]\n"
+    config.write_text(
+        config.read_text().replace(marker, marker + 'Scholarships = "Scholarships"\n')
+    )
+    feed("2026-08-18", npr=NPR_AUG_18)
+    door, desk, token = _daniel(solo)
+    _send(solo, desk, token, SCHOOL_CSV.encode())
+    [held] = door.call("bank_statement", {})["statements"]
+    door.call("keep_school_list", {"statement": held["statement"], "said": "add them"})
+    # No month run: each rupee payment's day's rate is recorded when the list goes in.
+    door.call("set_budget", {"kind": "Scholarships", "amount": "12000", "said": "$12,000"})
+    year = door.call("year_report", {"year": "2026"})
+    assert year["people"][0]["by_category"]["Scholarships"] == "171.64"  # 86.64 + 85.00
+    [scholarships] = year["budget"]
+    assert scholarships["spent"] == "171.64" and scholarships["left"] == "11828.36"
 
 
 def test_august_goes_to_the_reviewer_as_one_card_owing_only_what_daniel_paid(solo):  # noqa: F811
@@ -286,3 +330,32 @@ def test_a_statement_reply_carries_its_note_for_the_page(solo):  # noqa: F811
     status, body = _send(solo, desk, token, MINISTRY_CSV.encode())
     assert status == 200 and body["note"] == body["say"]
     assert _send(solo, desk, token, JPEG)[1].get("note") is None  # a receipt has none
+
+
+def test_a_school_payment_marked_paid_by_me_is_owed_back(solo, feed):  # noqa: F811
+    # Review 2026-11-10: the list's "Paid by: me" was read and then dropped on
+    # the way into the books, so the person's own money read as the ministry's.
+    door, desk, token = _daniel(solo)
+    listed = (
+        "Student,Amount,Date,School,Paid by\n"
+        "Asha Gurung,85.00,2026-08-07,Shree Janata School,me\n"
+        "Bikash Tamang,85.00,2026-08-07,Shree Janata School,\n"
+    )
+    status, _body = _send(solo, desk, token, listed.encode())
+    assert status == 200
+    [held] = door.call("bank_statement", {})["statements"]
+    door.call("keep_school_list", {"statement": held["statement"], "said": "add them"})
+    _month(solo, "2026-08")
+    [month] = door.call("month_report", {"month": "2026-08"})["people"]
+    school = {b["words"]: b["role"] for b in month["bank"]}
+    assert school["Bikash Tamang, Shree Janata School"] == "the ministry paid"
+    assert school["Asha Gurung, Shree Janata School"] != "the ministry paid", school
+
+
+def test_a_statement_tim_cannot_read_says_why(solo):  # noqa: F811
+    _door_, desk, token = _daniel(solo)
+    status, body = _send(
+        solo, desk, token, b"Date,Description,Amount\n25/08/2026,GUEST HOUSE,-120.00\n"
+    )
+    assert status == 415
+    assert body["say"].startswith("Tim can't tell the day from 25/08/2026")

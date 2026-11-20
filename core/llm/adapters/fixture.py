@@ -9,16 +9,50 @@ Three ways to seed it, one per test shape:
 Seed it with an exception INSTANCE and every call raises it (the transport
 mapping tests). Every bundle and schema it sees is kept on ``calls`` and
 ``schemas`` so a test can assert what the gateway sent.
+
+:func:`replies_from_file` is the seed for a harness that runs the engine as
+its own program and so cannot hand it an object (the proving ground, which
+imports nothing from the engine): one reply per line, read in order, the
+place kept in a file beside it so each new command picks up where the last
+one stopped.
 """
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from core.llm.gateway import GatewayTransportError, PromptBundle, RawReply, Usage
 
 Seed = dict[str, str] | list[str] | Callable[[PromptBundle, dict[str, Any]], RawReply | str]
+
+
+_PLACE = threading.Lock()
+
+
+def replies_from_file(path: Path) -> Callable[[PromptBundle, dict[str, Any]], str]:
+    """A seed that reads ``path`` one line a call (each line one whole reply,
+    blank lines skipped). The place is kept in ``<path>.at``, so it survives
+    from one process to the next; past the last line every call fails the
+    way an empty list does."""
+    place = path.with_name(path.name + ".at")
+
+    def next_reply(bundle: PromptBundle, schema: dict[str, Any]) -> str:
+        with _PLACE:
+            lines = [ln for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            at = int(place.read_text(encoding="utf-8") or 0) if place.is_file() else 0
+            if at >= len(lines):
+                raise GatewayTransportError(
+                    f"no fixture reply left in {path.name} for job type {bundle.job_type!r}",
+                    cause="fixture",
+                    transient=False,
+                )
+            place.write_text(str(at + 1), encoding="utf-8")
+            return lines[at]
+
+    return next_reply
 
 
 class FixtureAdapter:

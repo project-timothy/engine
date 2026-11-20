@@ -13,6 +13,71 @@ Unreleased section under the new number.
 
 ## Unreleased
 
+**What waits under Tim's message, after the year on his own voice
+(proving-ground #112, 2026-11-18).** A tool's link for her to tap (a
+receipt's camera, a catch-up page) shows as a button under his message
+(`Waiting.link`); the model is told the page shows it and never sees the
+link to copy, and any Markdown link it writes anyway reaches her as its
+words only. Her yes page button remembers the cards it decides, and her page
+drops it once none of them is waiting. **Tenant files:** none. **Ledger
+schema:** none.
+
+**Tim's page after the second live trial (2026-11-18, the owner's phone on
+practice).** Where Tim's voice is on, the page shows him working the moment
+she taps Send, and Send can't go twice (its one script, under the page's
+nonce; a voice-off page stays byte for byte as pinned); the box answers a
+repeat of her last words, sent while Tim was still on them, with the reply he
+already gave (`REPEAT_SECONDS`), and runs her messages one at a time. The
+brief brings the waiting item up only when she asks (her page already shows
+it on top) and sends a tax question to her packet before Tim says he can't
+answer; the `talk` set's tax case now asks it mid-conversation, and Haiku,
+Sonnet, and Opus 5.5 pass it 5 of 5 again. A stray closing brace at the end
+of a reply is trimmed. **Tenant files:** none. **Ledger schema:** none.
+
+**Real models scored on Tim's voice (`core/llm/eval_sets/talk/results`).**
+Claude Haiku 5.5, Sonnet 5.5, and Opus 5.5 each pass the `talk` set 5 of 5
+on the `anthropic_messages` adapter (the first live calls through that
+adapter), so a ministry may now name any of the three for `talk` or
+`talk_hard`. **Tenant files:** none. **Ledger schema:** none.
+
+**Tim's voice has an eval set (`core/llm/eval_sets/talk`, issue #681).**
+Five moments of a conversation, each checking the turn a model takes: it
+reaches for the books before answering about money, reads them again when
+asked where a figure came from, calls the packet for a tax question, and
+calls the deciding tool for a decision she asks for. The gate now covers
+`talk` and `talk_hard` (one set for both speeds). The harness gains
+conversation cases (`messages`), a job-built system text (`system_from`),
+and a case `seed` for a seeded run. **Tenant files:** a ministry that names
+a model for `talk` or `talk_hard` needs that model's green results
+committed first (`uv run engine evals run talk --tenant <slug> --tier
+<tier>`); `fixture-model` ships green. **Ledger schema:** none.
+
+**Tim's voice: a plain tier only, and earlier replies show their tools
+(issue #681).** The first live trial on the owner's Claude seat failed: the
+`claude_agent_sdk` adapter answers as an agent session, and the model looked
+for Tim's tools there and said the books weren't connected. A `talk` or
+`talk_hard` tier on that adapter now counts as not named: his voice stays
+off (his plain line, no call) and a hard question stays on the everyday
+model. Earlier replies reach the model with `read_from`, the tools they were
+read from, and the brief says to call them again before repeating an amount
+and to write no em dash. **Tenant files:** a ministry that routes `talk` to
+the seat finds Tim's voice off until it names a plain tier, such as
+`anthropic_messages`. **Ledger schema:** none.
+
+**Tim's own voice (`core/talk`, Standalone Tim shot 1, card V1).** Tim can
+hold the conversation himself instead of a person's own Claude or ChatGPT:
+the person's words in, the same tools called as them through `Tools.call`,
+Tim's words out. `engine talk <tenant> --as <person>` talks in the terminal
+over the read tools. Off until a ministry's own file routes the `talk` job
+to a tier (`[llm.jobs] talk = "<tier>"`); every call is priced, recorded in
+`llm_calls`, and refused past `[llm.budget].monthly_usd`, the same cap the
+nightly jobs use. Conversations are files beside the ledger (never inside
+it), kept 90 days. The gateway takes `cache=True` to have a provider cache a
+prompt's repeated opening, and counts cache tokens apart. **Tenant files:**
+two optional keys on a tier's `pricing`, `cache_write_usd_per_mtok` and
+`cache_read_usd_per_mtok`; left out, cached tokens are charged the input
+price. **Ledger schema:** none.
+
 **Records and catch-up.** Every receipt and drive is a record
 (`core/agents/expenses/records.py`), read from the books: captured, read,
 said, placed, approved, reported, sent, paid back. A review card names its

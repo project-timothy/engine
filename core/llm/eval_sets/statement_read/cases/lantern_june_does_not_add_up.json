@@ -1,0 +1,36 @@
+{
+  "name": "lantern_june_does_not_add_up",
+  "note": "printed lines that do not add up to the printed ending balance: read faithfully, and code turns it away (tests/unit/test_statement_read.py)",
+  "document": "lantern_june_does_not_add_up.png",
+  "text": "LANTERN PRAIRIE BANK                              Member FDIC\nHope Springs Ministries Inc.          Business Checking ...4417\nStatement period 06/01/2026 - 06/30/2026\nBeginning balance                              $900.00\nEnding balance                                 $1,047.80\n\nDATE   DESCRIPTION                                 AMOUNT\n06/02  ONLINE GIFT R DAVIS                           100.00\n06/09  CHECK 1019                                   -250.00\n06/16  CORNER FRESH MARKET                           -63.20\n06/23  DEPOSIT FOXGLOVE CHAPEL                       400.00\n06/30  SERVICE FEE                                   -12.00",
+  "expect": {
+    "doc_type": "bank_statement",
+    "currency": "USD",
+    "period_start": "2026-06-01",
+    "period_end": "2026-06-30",
+    "opening_balance": "900.00",
+    "closing_balance": "1047.80",
+    "lines": [
+      {
+        "day": "2026-06-02",
+        "amount": "100.00"
+      },
+      {
+        "day": "2026-06-09",
+        "amount": "-250.00"
+      },
+      {
+        "day": "2026-06-16",
+        "amount": "-63.20"
+      },
+      {
+        "day": "2026-06-23",
+        "amount": "400.00"
+      },
+      {
+        "day": "2026-06-30",
+        "amount": "-12.00"
+      }
+    ]
+  }
+}

@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from core.agents.expenses import fx
-from core.agents.expenses.jobs import REVIEW_CARD
+from core.agents.expenses.records import REVIEW_CARD
 from core.agents.expenses.schema import parse_foreign_claim
 from core.engine.runner import run
 from core.tools import catalog

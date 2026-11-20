@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from core.tools import catalog
 from core.tools.viewer import viewer_for
-from tests.unit.test_door_my_words import solo  # noqa: F401  (fixture)
+from tests.unit.test_door_my_words import no_plan, solo  # noqa: F401  (fixture)
 from tests.unit.test_policy_month import _approve_rules, _rules
 
 RULES = """
@@ -45,6 +45,7 @@ def _tim(solo, person: str = "daniel-reyes") -> catalog.Tools:  # noqa: F811
 
 
 def test_a_ministry_with_no_rules_is_not_offered_the_tool(solo):  # noqa: F811
+    no_plan(solo)
     assert "ask_the_rules" not in {s.name for s in _tim(solo).specs()}
 
 
@@ -73,17 +74,31 @@ def test_under_every_line_tim_says_nothing_stands_in_the_way(solo):  # noqa: F81
     said = _tim(solo).call("ask_the_rules", {"what": "lunch with the team", "amount": "30"})
     assert said["kind"] == "Meals"
     assert not [r for r in said["rules"] if r["applies"]]
-    assert said["answer"].startswith("Nothing in your ministry's rules stands in the way")
+    assert said["answer"].startswith(
+        "Counting lunch with the team as Meals. Nothing in your ministry's rules stands in the way"
+    )
     assert "A meal is up to $40." in said["answer"]  # the rule that covers it, to keep in mind
 
 
-def test_a_kind_the_words_do_not_settle_asks_which(solo):  # noqa: F811
+def test_a_kind_the_words_do_not_settle_is_the_ais_to_pick_never_the_persons(solo):  # noqa: F811
+    # the owner's phone run, 2026-10-15: a laptop for the school came back as
+    # a menu of eight categories for the missionary to choose from.
     _rules(solo, RULES)
     _approve_rules(solo)
-    said = _tim(solo).call("ask_the_rules", {"what": "a gift", "amount": "50"})
-    assert said["kind"] == ""
-    assert "Which of these is it" in said["answer"]
-    assert "Meals" in said["answer"]
+    tim = _tim(solo)
+    said = tim.call("ask_the_rules", {"what": "a gift", "amount": "50"})
+    assert said["kind"] == "" and said["answer"] == ""
+    assert said["pick_kind"].startswith("Choose the closest of these yourself")
+    assert "Meals" in said["pick_kind"]
+    picked = tim.call("ask_the_rules", {"what": "a gift", "amount": "50", "kind": "Meals"})
+    assert picked["answer"].startswith("Counting a gift as Meals.")
+
+
+def test_a_laptop_reads_as_work_equipment_where_the_ministry_has_it():
+    from core.agents.expenses.categories import from_words
+
+    assert from_words("a laptop for the school", ["Meals", "Work Equipment"]) == "Work Equipment"
+    assert from_words("a laptop for the school", ["Meals", "Ministry Supplies"]) == ""
 
 
 def test_without_an_amount_tim_reads_out_the_rules_for_that_kind(solo):  # noqa: F811

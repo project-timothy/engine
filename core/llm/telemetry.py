@@ -95,15 +95,39 @@ def month_to_date_usd(
     UTC month. Ledger timestamps are UTC ISO strings, so the month boundary
     is a string prefix compare on ``created_at``; ``now`` is injectable for
     the tests (a frozen instant, never a monkeypatched clock)."""
+    rows = conn.execute(
+        "SELECT usd FROM llm_calls WHERE tenant = ? AND created_at >= ?",
+        (tenant, _month_start(now)),
+    ).fetchall()
+    return sum((Decimal(str(r[0])) for r in rows), Decimal("0"))
+
+
+def _month_start(now: datetime | None) -> str:
     instant = now if now is not None else datetime.now(UTC)
     if instant.tzinfo is None:
         instant = instant.replace(tzinfo=UTC)
     start = instant.astimezone(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return start.isoformat()
+
+
+def month_by_job(
+    conn: sqlite3.Connection, tenant: str, *, now: datetime | None = None
+) -> dict[str, dict[str, Any]]:
+    """This month's rows for the tenant, by job type: ``calls`` (every
+    gateway call, ok or failed), ``refused`` (calls the cap or the document
+    rule turned away before they were made), ``usd`` (a Decimal). The same
+    rows :func:`month_to_date_usd` sums, so the parts add to its total."""
     rows = conn.execute(
-        "SELECT usd FROM llm_calls WHERE tenant = ? AND created_at >= ?",
-        (tenant, start.isoformat()),
+        "SELECT job_type, status, usd FROM llm_calls WHERE tenant = ? AND created_at >= ?",
+        (tenant, _month_start(now)),
     ).fetchall()
-    return sum((Decimal(str(r[0])) for r in rows), Decimal("0"))
+    out: dict[str, dict[str, Any]] = {}
+    for job_type, status, usd in rows:
+        held = out.setdefault(str(job_type), {"calls": 0, "refused": 0, "usd": Decimal("0")})
+        refused = status in (STATUS_BUDGET_REFUSED, STATUS_DOCUMENTS_REFUSED)
+        held["refused" if refused else "calls"] += 1
+        held["usd"] += Decimal(str(usd))
+    return out
 
 
 def run_totals(conn: sqlite3.Connection, run_key: str) -> dict[str, Any]:

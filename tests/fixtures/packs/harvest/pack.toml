@@ -1,0 +1,25 @@
+# A made-up sending agency's pack, for the engine's own tests (core/pack).
+# Every number in authority.toml is cited below with the words it came from.
+name = "Harvest Fields Mission"
+shape = "nonprofit-organization"
+categories = ["Work Equipment", "National Partners"]
+
+[[number]]
+at = "roles.team-leader"
+value = "4000"
+says = "A team leader okays a purchase up to $4,000."
+[number.source]
+document = "Harvest Fields Field Handbook"
+section = "Work equipment"
+page = 3
+quote = "From $801 to $4,000 your team leader approves it first"
+
+[[number]]
+at = "roles.regional-director"
+value = "10000"
+says = "A regional director okays up to $10,000."
+[number.source]
+document = "Harvest Fields Field Handbook"
+section = "Work equipment"
+page = 3
+quote = "your regional director approves up to $10,000"

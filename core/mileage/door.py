@@ -5,6 +5,7 @@ that ends into the books through the expenses lane's drive job."""
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -22,8 +23,13 @@ class TrackDoor:
         tenants_root: str | Path | None,
         ledger_root: Path,
         tracker: Tracker | None,
+        on_heard: Callable[[str], bool] | None = None,
     ) -> None:
         self.on = tracker is not None
+        # Told whose phone was heard, until it answers True: setup's mileage
+        # step is done once Tim hears the phone (chunk 10).
+        self.on_heard = on_heard
+        self._told: set[str] = set()
         self.tenant = tenant
         self.tenants_root = Path(tenants_root) if tenants_root else None
         self.ledger_root = Path(ledger_root)
@@ -47,6 +53,8 @@ class TrackDoor:
             fix = Fix(stamp / 1000 if stamp > 1e12 else stamp, float(q["lat"]), float(q["lon"]))
         except (KeyError, ValueError):
             return
+        if self.on_heard is not None and person not in self._told and self.on_heard(person):
+            self._told.add(person)
         self._record(self.tracker.add(person, fix))
 
     def flush(self, at: float | None = None) -> None:

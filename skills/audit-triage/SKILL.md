@@ -110,6 +110,9 @@ bundle already; interactively you open the paths yourself.
 - **Triage history:** `triage/triage-*.md` beside the audit reports — read the
   last note so items already triaged, PR'd, or handed to the owner are not
   re-worked.
+- **Open fix PRs:** when the bundle carries `open_prs`, it lists every fix PR
+  this lane has open and waiting on the owner. The notes above reach back
+  only a day or two; this list reaches back as far as a PR has waited.
 
 ## Protocol
 
@@ -128,7 +131,12 @@ bundle already; interactively you open the paths yourself.
      `uv run ruff format --check .`, bleed-through lint, independence lint),
      PR that adds or extends a lesson in `docs/lessons.md` (the rule, no
      particulars; the particulars go in the PR body and the note). **Never merge; never
-     commit to main.** The owner merges.
+     commit to main.** The owner merges. **One open PR per defect:** if
+     `open_prs` already lists a PR for this defect, open no second one
+     (2026-11-10: one fix was opened three times, weeks apart). Put it first
+     under Recommended actions instead: merge PR N, open since its date, and
+     the finding it would have closed today. A list that reads `unknown`
+     means look harder in the notes, not that nothing is open.
    - **Operational** → reversible, read-side acts (hydrate a file, re-run a
      read-only job) execute now and get reported. Anything else — Finder pins,
      UI acts, QBO writes, config with money meaning — is a Recommended Action

@@ -1,0 +1,15 @@
+{
+  "job": "statement_read",
+  "output_model": "core.tools.statement_read:StatementReply",
+  "decimal_fields": [
+    "closing_balance",
+    "lines",
+    "opening_balance",
+    "total_in",
+    "total_out"
+  ],
+  "prompt_source": "core/tools/statement_read.py SYSTEM and USER, as the catch-up link sends them; documents and cases built by scripts/statement_read_set.py",
+  "built_by": "scripts/statement_read_set.py",
+  "system": "Reply with ONLY a JSON object (no prose, no code fences) with keys:\n  doc_type: \"bank_statement\" if this is a bank account's statement listing its\n    transactions for a period, else \"other\"\n  bank: the bank's name as printed, or null\n  currency: the ISO 4217 code of the account's money (USD for dollars), or null\n  period_start: the first day the statement covers, ISO YYYY-MM-DD, or null\n  period_end: the last day the statement covers, ISO YYYY-MM-DD, or null\n  opening_balance: the balance printed for the start of the period, as a\n    decimal string like \"1234.56\" (negative if overdrawn), or null\n  closing_balance: the balance printed for the end of the period, the same\n    way, or null\n  total_in: the total of deposits and credits, when the statement prints one,\n    as a decimal string; else null\n  total_out: the total of withdrawals, checks, and fees, when the statement\n    prints one, as a positive decimal string; else null\n  lines: every transaction, in the order printed, each an object with\n    day: its date, ISO YYYY-MM-DD (the statement's year when only the month\n      and day are printed)\n    words: its description as printed\n    amount: a decimal string, negative for money out (withdrawals, checks,\n      card purchases, fees), positive for money in\nRead every page. List each transaction once. Leave out running balances,\nsubtotals, and summary lines. Write amounts as plain decimal strings with no\ncurrency sign and no thousands commas. Do not guess an amount that is not\nprinted.\n",
+  "user": "Read the attached bank statement. It is a photo or a scan with no text layer, so read the picture itself."
+}

@@ -82,7 +82,7 @@ def test_a_solo_missionary_answers_a_handful():
     answers = _answer_all(
         {}, {"who": "nonprofit-solo", "legal_name": "Ellis Mission Inc.", "your_name": "Jo Ellis"}
     )
-    assert len(answers) <= 9
+    assert len(answers) <= 10  # 10th: the accountable plan's cash ceiling (chunk 3)
     assert "people" not in answers and "two_approvals_above" not in answers
 
 
@@ -93,7 +93,20 @@ def test_a_church_is_asked_for_its_people_and_its_limits():
     while (q := next_question(answers)) is not None:
         asked.append(q["id"])
         answers = record(answers, q["id"], given.get(q["id"], q.get("default", "")))
-    assert {"people", "second_person_above", "two_approvals_above"} <= set(asked)
+    assert {"people", "two_approvals_above"} <= set(asked)
+    # Nobody at a church okays their own, at any amount (2026-10-16), so
+    # there is no limit to ask about.
+    assert "second_person_above" not in asked
+
+
+def test_a_small_company_is_still_asked_where_its_own_okay_ends():
+    answers = {"who": "commercial-small"}
+    asked = []
+    given = {"legal_name": "Acme", "your_name": "Pat", "your_role": "owner", "people": []}
+    while (q := next_question(answers)) is not None:
+        asked.append(q["id"])
+        answers = record(answers, q["id"], given.get(q["id"], q.get("default", "")))
+    assert "second_person_above" in asked
 
 
 def test_the_role_choices_come_from_the_shape_and_hide_the_agents():
@@ -144,7 +157,6 @@ CHURCH = {
     "your_name": "Pat Kim",
     "your_role": "treasurer",
     "people": "Sam Lee = board; Jo Ellis = missionary",
-    "second_person_above": "750",
     "two_approvals_above": "3000",
     "banned_words": "leverage, synergy",
     "spelling": "en-US",
@@ -163,7 +175,7 @@ def test_apply_builds_a_tenant_from_the_answers(world):
     policy = parse_policy(kit.authority)
     assert set(policy.people) == {"pat-kim", "sam-lee", "jo-ellis"}
     assert policy.people["pat-kim"].roles == ("treasurer",)
-    assert policy.safeguards.self_approval_limit == Decimal("750")
+    assert policy.safeguards.self_approval == "never"
     assert policy.safeguards.second_approver_above == Decimal("3000")
     assert {"leverage", "synergy"} <= set(kit.voice["banned"])
     assert result.doctor is not None
@@ -177,6 +189,16 @@ def test_the_applied_policy_works_end_to_end(world):
         "pat-kim", "approve", "expense.report", submitter="jo-ellis", amount=Decimal("100")
     )
     assert evaluate(policy, req).allowed
+
+
+def test_a_church_treasurer_never_approves_her_own_report(world):
+    _tmp, root = world
+    result = apply(plan(_answer_all({}, CHURCH), "grace"), root=root, run_audit=False)
+    policy = parse_policy(load_kit(result.tenant_dir).authority)
+    own = Request(
+        "pat-kim", "approve", "expense.report", submitter="pat-kim", amount=Decimal("86.65")
+    )
+    assert not evaluate(policy, own).allowed
 
 
 def test_a_solo_reviewer_gets_the_review_role(world):
@@ -220,11 +242,22 @@ def test_apply_refuses_while_a_required_answer_is_missing(world):
 
 
 def test_two_people_with_one_name_get_distinct_ids(world):
+    # Two who share a name are two when each has their own address
+    # (t-setup-self-twice, 2026-11-18); without one, setup asks.
     _tmp, root = world
-    answers = _answer_all({}, {**CHURCH, "people": "Pat Kim = board"})
+    answers = _answer_all(
+        {},
+        {
+            **CHURCH,
+            "your_name": "Pat Kim, pat@gracechapel.example.org",
+            "people": "Pat Kim = board, pkim@mail.example.org",
+        },
+    )
     result = apply(plan(answers, "grace"), root=root, run_audit=False)
     policy = parse_policy(load_kit(result.tenant_dir).authority)
     assert {"pat-kim", "pat-kim-2"} <= set(policy.people)
+    with pytest.raises(OnboardingError, match="Pat Kim is the name you gave as yours"):
+        _answer_all({}, {**CHURCH, "people": "Pat Kim = board"})
 
 
 # ---- the command, as an agent drives it ----------------------------------------------

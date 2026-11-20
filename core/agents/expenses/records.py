@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 
 from .schema import parse_amount_tag, parse_foreign_claim
 
@@ -35,6 +35,13 @@ LINE_EVENT = "bank.line"  # one statement line kept: the ministry's, or one the 
 TRANSFER_EVENT = "bank.transfer_matched"  # a ministry line that landed in the person's account
 SCHOOL_EVENT = "school.payment"  # a scholarship or school fee from the person's list
 LINE_PURPOSE_EVENT = "bank.line_purpose"  # what a line was for, in the person's own words
+CASH_COUNT_EVENT = "bank.cash_counted"  # the cash a person says is in hand, on a day
+CASH_USED_EVENT = (
+    "bank.cash_used"  # cash gone with no receipt: the ministry's spending, or their own
+)
+RECEIPT_SPLIT_EVENT = "expense.receipt_split"  # the part of a receipt that was the person's own
+RODE_EVENT = "expense.receipt_rode"  # which receipt a card line carried, as the person said
+LINE_SPLIT_EVENT = "bank.line_split"  # one line's dollars across kinds, by share, as said
 
 REVIEW_CARD = "expenses.report_review"
 SEND_CARD = "expenses.institution_send"  # the person's yes to send receipts to their institution
@@ -54,6 +61,8 @@ FACT_EVENTS = (
     PURPOSE_EVENT,
     DATED_EVENT,
     LINE_PURPOSE_EVENT,
+    RECEIPT_SPLIT_EVENT,
+    LINE_SPLIT_EVENT,
 )
 """What a reviewer's yes rests on: a newer one of these reopens the receipt."""
 
@@ -86,8 +95,11 @@ def drive_sha(drive: str) -> str:
 
 
 def drive_dollars(miles: Decimal, rate: Decimal) -> Decimal:
-    """A ministry drive in dollars at a rate per mile, to the cent."""
-    return (miles * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    """A ministry drive in dollars at a rate per mile, to the cent (the
+    arithmetic is ``core.tax.mileage``'s)."""
+    from ...tax import mileage
+
+    return mileage.dollars(miles, rate)
 
 
 UNDATED = "_receipt_undated"
@@ -102,6 +114,23 @@ def days(events: list[dict]) -> dict[str, str]:
         for e in events
         if e.get("event_type") == DATED_EVENT and e.get("payload", {}).get("sha256")
     }
+
+
+FROM_PAY = "pay"
+"""A receipt's ``whose``: paid from the person's own pay, owed to nobody (c34 gap C)."""
+
+
+def from_pay(events: list[dict]) -> set[str]:
+    """Receipts the person said they paid from their own pay: the latest
+    category word on each that says whose it was (a later word without one
+    leaves it as it was). They ride no card and are no one's spending;
+    their dollars are a cost on the person's Schedule C."""
+    said: dict[str, str] = {}
+    for e in events:
+        payload = e.get("payload", {})
+        if e.get("event_type") == CATEGORY_EVENT and payload.get("sha256") and "whose" in payload:
+            said[str(payload["sha256"])] = str(payload["whose"])
+    return {sha for sha, whose in said.items() if whose == FROM_PAY}
 
 
 def dated_name(name: str, day: str) -> str:
@@ -209,6 +238,8 @@ _STAGE_OF = {
     PRICED_EVENT: "said",
     SENT_EVENT: "sent",
     LINE_PURPOSE_EVENT: "said",
+    RECEIPT_SPLIT_EVENT: "said",
+    LINE_SPLIT_EVENT: "said",
 }
 
 
@@ -220,19 +251,19 @@ def _landing(kind: str | None, payload: dict) -> dict | None:
         return payload
     if kind == DRIVE_EVENT:
         return {**payload, "month": str(payload.get("start", ""))[:7]}
-    if kind in (LINE_EVENT, SCHOOL_EVENT):
+    if kind in (LINE_EVENT, SCHOOL_EVENT, CASH_USED_EVENT):
         day = str(payload.get("day", ""))
-        words = str(payload.get("words") or payload.get("student") or "")
+        words = str(payload.get("words") or payload.get("student") or payload.get("said") or "")
         return {**payload, "month": day[:7], "file": f"{day} {words}"}
     return None
 
 
 def _stages(kind: str | None, payload: dict) -> set[str]:
     """The stages one event shows a record has reached."""
-    if kind in (DRIVE_EVENT, LANDED_EVENT, LINE_EVENT, SCHOOL_EVENT):
+    if kind in (DRIVE_EVENT, LANDED_EVENT, LINE_EVENT, SCHOOL_EVENT, CASH_USED_EVENT):
         said = (
             (kind == LANDED_EVENT and _said_with_photo(str(payload.get("file", ""))))
-            or kind == SCHOOL_EVENT
+            or kind in (SCHOOL_EVENT, CASH_USED_EVENT)
             or (kind == LINE_EVENT and payload.get("account") == "own")
         )
         return {"captured", "said"} if said else {"captured"}

@@ -1,0 +1,11 @@
+{
+  "name": "gbp_hotel_two_pages",
+  "note": "a two pages receipt: the total, its currency, and its day read off the picture",
+  "document": "gbp_hotel_two_pages.pdf",
+  "text": "THE KINGS ARMS\nYork, United Kingdom\nInvoice date 2026-09-30\nRoom 2 nights 210.00\nDinner 46.50\ncontinued\n\f\nTHE KINGS ARMS  page 2\nBreakfast x2 25.00\nVAT included\nTOTAL GBP 281.50",
+  "expect": {
+    "amount": "281.50",
+    "currency": "GBP",
+    "invoice_date": "2026-09-30"
+  }
+}

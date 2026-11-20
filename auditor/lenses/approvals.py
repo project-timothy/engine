@@ -237,7 +237,11 @@ def door_refusal(ctx: AuditContext, row: dict, params: dict) -> str:
     not one the auditor can stand behind, or "". The signature math is the
     doorkeeper's; the auditor checks the tenant opened the door for this
     kind of card, the person who tapped is the decider or the voucher the
-    ministry named, and the signed answer is about this decision."""
+    ministry named, and the signed answer is about this decision. A yes
+    from the link mailed to someone with no passkey (evidence ``kind``
+    "email", 2026-10-30) carries the same decision hash, sealed with the
+    box's secret, which the auditor does not hold: it checks the hash is
+    this decision's and the seal is there, and trusts the box for the rest."""
     authority = _authority(ctx)
     if authority is None:
         return "the tenant has no authority.toml to open the door"
@@ -256,17 +260,27 @@ def door_refusal(ctx: AuditContext, row: dict, params: dict) -> str:
             return f"authority.toml does not name {tapper or 'anyone'} to vouch for {by}"
     try:
         evidence = json.loads(params.get("witness") or "")
-        client = json.loads(_b64u(str(evidence["client_data"])))
         nonce = _b64u(str(evidence["nonce"]))
-        signed = _b64u(str(client["challenge"]))
         summary = str(evidence["summary"])
-        if not evidence.get("signature") or client.get("type") != "webauthn.get":
-            raise ValueError("no signed answer")
+        kind = "email" if evidence.get("kind") == "email" else "passkey"
+        if kind == "email":
+            # the tap on a link mailed only to them: the box sealed the hash
+            signed = _b64u(str(evidence["challenge"]))
+            if not evidence.get("seal"):
+                raise ValueError("no seal")
+        else:
+            client = json.loads(_b64u(str(evidence["client_data"])))
+            signed = _b64u(str(client["challenge"]))
+            if not evidence.get("signature") or client.get("type") != "webauthn.get":
+                raise ValueError("no signed answer")
     except (ValueError, KeyError, TypeError, binascii.Error):
         return "the signed evidence cannot be read"
+    if params.get("witness_kind", kind) != kind:
+        return f"the card says {params['witness_kind']}, but the evidence is {kind}"
     verb = VERBS.get(str(row["status"]), "")
     if signed != decision_challenge(nonce, tapper, str(row["id"]), verb, summary):
-        return f"the signed evidence is not {tapper}'s {verb} on this card"
+        how = "emailed yes" if kind == "email" else "signed evidence"
+        return f"the {how} is not {tapper}'s {verb} on this card"
     return ""
 
 
@@ -274,7 +288,8 @@ def check_human_only(ctx: AuditContext) -> list[Finding]:
     """A card stamped human-only (#356) and resolved without the queue's
     record that a person decided it: at a terminal, or through the box's
     door with their own Face ID or the Face ID of the person the ministry
-    named to vouch for them (#465; the owner counts both the same). The
+    named to vouch for them (#465; the owner counts both the same), or the
+    tap on the link mailed to someone with no passkey (2026-10-30). The
     queue refuses any other route, so a hit means the decision came some
     other way: a faked terminal, a direct write to the queue, or a bug in
     the gate. CRITICAL: the stamp exists because no agent may make this

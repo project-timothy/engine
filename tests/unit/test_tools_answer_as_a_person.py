@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from core.agents.ap import store
-from core.agents.expenses.jobs import REVIEW_CARD
+from core.agents.expenses.records import REVIEW_CARD
 from core.engine.runner import resolve_ledger_root
 from core.ledger import Ledger
 from core.onboarding import apply, next_question, plan, record

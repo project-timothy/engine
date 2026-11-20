@@ -9,6 +9,13 @@
 # No question names the machinery: the person never hears "role", "scope" or
 # "permission" unless they ask.
 
+# What setup says when it asks an answer again in its own words (a test
+# fails on an em dash or a machinery word here); code fills the {names}.
+[said]
+# A people line with the setter's own name and another role, and no address
+# apart from theirs to say it's someone else (t-setup-self-twice).
+yourself_twice = "{name} is the name you gave as yours. If that line is you, give your own job there ({yours}) or leave it off; if it's someone else with your name, give each of you your own email."
+
 [[question]]
 id = "who"
 ask = "What kind of work will Tim keep the books for?"
@@ -104,10 +111,25 @@ optional = true
 default = ""
 
 [[question]]
+id = "reviewer_approves"
+ask = "Should they also approve each month, or just look it over?"
+help = "If they approve, their yes closes the month. You can still approve a month yourself when they can't, and they'll see that you did."
+kind = "choice"
+sizes = ["solo"]
+families = ["nonprofit"]
+needs = "reviewer"
+default = "look"
+choices = [
+    { label = "Just look it over", value = "look" },
+    { label = "Approve each month", value = "approve" },
+]
+
+[[question]]
 id = "second_person_above"
 ask = "Up to what amount can someone okay their own bill? Above it, a second person does."
 kind = "amount"
 sizes = ["small"]
+families = ["commercial"]  # nobody at a church okays their own (2026-10-16)
 default = "500"
 
 [[question]]
@@ -126,6 +148,24 @@ kind = "amount"
 sizes = ["small", "organization"]  # a solo worker gets the solo default, unasked
 default = "500"
 defaults = { commercial-solo = "250", nonprofit-solo = "250", commercial-organization = "1000", nonprofit-organization = "1000" }
+
+[[question]]
+id = "cash_on_hand"
+ask = "Workers sometimes carry the ministry's cash, like money from an ATM abroad. Up to how much may one person hold before a director okays more?"
+help = "It goes in the ministry's accountable plan, which Tim writes for your board to adopt. Tim tells the reviewer when someone holds more."
+kind = "amount"
+families = ["nonprofit"]
+sizes = ["solo", "small"]
+default = "1500"
+
+[[question]]
+id = "mileage_rate"
+ask = "When someone drives for the ministry, should Tim pay it back at the IRS rate for that year, or at a rate the ministry sets? Say IRS rate, or the ministry's rate in cents a mile, like 65."
+help = "Most small ministries use the IRS rate, and Tim keeps it current each year. A ministry's own rate can't be above the IRS rate, because anything above it counts as pay. You can change it later."
+kind = "mileage"
+families = ["nonprofit"]
+sizes = ["small", "organization"]  # a solo worker gets the IRS rate, unasked
+default = "IRS rate"
 
 [[question]]
 id = "people"

@@ -1,0 +1,12 @@
+{
+  "name": "determination_two_pages",
+  "note": "a two pages IRS letter: whether it is to a nonprofit, and its name and number, read off the picture",
+  "document": "determination_two_pages.pdf",
+  "text": "Internal Revenue Service      Department of the Treasury\nP.O. Box 2508, Cincinnati OH 45201\nDate: October 21, 2024\nEmployer Identification Number: 82-4567891\n\nWillow Ford Fellowship Missions\n512 Harbor Road\nColumbus, OH 43215\n\nDear Applicant:\nWe're pleased to tell you we determined you're exempt\nfrom federal income tax under Internal Revenue Code\n(IRC) Section 501(c)(3). Donors can deduct\n(continued on next page)\n\f\nWillow Ford Fellowship Missions\nPage 2\ncontributions they make to you under IRC Section 170.\nYou're also qualified to receive tax deductible\nbequests, devises, transfers or gifts.\nKeep this letter for your permanent records.\nLetter 947 (Rev. 2-2020)",
+  "expect": {
+    "doc_type": "irs_letter",
+    "organization": "nonprofit",
+    "legal_name": "Willow Ford Fellowship Missions",
+    "ein": "82-4567891"
+  }
+}

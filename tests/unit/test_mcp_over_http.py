@@ -130,6 +130,20 @@ def test_ruth_signed_in_sees_her_own_and_never_the_bakers(box):
     assert {r["person"] for r in rows} == {"Ruth Hollis"}
 
 
+def test_every_tool_has_a_name_a_person_reads_and_says_if_it_writes(box):
+    """Claude lists Tim's tools by title, and sorts them into Read-only and
+    Write for the one Always allow per group (the sign-up goal, fix 6). The
+    directory asks for both too."""
+    for who in ("ruth", "carol"):
+        for tool in _rpc(box, box[who], "tools/list")["result"]["tools"]:
+            assert tool["title"] and "_" not in tool["title"], tool["name"]
+            assert tool["title"] == tool["annotations"]["title"]
+            hints = tool["annotations"]
+            assert isinstance(hints["readOnlyHint"], bool), tool["name"]
+            if not hints["readOnlyHint"]:
+                assert isinstance(hints["destructiveHint"], bool), tool["name"]
+
+
 def test_the_treasurer_signed_in_sees_the_church(box):
     reply = _rpc(box, box["carol"], "tools/call", {"name": "expense_reports", "arguments": {}})
     rows = json.loads(reply["result"]["content"][0]["text"])["rows"]

@@ -53,4 +53,6 @@ skill_must_mention = [
     "docs/proposals/",
     "evals/proposals/",
     "Candidate:",
+    "open_prs",
+    "One open PR per defect",
 ]

@@ -1,0 +1,26 @@
+# What Tim says is the one next thing (core/tools/next_thing.py, the
+# owner's direction of 2026-11-16, docs/screens/README.md chunk 1). Code
+# picks which one and fills the {names}; these are only the words. A test
+# fails on an em dash or a machinery word here.
+
+[words]
+yes = "{about} is waiting on your yes."
+yes_more = "{about} is waiting on your yes, and {more} more."
+cash = "The {cash} you drew on {day} is {old} days old. Count what's in hand, or tell me where it went; it's due at {due} days."
+cash_past = "The {cash} you drew on {day} is {old} days old, past the {due} days to account for it. Count what's in hand, or tell me where it went."
+whose_statement = "The bank statement you sent is waiting on one answer: whose account is it, the ministry's or your own?"
+# When the statements' own names say whose each is (t-account-from-name):
+# {ask} is the one question, from statement_names.toml.
+whose_named = "What you sent is waiting on one yes. {ask}"
+month_ready = "{month} is ready to send for review. Say the word and it goes."
+first_statement = "Let's start with your first bank statement. Download last month's from your bank's website (the CSV file) and send it to me through your catch-up link."
+statement = "{month}'s bank statement isn't in yet. Download it from your bank's website and send it through your catch-up link."
+nothing = "Nothing's waiting on you."
+
+[takes]
+yes = "about a minute"
+cash = "about 2 minutes"
+whose_statement = "about a minute"
+month_ready = "about a minute"
+first_statement = "about 5 minutes"
+statement = "about 5 minutes"

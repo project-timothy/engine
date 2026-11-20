@@ -11,6 +11,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from core.engine.runner import resolve_ledger_root, run
 
 # core/evals/seed/test_phase1_incidents.py -> parents[3] is the repo root.
@@ -29,6 +31,7 @@ def _commit_count(root: Path) -> int:
     return int(out.stdout.strip())
 
 
+@pytest.mark.security("SEC-13")
 def test_idempotent_rerun_is_a_noop(tmp_path):
     """Invariant 3: every job is safe to re-run; re-running never double-posts."""
     first = run("demo", "demo", "ingest", ledger_dir=tmp_path)
@@ -42,6 +45,7 @@ def test_idempotent_rerun_is_a_noop(tmp_path):
     assert _commit_count(root) == commits  # no new commit on re-run
 
 
+@pytest.mark.security("SEC-13")
 def test_ledger_is_single_home_no_duplicate_writes(tmp_path):
     """2026-04-23 / 2026-05-06: one home per record, no duplicate copies.
 
@@ -55,6 +59,7 @@ def test_ledger_is_single_home_no_duplicate_writes(tmp_path):
     assert len(lines) == 3  # three items, written once, not six
 
 
+@pytest.mark.security("SEC-19")
 def test_dependencies_are_pinned():
     """2026-05-14: unpinned dependency drift silently breaks working pipelines.
 
@@ -69,6 +74,7 @@ def test_dependencies_are_pinned():
     assert (REPO_ROOT / "uv.lock").exists()
 
 
+@pytest.mark.security("SEC-16")
 def test_secrets_never_committed_to_the_repo():
     """2026-05-21 secret-scan rule + the secrets-as-references invariant.
 

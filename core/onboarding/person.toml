@@ -1,0 +1,153 @@
+# A person's own setup (chunk 10; the owner's design of 2026-10-15): after
+# Face ID, the welcome page asks one of these per screen, and each yes is the
+# person's own Face ID: the one that opened setup covers its yeses for ten
+# minutes in that browser (the sign-up goal, 2026-10-27; doorkeeper #39)
+# (core/onboarding/person.py, core/tools/setup_page.py).
+#
+# The ministry's own onboarding decides what's offered: a `baseline` step is
+# offered to everyone it fits (an address to email, receipts to file); any
+# other step (mileage, calendar, ai_connector) only where tenant.toml's
+# [setup] offer names it. A step with `at_sign_up = false` is offered but
+# never asked during sign-up (the sign-up goal, 2026-10-27): it waits on the
+# last screen, and in Tim's answers, until the person wants it. A step with
+# `face_id = false` asks no Face ID yes: its own button is the yes, because
+# nothing on the box changes until the person's AI signs in, and that sign-in
+# asks for Face ID itself (the AI step; the owner's iPhone walk, 2026-10-28).
+# The receipt page comes after the AI: it sends the person out of the browser.
+#
+# Words a person reads, so no machinery and no em dashes:
+#   name     what it is, in a few words, for the last screen's list
+#   ask      the question on the screen
+#   help     a line under it: what it does, in plain words
+#   yes      the button that asks for Face ID
+#   later    the quiet button: nothing is written but "not now"
+#   waiting  once they said yes, until Tim sees it work
+#   done     when Tim has seen it work
+# `{email}` in a step's words is the address the ministry gave the person;
+# `{who}` is whoever the ministry's expense plan covers, by first name.
+#   points   optional: a heading and lines under the help, as a short list
+#
+# Where Tim's own voice is on (the ministry's file names a tier for `talk`;
+# Standalone Tim, card T2, the owner's decision of 2026-11-17), a step's
+# `[step.voice]` words stand in for its own, and `baseline = true` there
+# offers it to everyone. Tim's own page comes first, with Claude or ChatGPT
+# as "also", and his page is the one on the home screen. Where the voice is
+# off, nothing here is read.
+#   talk     the button to Tim's own page
+#   also     the line over the Claude and ChatGPT buttons
+#   open     the button that opens Tim's page to put it on the home screen
+#
+# The reviewer's side (docs/screens/README.md, R2 and R3; chunk 3 of the
+# screens, 2026-11-16): `role` and `plan` come first, and only to someone a
+# waiting expense plan asks to adopt it. The role's yes is the setup's own
+# Face ID and changes nothing on the box but the answer. The plan asks no
+# Face ID here: its button opens the plan's own yes page, where Face ID
+# adopts it, and the step is done once the plan is in force. Every rule on
+# these screens is Tim's own FAQ answer (accountable-plan, personal-spending).
+
+[[step]]
+id = "role"
+name = "Looking over {who}'s months"
+baseline = true
+ask = "Here's what {who} is asking."
+help = "Today, once: say yes to the ministry's expense plan. I wrote it, and you read it. Then once a month: I send you {who}'s month, already checked. You look it over and say yes, or ask about a line."
+points_heading = "What you'll see, and what you won't"
+points = [
+  "You see what the ministry spent, line by line.",
+  "From {who}'s own bank account, you see only the lines {who} says were the ministry's.",
+  "You never move money. Your yes is a record, and the bank does the paying.",
+]
+yes = "I'll do it"
+later = "I can't take this on"
+waiting = "One moment."
+done = "You'll look over {who}'s months."
+
+[[step]]
+id = "plan"
+name = "The ministry's expense plan"
+baseline = true
+face_id = false
+ask = "The ministry's expense plan needs your yes."
+help = "It's the written plan the IRS asks for, so money that pays {who} back for ministry costs isn't counted as income. Nobody the plan covers can adopt it. That's why it comes to you."
+points_heading = "The rules in it"
+yes = "Yes, adopt the plan"
+later = "Not now"
+waiting = "Tap Yes, adopt the plan, then use your Face ID or fingerprint. This page moves on by itself."
+done = "The ministry's expense plan is adopted."
+
+[[step]]
+id = "daily_email"
+name = "Tim's daily email"
+baseline = true
+ask = "Tim's daily email goes to {email}. Is that your email?"
+help = "When something needs you, Tim says so in one short email, at most once a day. Tap yes and Tim sends you a hello there. Wrong address? Ask your ministry to change it."
+yes = "Yes, send the hello"
+later = "Not now"
+waiting = "Open Tim's hello in your email and tap the link in it. This page moves on by itself."
+done = "Tim's email reaches you."
+
+[[step]]
+id = "ai_connector"
+name = "Tim in Claude or ChatGPT"
+face_id = false
+ask = "Do you use Claude or ChatGPT? Add Tim there?"
+help = "Then you can ask Tim anything in your own words, like \"here's a $43 receipt\" or \"what's waiting for me?\" Signing in takes the same Face ID or fingerprint."
+yes = "Yes, add Tim"
+later = "Not now"
+waiting = "In Claude, tap Add Tim to Claude below. Claude shows Tim's name and address filled in: tap Add, Connect, and Allow. If Claude says Tim is already there, open Customize, then Connectors in Claude, tap Tim, then Connect. In ChatGPT (Plus or higher), copy Tim's link and add it under Settings, then Apps. Then say \"Tim, what's waiting for me?\" This page moves on by itself."
+done = "Tim answers you in your AI."
+
+[step.voice]
+baseline = true
+name = "Talking to Tim"
+ask = "Where do you want to talk to me?"
+help = "Right here, on my own page. No other app needed. Already pay for Claude or ChatGPT? You can add me there too, now or any time."
+yes = "Talk to Tim here"
+later = "Not now"
+waiting = "Tap Talk to Tim here and say hi. I'll answer you right on my page, and this page moves on by itself."
+done = "Tim answers you."
+talk = "Talk to Tim here"
+also = "Also in Claude or ChatGPT, if you use one:"
+
+[[step]]
+id = "home_screen"
+name = "Your receipt page on your home screen"
+baseline = true
+ask = "Put your receipt page on your home screen?"
+help = "Then a receipt is one tap: open it, take the photo, done. It only adds photos to your own receipts, and it never sees your money."
+yes = "Yes, make my receipt page"
+later = "Not now"
+waiting = "Open your receipt page, then add it to your home screen. Open it once from there and this page moves on by itself."
+done = "Your receipt page is on your home screen."
+
+[step.voice]
+name = "Tim on your home screen"
+ask = "Put me on your home screen?"
+help = "Then I'm one tap away. Open me and say what you need, or snap a receipt. Your phone remembers you for 30 days."
+yes = "Yes, put Tim there"
+later = "Not now"
+waiting = "Open my page, then add it to your home screen. On an iPhone, tap Share, then Add to Home Screen. On Android, tap the menu (three dots), then Add to Home screen. Open me once from there and this page moves on by itself."
+done = "Tim is on your home screen."
+open = "Open Tim's page"
+
+[[step]]
+id = "mileage"
+at_sign_up = false
+name = "Your mileage"
+ask = "Should Tim keep your mileage?"
+help = "The free Traccar Client app on your phone tells Tim when you drive. Tim keeps each drive's miles and times, never where you went, and once a week asks which drives were for the ministry."
+yes = "Yes, keep my mileage"
+later = "Not now"
+waiting = "Set up the app and turn it on. This page moves on by itself once Tim hears your phone."
+done = "Tim hears your phone. Your drives count from now on."
+
+[[step]]
+id = "calendar"
+at_sign_up = false
+name = "Tim's dates in your calendar"
+ask = "Put the dates Tim watches for you in your calendar?"
+help = "Things due, like a report or a renewal, show up in the calendar you already use, with a reminder ahead. Tim only adds dates. It never reads your calendar."
+yes = "Yes, add the dates"
+later = "Not now"
+waiting = "Tap the button below, then Subscribe when it asks. This page moves on by itself once your calendar checks in."
+done = "Tim's dates are in your calendar."

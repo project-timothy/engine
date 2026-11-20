@@ -1,0 +1,12 @@
+{
+  "name": "inr_restaurant_faded",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "inr_restaurant_faded.png",
+  "text": "SPICE GARDEN RESTAURANT\nBengaluru, India\nDate: 2026-09-26\nThali x3 750.00\nLassi x3 270.00\nCGST 2.5% 25.50\nSGST 2.5% 25.50\nGrand Total INR 1,071.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "1071.00",
+    "currency": "INR",
+    "invoice_date": "2026-09-26"
+  }
+}

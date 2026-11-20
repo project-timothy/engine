@@ -1,0 +1,12 @@
+{
+  "name": "eur_train_faded",
+  "note": "a faded ticket that prints only the day of travel: the total and its currency read off it, and no day it was paid, so Tim asks her (the owner's call of 2026-11-19)",
+  "document": "eur_train_faded.png",
+  "text": "DEUTSCHE BAHN\nFrankfurt - Koln\nReisedatum 2026-09-04\n1 Erwachsener 2. Klasse\nSumme 49,90 EUR",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "49.90",
+    "currency": "EUR",
+    "invoice_date": null
+  }
+}

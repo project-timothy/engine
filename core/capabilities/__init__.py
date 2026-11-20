@@ -24,19 +24,34 @@ from ..engine.registry import list_agents
 from ..onboarding import load_questions
 from ..tools.catalog import (
     ADD_RECEIPT,
+    ADDED,
     AGREE_TO_READINGS,
+    ASK_FOR_OK,
     ASK_THE_RULES,
     CATCH_UP_LINK,
+    CLOSE_YEAR,
+    CPA_EXPORT,
     DECIDE,
+    DONOR_LETTERS,
+    DRAFT_RULE,
+    HANDBOOK_CHANGES,
+    KEEP_PAYERS,
+    LETTER_DETAILS,
+    PAID_IT_MYSELF,
     RECEIPTS_TO_READ,
     RECORD_READING,
+    REOPEN_YEAR,
     SEND_MONTH_FOR_REVIEW,
     SET_AMOUNT,
+    SET_BUDGET,
     SET_CATEGORY,
     SET_DRIVE_PURPOSE,
+    SET_PAY,
+    SET_PROGRAM_SHARE,
     SET_RECEIPT_DAY,
     SPECS,
     STATEMENT_TOOLS,
+    TAX_PACKET,
     ToolSpec,
 )
 
@@ -55,6 +70,21 @@ DOOR_SPECS: tuple[ToolSpec, ...] = (
     SEND_MONTH_FOR_REVIEW,
     *STATEMENT_TOOLS,
     ASK_THE_RULES,
+    ASK_FOR_OK,
+    SET_BUDGET,
+    CLOSE_YEAR,
+    PAID_IT_MYSELF,
+    SET_PROGRAM_SHARE,
+    CPA_EXPORT,
+    DONOR_LETTERS,
+    LETTER_DETAILS,
+    KEEP_PAYERS,
+    TAX_PACKET,
+    REOPEN_YEAR,
+    HANDBOOK_CHANGES,
+    DRAFT_RULE,
+    SET_PAY,
+    *(spec for spec, _offered in ADDED),
 )
 """Every tool the door can offer a person: the read tools, then the ones that act."""
 
@@ -79,17 +109,34 @@ def acts(spec: ToolSpec) -> bool:
     return bool(spec.annotations) and spec.annotations.get("readOnlyHint") is False
 
 
-def build(shape: str | None = None) -> dict:
+RULES_ONLY = frozenset({"ask_the_rules", "ask_for_ok"})
+"""Tools the door offers only to a ministry that wrote its rules down."""
+
+ASK_FIRST = "ask_for_ok"
+"""Offered only where a rule asks for an OK before buying."""
+
+
+def build(shape: str | None = None, *, rules: bool = True, asks: bool = True) -> dict:
     """The page as data: ask, tell, setup, on_its_own, not_yet. With a
-    shape, setup holds only the questions that shape is asked."""
+    shape, setup holds only the questions that shape is asked; without
+    ``rules`` (a ministry with no handbook rules), the rules tools are left
+    off, as its door leaves them off, and without ``asks`` (no rule asks for
+    an OK first, as with a plan alone) the ask is left off."""
     lanes, tools = load_lanes(), load_tools()
+    shown = [
+        s
+        for s in DOOR_SPECS
+        if s.name in tools
+        and (rules or s.name not in RULES_ONLY)
+        and (rules and asks or s.name != ASK_FIRST)
+    ]
 
     def line(spec: ToolSpec) -> dict:
         return {"name": spec.name, "says": tools[spec.name]["says"], "try": tools[spec.name]["try"]}
 
     return {
-        "ask": [line(s) for s in DOOR_SPECS if s.name in tools and not acts(s)],
-        "tell": [line(s) for s in DOOR_SPECS if s.name in tools and acts(s)],
+        "ask": [line(s) for s in shown if not acts(s)],
+        "tell": [line(s) for s in shown if acts(s)],
         "setup": [
             {"ask": q.ask, "help": q.help}
             for q in load_questions()

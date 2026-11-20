@@ -77,7 +77,13 @@ resurfaces.
   that wears a check reference and a QBO bill, so the bank-feed line
   arrives pre-matched. One check paying N bills is ONE BillPayment
   applying to N bills (the check number as DocNumber, `engine:<key>` in
-  PrivateNote). Off unless `[qbo].payment_records` is true (a tenant
+  PrivateNote). One bill paid with several checks (a bank's per-check cap)
+  is the reverse: the row's reference names each check with its amount
+  ("9170 $10,000.00 + 9171 $3,253.00", a send date may follow each), code
+  reads it, and each check becomes its own partial BillPayment of the one
+  bill; a reference that does not spell every amount out, or whose amounts
+  miss the bill, is skipped on the card with the reason, never written as
+  one lump (issue #688). Off unless `[qbo].payment_records` is true (a tenant
   setting, off by default; with it off the job is one log line; on, it
   runs in the daily sequence between `qbo-push` and `reconcile`). Nothing
   writes without an approved batch card; a row with no QBO bill is listed
@@ -97,7 +103,9 @@ resurfaces.
   ledger's committed rows against them. Deterministic engine code end to end
   (invariant 4): one clean match flips to Paid with the cleared date and
   check reference; a check whose referenced group of rows sums to the cleared
-  amount settles the group; any ambiguity parks an `ap.reconcile_review`
+  amount settles the group; a statement line that pays one check of a split
+  bill is explained and remembered, and the row settles when every check it
+  names has cleared, in one statement or across several (issue #688); any ambiguity parks an `ap.reconcile_review`
   card and flips nothing. The owner answers that card with `queue approve
   --param row=<id>`: the queue refuses an approval that names no candidate,
   a settled row, or a row whose amount disagrees with the cleared total

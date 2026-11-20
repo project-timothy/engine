@@ -570,6 +570,54 @@ def _bill_pay_candidates(
     return candidates
 
 
+def _split_piece_decision(
+    open_rows: list[Row], line: Any, check: str, amount: int
+) -> Decision | None:
+    """The open split rows that name this check (issue #688). One row whose
+    piece fits on amount and date is a ``split_piece``; a row that names the
+    check but cannot be read, or whose piece disagrees, parks review (the
+    money is explained by the owner's own reference, so it is never unknown)."""
+    from .split_checks import read_split
+
+    fits: list[Row] = []
+    doubts: list[tuple[Row, str]] = []
+    for row in open_rows:
+        ref = str(row["check_ref"] or "")
+        split = read_split(
+            ref, total_cents=int(row["amount_cents"]), base_date=str(row["payment_date"] or "")[:10]
+        )
+        if split is None or check not in split.checks:
+            continue
+        if not split.ok:
+            # An unreadable split (no amounts: the legacy "9032 + 9033") keeps
+            # its pre-#688 path; the write side names the fix to the owner.
+            continue
+        piece = split.piece(check)
+        if piece is None or piece.amount_cents != amount:
+            have = f"${piece.amount_cents / 100:,.2f}" if piece else "no amount"
+            doubts.append((row, f"its reference gives check {check} {have}"))
+            continue
+        if not _dates_compatible(piece.send_date or row["payment_date"], line.date):
+            doubts.append((row, f"check {check} was to go out {piece.send_date or 'undated'}"))
+            continue
+        fits.append(row)
+    if len(fits) == 1 and not doubts:
+        return Decision("split_piece", line, rows=fits, reason=f"one check of a split: {check}")
+    if fits or doubts:
+        reasons = "; ".join(f"#{r['id']}: {why}" for r, why in doubts)
+        return Decision(
+            "review",
+            line,
+            rows=fits + [r for r, _ in doubts],
+            reason=(
+                f"check {line.check_ref} is named by a split payment that does not fit"
+                + (f" ({reasons})" if reasons else "")
+                + (f"; {len(fits)} row(s) fit" if len(fits) > 1 else "")
+            ),
+        )
+    return None
+
+
 def decide_statement(
     line: StatementEvidence,
     rows: list[Row],
@@ -637,6 +685,13 @@ def decide_statement(
                 rows=named,
                 reason="legacy reference names the check",
             )
+        # 2b) One bill paid with several checks (issue #688): an open row whose
+        #     reference spells the split out pays this line as one piece. The
+        #     piece must match to the cent and its send date must fit; the job
+        #     settles the row only once every piece has cleared.
+        piece = _split_piece_decision(open_rows, line, check, amount)
+        if piece is not None:
+            return piece
         backfill = _reference_backfill_groups(settled_rows, line)
         if len(backfill) == 1:
             return Decision("ref_backfill", line, rows=backfill[0])

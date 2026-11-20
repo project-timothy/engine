@@ -1,0 +1,11 @@
+{
+  "name": "npr_printing_two_pages",
+  "note": "a two pages receipt: the total, its currency, and its day read off the picture",
+  "document": "npr_printing_two_pages.pdf",
+  "text": "NEW ERA PRINTERS\nBhaktapur, Nepal\nInvoice date: 2026-09-15\nTracts A5 x500 3,500.00\nPosters x40 2,800.00\ncontinued overleaf\n\f\nNEW ERA PRINTERS  p.2\nBinding 900.00\nSub total 7,200.00\nVAT 13% 936.00\nTOTAL NPR 8,136.00",
+  "expect": {
+    "amount": "8136.00",
+    "currency": "NPR",
+    "invoice_date": "2026-09-15"
+  }
+}

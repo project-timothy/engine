@@ -1,0 +1,26 @@
+{
+  "note": "The first live trial's failure: asked about a figure it had read from her books, the model called it made up. With read_from on its earlier reply, it should read the books again.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "How much have I spent this year?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"say\": \"You've spent $4,210.55 so far this year. Your October receipts are ready to send for a look.\", \"read_from\": [\"year_report\"]}"
+    },
+    {
+      "role": "user",
+      "content": "Wait, where did that number come from? Did you make that up?"
+    }
+  ],
+  "expect": {
+    "call": {}
+  },
+  "seed": {
+    "call": {
+      "tool": "year_report",
+      "args_json": "{}"
+    }
+  }
+}

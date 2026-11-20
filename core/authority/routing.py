@@ -176,7 +176,7 @@ def can_decide(policy: Policy, rule: CardRule, resource_actor: str) -> bool:
     card (for listing who a role-less step waits on)."""
     who = policy.principal(resource_actor)
     return who is not None and any(
-        g.matches(rule.action, rule.resource) for g in policy.grants_of(who)
+        g.matches(rule.action, rule.resource, rule.kind) for g in policy.grants_of(who)
     )
 
 

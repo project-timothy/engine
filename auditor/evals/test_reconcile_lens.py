@@ -474,14 +474,14 @@ def test_resolve_notes_names_the_sweep_cards_answer(tmp_path):
     _unknown(conn, "stmt:d45b40", date="2026-07-15", amount_cents=2512345, check_ref="8158")
     dismissed = _swept(
         conn,
-        "1060",
+        "1260",
         amount_cents=700_000,
         account="",
         status="rejected",
         resolved_at="2026-07-19T09:00:00+00:00",
         feed_line_id="ef17697b2a70151b",
     )
-    _unknown(conn, "stmt:71ab6c", date="2026-07-15", amount_cents=700_000, check_ref="1060")
+    _unknown(conn, "stmt:71ab6c", date="2026-07-15", amount_cents=700_000, check_ref="1260")
     ctx = make_context(tmp_path)
     with ctx.ledger:
         notes = reconcile.resolve_notes(ctx)

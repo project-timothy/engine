@@ -16,12 +16,14 @@ or their named voucher's) on a resource the tenant opened with
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
+from . import clock
 from .authority_gate import (
+    DECISION_PARAMS,
     CardDecision,
     TenantAuthority,
     Witnessed,
@@ -73,7 +75,7 @@ def decide_in_ledger(
                 f"{tenant} decides cards through authority.toml: name who "
                 "is deciding with --as <person or agent>"
             )
-        now = datetime.now(UTC)
+        now = clock.utc_now()
         ruling = decide_card(
             authority.policy,
             principal,
@@ -108,7 +110,9 @@ def decide_in_ledger(
     if authority is not None and vote is not None and row is not None:
         ledger.update_pending_params(tenant, card_id, overrides)
         waiting = ", ".join(vote.waiting_on) or "the next approver"
-        how = " by Face ID" if by_door else " by word" if by_word else ""
+        how = " by word" if by_word else ""
+        if by_door and witness is not None:
+            how = " by email" if witness.kind == "email" else " by Face ID"
         ledger.commit(
             agent="queue",
             job="route",
@@ -139,4 +143,88 @@ def decide_in_ledger(
     return Outcome(result["action_type"], overrides)
 
 
-__all__ = ["Outcome", "decide_in_ledger", "human_only"]
+TAKEN_BACK = (DECISION_PARAMS - {"handoff_to", "on_it_until", "on_it_set"}) | {
+    "review_after",
+    "self_approved",
+    "vouchers",
+    "decided_via",
+    "vouched_by",
+    "witness_at",
+    "witness_kind",
+    "witness_resource",
+    "witness",
+    "yes_by_word_up_to",
+}
+"""The params a decision stamps on a card (``authority_gate.decide_card``),
+lifted off it when the decision is taken back and kept in its record."""
+RAN_SINCE = "the books have run since it was decided, so it may already have been acted on"
+
+
+def take_back_refusal(ledger: Any, tenant: str, row: dict, principal: str) -> str | None:
+    """Why ``principal`` can't take back this card's decision, or None when
+    they can: shared by :func:`take_back_in_ledger` and the button Tim puts
+    up for words that come close, so a button never shows for a take-back
+    its tap would refuse."""
+    if row["status"] not in ("approved", "rejected"):
+        return "it isn't decided, so there's nothing to take back"
+    params = row["params"]
+    if human_only(row):
+        return "a person decides it at a terminal, so it's taken back there too"
+    if params.get("decided_by") != principal:
+        return "someone else decided it, so it's theirs to take back"
+    if len(json.loads(params.get("route_votes") or "[]")) > 1:
+        return "more than one yes went into it, so one can't be taken back alone"
+    if ledger.ran_since(tenant, str(row["resolved_at"])):
+        return RAN_SINCE
+    return None
+
+
+def take_back_in_ledger(
+    ledger: Any, tenant: str, card_id: int, *, principal: str, said: str, via: str = "word"
+) -> dict[str, str]:
+    """A person takes back their own yes or no (the owner's call of
+    2026-11-18, the persona year's A06): the card waits again, with who
+    took it back, when, their words, and the decision it carried kept on it
+    under ``taken_back``, so a run and the auditor see an ordinary waiting
+    card. Only before any run of the tenant since the decision (the caller
+    holds the write lock); never a human-only card, someone else's
+    decision, or a card more than one yes went into
+    (:func:`take_back_refusal`). ``via``: her ``word`` or her ``tap`` on
+    the button Tim put up, kept on the record. Raises ``ValueError`` with
+    the reason, ``LookupError`` for no such card."""
+    row = next((r for r in ledger.list_approvals(tenant) if r["id"] == card_id), None)
+    if row is None:
+        raise LookupError(f"no approval #{card_id} for tenant {tenant!r}")
+    why = take_back_refusal(ledger, tenant, row, principal)
+    if why is not None:
+        raise ValueError(why)
+    params = dict(row["params"])
+    stamp = {key: params.pop(key) for key in sorted(TAKEN_BACK) if key in params}
+    if stamp.get("decided_via") == "door-word" and "said" in params:
+        stamp["said"] = params.pop("said")  # the words that decided it, kept with it
+    record = json.loads(params.get("taken_back") or "[]")
+    record.append(
+        {
+            "by": principal,
+            "at": clock.utc_now().isoformat(),
+            "was": row["status"],
+            "decided_at": row["resolved_at"],
+            "said": said,
+            "via": via,
+            "stamp": stamp,
+        }
+    )
+    params["taken_back"] = json.dumps(record, sort_keys=True)
+    if not ledger.reopen_approval(tenant, card_id, params):
+        raise ValueError(RAN_SINCE)
+    ledger.commit(
+        agent="queue",
+        job="taken_back",
+        idempotency_key=f"approval-{card_id}-taken-back-{len(record)}",
+        summary=f"approval #{card_id} taken back by {principal}: it was {row['status']}, "
+        f"and waits again ({row['action_type']})",
+    )
+    return {"action_type": str(row["action_type"]), "was": str(row["status"])}
+
+
+__all__ = ["Outcome", "decide_in_ledger", "human_only", "take_back_in_ledger", "take_back_refusal"]

@@ -1,0 +1,1232 @@
+{
+  "job": "receipt_read",
+  "model_id": "fixture-model",
+  "adapter": "fixture",
+  "tier": "",
+  "seeded": true,
+  "ran_at": "2026-11-18T00:49:43.368884+00:00",
+  "engine_commit": "67cb140fadfb0122f4460265e0ff8518a6d89edd",
+  "provider_models": [],
+  "cases": 40,
+  "passed": 40,
+  "failed": 0,
+  "summary": "receipt_read: 40 of 40 cases passed on model 'fixture-model' (adapter fixture); replies seeded from the cases, so this scores the harness, not a model",
+  "results": [
+    {
+      "case": "etb_cafe_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "960.00",
+          "actual": "960.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "ETB",
+          "actual": "ETB",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-09",
+          "actual": "2026-11-09",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "eur_cafe_symbol",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "6.40",
+          "actual": "6.40",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "EUR",
+          "actual": "EUR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-04",
+          "actual": "2026-11-04",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "eur_train_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "49.90",
+          "actual": "49.90",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "EUR",
+          "actual": "EUR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-04",
+          "actual": "2026-09-04",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "gbp_hotel_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "281.50",
+          "actual": "281.50",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "GBP",
+          "actual": "GBP",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-30",
+          "actual": "2026-09-30",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "gbp_taxi_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "85.00",
+          "actual": "85.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "GBP",
+          "actual": "GBP",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-01",
+          "actual": "2026-10-01",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "ghs_print_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "200.00",
+          "actual": "200.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "GHS",
+          "actual": "GHS",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-06",
+          "actual": "2026-10-06",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "inr_restaurant_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1071.00",
+          "actual": "1071.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "INR",
+          "actual": "INR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-26",
+          "actual": "2026-09-26",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "inr_train",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1830.00",
+          "actual": "1830.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "INR",
+          "actual": "INR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-19",
+          "actual": "2026-10-19",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "kes_clinic_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "2500.00",
+          "actual": "2500.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "KES",
+          "actual": "KES",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-30",
+          "actual": "2026-10-30",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "kes_hardware_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "2020.00",
+          "actual": "2020.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "KES",
+          "actual": "KES",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-29",
+          "actual": "2026-09-29",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "kes_matatu_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "2400.00",
+          "actual": "2400.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "KES",
+          "actual": "KES",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-03",
+          "actual": "2026-11-03",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "kes_supermarket",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "725.00",
+          "actual": "725.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "KES",
+          "actual": "KES",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-08",
+          "actual": "2026-10-08",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "mxn_hardware",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1276.00",
+          "actual": "1276.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "MXN",
+          "actual": "MXN",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-12",
+          "actual": "2026-09-12",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "mzn_chapa_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1200.00",
+          "actual": "1200.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "MZN",
+          "actual": "MZN",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-18",
+          "actual": "2026-10-18",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "mzn_fuel_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "2598.00",
+          "actual": "2598.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "MZN",
+          "actual": "MZN",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-25",
+          "actual": "2026-10-25",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "mzn_hotel_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "18502.00",
+          "actual": "18502.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "MZN",
+          "actual": "MZN",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-09",
+          "actual": "2026-09-09",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "mzn_market",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "750.00",
+          "actual": "750.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "MZN",
+          "actual": "MZN",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-10",
+          "actual": "2026-11-10",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "npr_bus_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "2400.00",
+          "actual": "2400.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "NPR",
+          "actual": "NPR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-12",
+          "actual": "2026-10-12",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "npr_hotel_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "8949.60",
+          "actual": "8949.60",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "NPR",
+          "actual": "NPR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-13",
+          "actual": "2026-10-13",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "npr_market",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "2486.00",
+          "actual": "2486.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "NPR",
+          "actual": "NPR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-12",
+          "actual": "2026-11-12",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "npr_pharmacy_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "245.00",
+          "actual": "245.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "NPR",
+          "actual": "NPR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-01",
+          "actual": "2026-11-01",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "npr_printing_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "8136.00",
+          "actual": "8136.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "NPR",
+          "actual": "NPR",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-15",
+          "actual": "2026-09-15",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "npr_tea_plain",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "960.00",
+          "actual": "960.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "NPR",
+          "actual": "NPR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-05",
+          "actual": "2026-11-05",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "php_jeepney_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "3500.00",
+          "actual": "3500.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "PHP",
+          "actual": "PHP",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-24",
+          "actual": "2026-10-24",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "thb_guesthouse",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1720.00",
+          "actual": "1720.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "THB",
+          "actual": "THB",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-08-21",
+          "actual": "2026-08-21",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "tzs_bookshop",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "120000.00",
+          "actual": "120000.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "TZS",
+          "actual": "TZS",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-02",
+          "actual": "2026-10-02",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "tzs_ferry_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "140000.00",
+          "actual": "140000.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "TZS",
+          "actual": "TZS",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-08-14",
+          "actual": "2026-08-14",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "ugx_fuel",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "101475.00",
+          "actual": "101475.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "UGX",
+          "actual": "UGX",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-17",
+          "actual": "2026-10-17",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "ugx_guesthouse_hand",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "160000.00",
+          "actual": "160000.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "UGX",
+          "actual": "UGX",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-21",
+          "actual": "2026-09-21",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_airport_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "7.60",
+          "actual": "7.60",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-03",
+          "actual": "2026-09-03",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_diner_tip",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "36.03",
+          "actual": "36.03",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-02",
+          "actual": "2026-11-02",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_fuel_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "35.85",
+          "actual": "35.85",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-14",
+          "actual": "2026-10-14",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_grocery",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "13.63",
+          "actual": "13.63",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-03",
+          "actual": "2026-10-03",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_hand_cash",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "45.00",
+          "actual": "45.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-11-05",
+          "actual": "2026-11-05",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_hotel_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "303.54",
+          "actual": "303.54",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-22",
+          "actual": "2026-10-22",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_office_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "89.53",
+          "actual": "89.53",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-21",
+          "actual": "2026-09-21",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "usd_pharmacy_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "15.85",
+          "actual": "15.85",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-08-30",
+          "actual": "2026-08-30",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "zar_grocer",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "412.60",
+          "actual": "412.60",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "ZAR",
+          "actual": "ZAR",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-10-11",
+          "actual": "2026-10-11",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "zar_rental_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "3743.25",
+          "actual": "3743.25",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "ZAR",
+          "actual": "ZAR",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-08-28",
+          "actual": "2026-08-28",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "zmw_hardware_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "amount",
+          "expected": "1405.00",
+          "actual": "1405.00",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "ZMW",
+          "actual": "ZMW",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "receipt",
+          "actual": "receipt",
+          "passed": true
+        },
+        {
+          "field": "invoice_date",
+          "expected": "2026-09-18",
+          "actual": "2026-09-18",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

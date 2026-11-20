@@ -1,0 +1,12 @@
+{
+  "name": "zmw_hardware_tilted",
+  "note": "a tilted receipt: the total, its currency, and its day read off the picture",
+  "document": "zmw_hardware_tilted.png",
+  "text": "LUSAKA BUILDERS MART\nLusaka, Zambia\n2026-09-18\nRoofing sheets x4 1,320.00\nScrews 85.00\nTOTAL K 1,405.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "1405.00",
+    "currency": "ZMW",
+    "invoice_date": "2026-09-18"
+  }
+}

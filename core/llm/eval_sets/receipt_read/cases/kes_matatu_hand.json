@@ -1,0 +1,12 @@
+{
+  "name": "kes_matatu_hand",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "kes_matatu_hand.png",
+  "text": "Matatu fare\nNakuru - Nairobi\n4 people x 600\nKSh 2,400\n3 Nov 2026",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "2400.00",
+    "currency": "KES",
+    "invoice_date": "2026-11-03"
+  }
+}

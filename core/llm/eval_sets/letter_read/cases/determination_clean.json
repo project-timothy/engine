@@ -1,0 +1,12 @@
+{
+  "name": "determination_clean",
+  "note": "a plain IRS letter: whether it is to a nonprofit, and its name and number, read off the picture",
+  "document": "determination_clean.png",
+  "text": "Internal Revenue Service      Department of the Treasury\nP.O. Box 2508, Cincinnati OH 45201\nDate: March 14, 2024\nEmployer Identification Number: 84-1234567\n\nHope Springs Ministries Inc.\n1420 Juniper Lane\nLebanon, TN 37087\n\nDear Applicant:\nWe're pleased to tell you we determined you're exempt\nfrom federal income tax under Internal Revenue Code\n(IRC) Section 501(c)(3). Donors can deduct\ncontributions they make to you under IRC Section 170.\nLetter 947 (Rev. 2-2020)",
+  "expect": {
+    "doc_type": "irs_letter",
+    "organization": "nonprofit",
+    "legal_name": "Hope Springs Ministries Inc.",
+    "ein": "84-1234567"
+  }
+}

@@ -66,3 +66,26 @@ def test_a_person_with_no_zone_of_their_own_uses_the_ministrys(solo):  # noqa: F
 def test_a_zone_this_host_does_not_know_uses_the_ministrys(solo):  # noqa: F811
     _zone(solo, "Mars/Olympus")
     assert _snap(solo, datetime(2026, 10, 13, 1, 30, tzinfo=UTC)) == "2026-10-12"
+
+
+def _filed_months() -> list[str]:
+    return sorted(
+        p.parts[p.parts.index("filed") + 1]
+        for p in Path.cwd().rglob("*_receipt_*")
+        if "/filed/" in str(p) and p.is_file()
+    )
+
+
+def test_the_month_it_files_under_is_the_month_of_its_own_day(solo):  # noqa: F811
+    # Found 2026-11-10: the name carried the person's day while intake filed
+    # under the month on the host's clock, so every October receipt in this
+    # suite filed under November once November came.
+    assert _snap(solo, datetime(2026, 10, 12, 9, 0, tzinfo=UTC)) == "2026-10-12"
+    assert _filed_months() == ["2026-10"]
+
+
+def test_a_missionary_abroad_files_in_her_own_month(solo):  # noqa: F811
+    _zone(solo, "Asia/Kathmandu")
+    # 1:45 AM on Nov 1 in Kathmandu, still the evening of Oct 31 for the ministry.
+    assert _snap(solo, datetime(2026, 10, 31, 20, 0, tzinfo=UTC)) == "2026-11-01"
+    assert _filed_months() == ["2026-11"]

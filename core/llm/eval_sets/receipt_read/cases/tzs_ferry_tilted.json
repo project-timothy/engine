@@ -1,0 +1,12 @@
+{
+  "name": "tzs_ferry_tilted",
+  "note": "a tilted ticket that prints only the day of travel: the total and its currency read off it, and no day it was paid, so Tim asks her (the owner's call of 2026-11-19)",
+  "document": "tzs_ferry_tilted.png",
+  "text": "ZANZIBAR FAST FERRY\nDar es Salaam - Stone Town\nTravel date 2026-08-14\n2 adults economy\nFare TZS 140,000",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "140000.00",
+    "currency": "TZS",
+    "invoice_date": null
+  }
+}

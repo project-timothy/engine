@@ -1,0 +1,83 @@
+{
+  "job": "talk",
+  "model_id": "claude-opus-5-5",
+  "adapter": "anthropic_messages",
+  "tier": "opus",
+  "seeded": false,
+  "ran_at": "2026-11-18T23:45:06.506359+00:00",
+  "engine_commit": "5eb585d5a1a840c93543dc8017ae01f5c34eab68",
+  "provider_models": [
+    "claude-opus-5-5"
+  ],
+  "cases": 5,
+  "passed": 5,
+  "failed": 0,
+  "summary": "talk: 5 of 5 cases passed on model 'claude-opus-5-5' (adapter anthropic_messages, tier opus)",
+  "results": [
+    {
+      "case": "approve_august",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "call",
+          "expected": "{\"tool\": \"decide_card\"}",
+          "actual": "{\"args_json\": \"{\\\"card\\\": 41, \\\"decision\\\": \\\"approve\\\", \\\"said\\\": \\\"Approve my August report.\\\"}\", \"tool\": \"decide_card\"}",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "greeting",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "call",
+          "expected": "{\"tool\": \"start_here\"}",
+          "actual": "{\"args_json\": \"{}\", \"tool\": \"start_here\"}",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "spent_this_year",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "call",
+          "expected": "{}",
+          "actual": "{\"args_json\": \"{}\", \"tool\": \"year_report\"}",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "tax_bracket",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "call",
+          "expected": "{\"tool\": \"tax_packet\"}",
+          "actual": "{\"args_json\": \"{}\", \"tool\": \"tax_packet\"}",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "where_did_that_come_from",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "call",
+          "expected": "{}",
+          "actual": "{\"args_json\": \"{}\", \"tool\": \"year_report\"}",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

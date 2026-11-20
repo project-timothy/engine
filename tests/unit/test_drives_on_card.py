@@ -1,6 +1,6 @@
 """Drives on the month's card (the owner, 2026-10-14). A ministry drive rides
 the month's one yes as a line in the reviewer's words: "Oct 12: 14.0
-miles, visiting the church in Pokhara, $10.15 at 72.5 cents a mile",
+miles, visiting the church in Pokhara, $10.64 at 76 cents a mile",
 priced at the rate in force on its own day. A personal drive, or one
 nobody has spoken for, never becomes money. The approved month files each
 drive as a report line, and a drive is a record like a receipt: approved
@@ -26,9 +26,9 @@ def test_a_ministry_drive_is_a_line_on_the_months_card(solo):  # noqa: F811
     _month(solo)
     [card] = _cards(solo)
     assert card["lines"] == (
-        "2026-10-12: 14.0 miles, visiting the church in Pokhara, $10.15 at 72.5 cents a mile"
+        "2026-10-12: 14.0 miles, visiting the church in Pokhara, $10.64 at 76 cents a mile"
     )
-    assert card["total_cents"] == "1015"
+    assert card["total_cents"] == "1064"
 
 
 def test_personal_and_unexplained_drives_never_become_money(solo):  # noqa: F811
@@ -48,10 +48,10 @@ def test_the_approved_month_files_the_drive_once(solo):  # noqa: F811
     _approve(solo, card, at=_now())
     _month(solo)
     [line] = _lines(solo)
-    assert line["amount_cents"] == 1015 and line["expense_date"] == "2026-10-12"
+    assert line["amount_cents"] == 1064 and line["expense_date"] == "2026-10-12"
     assert "Pokhara" in line["note"]
     [month] = _reviewer(solo).call("month_report", {"month": "2026-10"})["people"]
-    assert month["drives"] == [] and month["total"] == "10.15"
+    assert month["drives"] == [] and month["total"] == "10.64"
     _month(solo)
     assert len(_lines(solo)) == 1 and len(_cards(solo)) == 1
 

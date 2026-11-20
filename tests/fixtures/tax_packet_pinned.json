@@ -1,0 +1,106 @@
+{
+ "as_of": "2026-10-13",
+ "asks": [
+  {
+   "ask": "This deposit carries EquipNet's name but counts as the ministry's money. Was it their pay?",
+   "date": "2026-08-17",
+   "dollars": "400.00",
+   "payer": "EquipNet"
+  }
+ ],
+ "days_abroad": {
+  "days_with_spending_abroad": 0,
+  "needs": 330,
+  "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+ },
+ "federal_tax": {
+  "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+  "filing_status": "single",
+  "left_to_preparer": [
+   "state income tax",
+   "itemized deductions",
+   "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+   "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+   "the bona fide residence test (Tim works out the physical presence test only)",
+   "the foreign tax credit and the foreign housing exclusion",
+   "a spouse's self-employment",
+   "retirement contributions"
+  ],
+  "part_year_through": "2026-10-13",
+  "without_exclusion": {
+   "adjusted_gross_income": "873.59",
+   "balance": "132.81",
+   "business_deduction": "0.00",
+   "estimates": [
+    {
+     "dollars": "0.00",
+     "due": "2027-04-15"
+    },
+    {
+     "dollars": "0.00",
+     "due": "2027-06-15"
+    },
+    {
+     "dollars": "0.00",
+     "due": "2027-09-15"
+    },
+    {
+     "dollars": "0.00",
+     "due": "2028-01-18"
+    }
+   ],
+   "estimates_paid": "0.00",
+   "income_tax": "0.00",
+   "self_employment_tax": "132.81",
+   "standard_deduction": "16100.00",
+   "taxable_income": "0.00",
+   "top_bracket": "",
+   "total_tax": "132.81",
+   "withheld": "0.00"
+  }
+ },
+ "payers": [
+  {
+   "came_in_seen": "400.00",
+   "deposits": [
+    {
+     "date": "2026-08-03",
+     "dollars": "400.00"
+    }
+   ],
+   "form": "1099-NEC",
+   "form_says": "1000.00",
+   "kind": "support platform",
+   "name": "EquipNet",
+   "not_seen": "600.00"
+  }
+ ],
+ "person": "Daniel Reyes",
+ "personal_gifts": [
+  {
+   "date": "2026-08-09",
+   "dollars": "100.00",
+   "from": "Aunt Maria"
+  }
+ ],
+ "says": "2026: EquipNet paid $400.00 that Tim saw arrive. Its 1099-NEC says $1,000.00, so $600.00 went to an account Tim doesn't see. 1 deposit of their own name no payer: ask who paid. 1 deposit carries a payer's name but count as the ministry's: ask. $60.00 of ministry costs they paid from their own pay come off it. Self-employment tax on $940.00 of 1099 income, net of costs, is $132.81; the Foreign Earned Income Exclusion never lowers it. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $132.81. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+ "schedule_c": {
+  "costs": "60.00",
+  "income": "1000.00",
+  "net": "940.00"
+ },
+ "self_employment_tax": {
+  "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+  "half_off_income": "66.41",
+  "on": "868.09",
+  "tax": "132.81"
+ },
+ "unmatched": [
+  {
+   "date": "2026-08-12",
+   "dollars": "300.00",
+   "words": "MOBILE DEPOSIT"
+  }
+ ],
+ "year": "2026"
+}

@@ -76,6 +76,7 @@ def _verdict(gate: ToolGate, command: str):
         "git status `id`",
     ],
 )
+@pytest.mark.security("SEC-17")
 def test_a_line_the_shell_would_split_or_expand_is_refused(gate, command):
     allowed, reason = _verdict(gate, command)
     assert not allowed, reason
@@ -102,6 +103,7 @@ def test_a_line_the_shell_would_split_or_expand_is_refused(gate, command):
         "git switch -",
     ],
 )
+@pytest.mark.security("SEC-17")
 def test_git_arguments_that_leave_the_root_are_refused(gate, command):
     allowed, reason = _verdict(gate, command)
     assert not allowed, reason
@@ -118,6 +120,7 @@ def test_git_arguments_that_leave_the_root_are_refused(gate, command):
         "gh pr comment 1 --repo someone/else --body hi",
     ],
 )
+@pytest.mark.security("SEC-17")
 def test_gh_arguments_that_leave_the_root_or_repo_are_refused(gate, command):
     allowed, reason = _verdict(gate, command)
     assert not allowed, reason

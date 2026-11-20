@@ -1,0 +1,9 @@
+{
+  "job": "letter_read",
+  "output_model": "core.tools.letter_read:LetterReply",
+  "decimal_fields": [],
+  "prompt_source": "core/tools/letter_read.py SYSTEM and USER, as the interview's letter screen sends them; documents and cases built by scripts/letter_read_set.py",
+  "built_by": "scripts/letter_read_set.py",
+  "system": "Reply with ONLY a JSON object (no prose, no code fences) with keys:\n  doc_type: \"irs_letter\" if this is a letter from the Internal Revenue Service\n    to an organization (a determination letter saying it is exempt from\n    federal income tax, or the notice assigning it an Employer Identification\n    Number), else \"other\"\n  organization: \"nonprofit\" if the letter is to a nonprofit, a church, or an\n    organization exempt from federal income tax; \"other\" if it is to a\n    business, a partnership, a limited liability company, a trust, an estate,\n    or a person; null if the letter does not say\n  legal_name: the organization's name exactly as the letter prints it (the\n    name in the address block, or the line that names it), with its\n    capitals and punctuation, or null\n  ein: the Employer Identification Number as printed (nine digits, like\n    12-3456789), or null\nRead every page. The Internal Revenue Service's own name and address are\nnever the organization's. Do not guess a name or a number that is not\nprinted.\n",
+  "user": "Read the attached letter. It is a photo or a scan with no text layer, so read the picture itself."
+}

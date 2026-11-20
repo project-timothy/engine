@@ -62,6 +62,8 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.agents.ap.schema` | `amount_to_cents` | Exact Decimal-to-cents conversion. |
 | `core.agents.ap.shadow_diff` | `read_legacy_rows` | Read the legacy workbook's AP Ledger sheet, read-only, skipping bands. |
 | `core.agents.ap.shadow_diff` | `run_shadow_diff` | Produce the parity report; optionally write it inside the ledger root. |
+| `core.agents.ap.split_checks` | `named_checks` | Every check number in the reference, amounts removed first so "$12000.00" never reads as a check, each number once, in order. |
+| `core.agents.ap.split_checks` | `read_split` | The split a reference describes, or None when it names one check or none. |
 | `core.agents.ap.status` | `assert_transition` | Validate a status flip. |
 | `core.agents.ap.store` | `invoices_by_number` | Invoice rows matching an invoice number (optionally a vendor too). |
 | `core.agents.ap.store` | `insert_invoice` | Insert an invoice row; a repeated identity is a no-op. |
@@ -69,6 +71,7 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.agents.ap.store` | `record_payment_details` | Record how a row was (or will be) paid. |
 | `core.agents.ap.store` | `record_qbo_ids` | Store ids of engine-created QBO records. |
 | `core.agents.ap.store` | `engine_authored_qbo_ids` | Every QBO record id the engine itself created for this tenant. |
+| `core.agents.ap.store` | `add_qbo_payment_id` | Add one engine-created payment id to a row paid with several checks (issue #688): the ids are comma-joined, each kept once, in write order. |
 | `core.agents.ap.store` | `append_note_once` | Append ``note`` only if the row does not already carry it verbatim. |
 | `core.agents.ap.store` | `rows_for_verification` | Shape ap_invoices into the verification state's ``ap_ledger`` list. |
 | `core.agents.ap.store` | `status_counts` | Status histogram for the whole tenant book. |
@@ -113,12 +116,52 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.agents.deadlines.calendar_sync` | `doh_mx` | The domain's public mail records, over DNS-over-HTTPS (standard library). |
 | `core.agents.deadlines.calendar_sync` | `detect_provider` | (provider, why): graph, google, ics or off. |
 | `core.agents.deadlines.calendar_sync` | `reminder_minutes` | The final week's reminder: the smallest lead, never more than a week. |
+| `core.agents.deadlines.form990` | `tax_year_of` | The year a filing due on ``due`` covers: the twelve months ending the last day of the fifth month before it. |
+| `core.agents.deadlines.form990` | `files` | What a charity that took in ``gross_cents`` in the year files. |
 | `core.agents.deadlines.schema` | `load_obligations` | Every obligation in the file, validated. |
 | `core.agents.deadlines.schema` | `occurrence_dates` | Every occurrence from the anchor up to and including ``until``. |
+| `core.agents.expenses.advances` | `run` | The card for one expense a person paid themselves. |
+| `core.agents.expenses.advances` | `approved` | The approved cards' params, each with its card id. |
+| `core.agents.expenses.advances` | `month_rows` | Each person's approved expenses in ``month``, as the month report's bank rows: the ministry's spending, owed back to them. |
+| `core.agents.expenses.balances` | `key` | The event's idempotency key: the same statement sent twice is one. |
+| `core.agents.expenses.balances` | `same` | Whether two events hold the same statement's balances. |
+| `core.agents.expenses.balances` | `standing` | Each ministry account whose statement gave a balance on or before ``through``, with the books against it: only the lines a statement with balances held, and nothing dated after ``through``. |
+| `core.agents.expenses.balances` | `words` | The bank against the books, for the person to hear. |
+| `core.agents.expenses.board_pack` | `activities` | The statement of activities from the span's own entries' totals. |
+| `core.agents.expenses.board_pack` | `position` | The statement of financial position from every entry through the end. |
+| `core.agents.expenses.board_pack` | `functional` | Each kind of spending split program and management, to the cent. |
+| `core.agents.expenses.board_pack` | `latest_share` | The share of spending that is program, as last said; None if never. |
+| `core.agents.expenses.board_pack` | `split_run` | The share of the ministry's spending that is program (the rest is management), as someone who looks over every month said it. |
+| `core.agents.expenses.budget` | `latest` | Each kind's budget for ``year`` in cents: the last one said wins. |
+| `core.agents.expenses.budget` | `year_gone` | How much of ``year`` is behind us, in whole percent. |
+| `core.agents.expenses.budget` | `standing` | Each budgeted kind: its budget, what was spent, what's left, and one plain sentence saying so. |
 | `core.agents.expenses.categories` | `canonical` | The ministry's own spelling of ``category``, "" for uncategorized, or None when the ministry has no such category. |
 | `core.agents.expenses.categories` | `from_words` | The one category the words point to, or "" when they point to none or to more than one. |
+| `core.agents.expenses.church_pay` | `paid_as_pay` | Each line this ministry paid ``person`` as pay in ``year``, by date: ``{"date", "dollars"}`` (month_report bank rows of the year, anyone's). |
+| `core.agents.expenses.church_pay` | `by_person` | What this ministry paid each person as pay in ``year``, in cents. |
+| `core.agents.expenses.church_pay` | `funds` | Each fund in ``year``, by whom it is for: the gifts given toward it, their pay, what the ministry paid them back, and what is left (below zero when it paid out more than was given). |
 | `core.agents.expenses.classify` | `is_reference_material` | True when the item is the reference-material shape, never a guess. |
 | `core.agents.expenses.dedup` | `duplicate_groups` | Groups of filenames that look like one purchase scanned twice. |
+| `core.agents.expenses.donors` | `donor_of` | Who gave the money a bank row carries: as said, or the name a kind for one donor carries ("Gifts from <name>"); "" when no one is named. |
+| `core.agents.expenses.donors` | `gifts_of` | Every gift among month_report bank rows, oldest first: the ministry's income with its donor named. |
+| `core.agents.expenses.donors` | `by_donor` | The people who gave, by name (the first spelling said stands, any case), and the grants from donor-advised funds apart from them. |
+| `core.agents.expenses.donors` | `letterhead` | The letters' details from every word said, the newest on each standing. |
+| `core.agents.expenses.donors` | `address_of` | A donor's mailing address, the newest said, any case of their name. |
+| `core.agents.expenses.donors` | `long_day` | A day as a letter says it: "January 6, 2026". |
+| `core.agents.expenses.donors` | `statement` | The donor's year-end giving statement: every gift that year. |
+| `core.agents.expenses.donors` | `acknowledgment` | The written acknowledgment of one gift of $250 or more. |
+| `core.agents.expenses.donors` | `thank_you` | A thank-you for a grant from a donor-advised fund: no tax language, since the fund's sponsor gave the donor their receipt. |
+| `core.agents.expenses.donors` | `detail_run` | Keep what the letters need, as said (the door checked an EIN's shape). |
+| `core.agents.expenses.drives` | `priced` | The drive's money: ``rate``, ``rate_from``, ``dollars`` (paid back), and ``irs_rate`` and ``at_irs_rate`` beside them when the ministry pays less; or ``refused``, the plain words for why it can't be priced. |
+| `core.agents.expenses.drives` | `line` | One drive of the month's listing: its miles, what the person said it was for, and its dollars when it was the ministry's. |
+| `core.agents.expenses.drives` | `of_year` | The person's ministry drives in ``year`` that the ministry pays back below the IRS rate, each ``(miles, irs_rate, paid_rate)`` for ``core.tax.mileage.below_irs``. |
+| `core.agents.expenses.export` | `account_name` | The ministry's account as Beancount spells one. |
+| `core.agents.expenses.export` | `brought_forward` | Every asset and liability as the year opens, against net assets. |
+| `core.agents.expenses.export` | `beancount` | The entries as a Beancount-format file, accounts opened on first use. |
+| `core.agents.expenses.export` | `read_back` | The file this module writes, read again: each account's total, how many transactions, and how many don't balance. |
+| `core.agents.expenses.export` | `trial_balance` | Each account's debit or credit as CSV, with the totals row. |
+| `core.agents.expenses.export` | `filings` | The numbers the year's returns start from: gross receipts and which 990 they point to; what was spent under the ministry's pay kind; the ministry money each person still holds or owes at year end (a return may count it as pay, by a year-end entry the ministry decides); and, where the ministry paid pay (``church_pay.by_person``, in cents), each person's pay and whether it needs a 1099-NEC (c34 PR 3). |
+| `core.agents.expenses.export` | `pay_words` | What ``filings`` says of the ministry's pay, one sentence a person (c34 PR 3); "" where it paid none. |
 | `core.agents.expenses.fx` | `stored` | The rates already recorded, by (currency, day); the first one for a day stands. |
 | `core.agents.expenses.fx` | `fetch` | The feed's rate for ``currency`` on ``day``, or None when no source has it (not published yet, unknown currency, or down). |
 | `core.agents.expenses.fx` | `needed` | The (currency, day) a door receipt's name needs a rate for, or None. |
@@ -126,14 +169,56 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.agents.expenses.inbox` | `sanitize` | Enforce the label-only contract in code: a non-receipt carries the boolean and the confidence, nothing more — whatever a model said. |
 | `core.agents.expenses.inbox` | `resolved_tier` | ``(tier, adapter, model)`` for what this classifier name would call, or ``None`` for the fixture classifier (which calls no model at all). |
 | `core.agents.expenses.inbox` | `build_classifier` | Resolve a classifier by name. |
+| `core.agents.expenses.job_edits` | `is_personal` | Words that say a drive wasn't the ministry's. |
+| `core.agents.expenses.job_inbox` | `skip_card_supersessions` | Which pending skip cards tonight's skip card replaces (proposal 99e8ae57). |
+| `core.agents.expenses.journal` | `month_entries` | One month report's people as journal entries, and how many of its rows are no entry yet (their amount still waits). |
+| `core.agents.expenses.journal` | `opening` | What the ministry's account held before its first kept line. |
+| `core.agents.expenses.journal` | `totals` | Each account's balance over the entries, in signed cents. |
+| `core.agents.expenses.journal` | `by_kind` | The kinds under ``Income`` or ``Expenses``, as positive cents. |
+| `core.agents.expenses.journal` | `owed` | From the people accounts: what the ministry owes each person, and what each person holds or owes the ministry, as positive cents. |
+| `core.agents.expenses.own_pay` | `of_year` | (each priced receipt's cents, how many wait on a rate) for the person's receipts in ``year`` paid from their own pay. |
+| `core.agents.expenses.packet` | `estimate_dates` | When the four quarterly estimates for ``year`` are due. |
+| `core.agents.expenses.packet` | `foreign_days` | Each day the bank shows money spent in another currency, with the country it names (its currency's code when no country is printed). |
+| `core.agents.expenses.packet` | `days_abroad` | The year's days abroad, drafted from the bank: how many days show spending abroad, the first and last, the countries, and each gap of more than two weeks between them, for the person to say where they were. |
+| `core.agents.expenses.packet` | `at_home` | The days among ``days`` that fall on no trip they said, from the day they left through the day they came back (or on, while still away): days they said they were in the United States. |
+| `core.agents.expenses.packet` | `from_travel` | The year's days abroad from the travel dates they said, the bank's foreign spending beside it, and each bank day abroad that falls on a day they said they were home. |
+| `core.agents.expenses.packet` | `taxes` | The ``tax_packet`` answer's tax half (c33; moved from the door's catalog, c36; the roll-up, c39): the 1099 income less the costs it carried (Schedule C), self-employment tax on it, the days abroad (from the travel dates said, else drafted from the bank), the federal return worked out to a bracket, with the Foreign Earned Income Exclusion and without it when they qualify, and next year's four estimates. |
+| `core.agents.expenses.packet` | `page` | The ``tax_packet`` answer as one page of blocks, in the formal register, every acronym spelled out: income from each payer, Schedule C, self-employment tax, the days abroad, and next year's estimates. |
+| `core.agents.expenses.payers` | `looks_like_org` | Whether a payer's name reads as an organization, not a person. |
+| `core.agents.expenses.payers` | `recurs` | Whether deposits come on a schedule: three or more in a row, each about a month after the last. |
+| `core.agents.expenses.payers` | `share_of` | A split as kept ("3/10"): part of each payment, more than none and less than all; None for anything else. |
+| `core.agents.expenses.payers` | `percent` | A split's two parts as percentages to the hundredth, the gift's worked out from the first so the two always add up to 100%. |
+| `core.agents.expenses.payers` | `kind_of` | The payer kind plain words name, or "" when they name none. |
+| `core.agents.expenses.payers` | `kept` | Each person's payers, in the order first said; the newest word on a payer (by name, whatever its case) stands. |
+| `core.agents.expenses.payers` | `match` | The one payer whose words a deposit carries, or None: none, or two as likely, is the person's to say. |
+| `core.agents.expenses.payers` | `figures` | What each payer's tax form reports, in cents (a W-2's box 1 wages), keyed by person, the payer's name casefolded, and year; the newest word stands. |
+| `core.agents.expenses.payers` | `withheld` | A W-2's box 2, federal income tax withheld, in cents, keyed as ``figures``; the newest word on the form stands, so one said without it has none. |
+| `core.agents.expenses.payers` | `sort` | Each deposit to its payer (month_report bank rows of the year): their own money to the payer it names, a gift for them said on the line, or unmatched; a ministry deposit carrying a payer's name is asked about; and a gift that may be pay is asked once (``ASK_WORK``). |
+| `core.agents.expenses.payers` | `sort_with_pay` | ``sort``, with what this ministry paid the person as pay (``pay`` is the ministry's name and ``church_pay.paid_as_pay``): the ministry is their payer, by their own word on it where they gave one (its name or words carry the ministry's name), else as a sending church that sends a 1099-NEC. |
+| `core.agents.expenses.payers` | `rows` | The packet's payer rows and what Tim says of each: what it paid that Tim saw arrive, checked against what its form says once kept. |
+| `core.agents.expenses.payers` | `keep_said` | One event of what a person said, from the job's params (shared by the payer jobs and tax_facts.py). |
+| `core.agents.expenses.payers` | `payer_run` | Keep a payer as said (the door checked its kind). |
+| `core.agents.expenses.payers` | `form_run` | Keep what a payer's tax form reports for a year (the door read the dollars). |
+| `core.agents.expenses.periods` | `read` | ``said`` as a span: YYYY-MM, YYYY-Qn, YYYY, YYYY-YTD, a month's name (this year's, or last year's when it hasn't come yet), or this/last month, quarter or year, or year to date. |
+| `core.agents.expenses.processors` | `is_export` | Whether the file reads as a payment service's export at all. |
+| `core.agents.expenses.processors` | `parse` | Every row of a service's export that moved money, oldest first. |
+| `core.agents.expenses.processors` | `left_out_words` | What Tim didn't keep from an export, as the person hears it. |
+| `core.agents.expenses.processors` | `kept` | Every kept row, by its fingerprint (the first keeping stands). |
+| `core.agents.expenses.processors` | `moves` | Each payout matched to the bank deposit it became: the deposit's fingerprint to its payout, and the payouts matched. |
+| `core.agents.expenses.processors` | `gross_in` | Gifts through the services from ``start`` through ``end``, less refunds, at their gross: what the ministry received, for a 990. |
+| `core.agents.expenses.processors` | `month_rows` | The month's rows from every service, shaped as ``statements.month_lines`` rows: each gift (money in, its donor named) and its fee (spending from the service), each refund, and each payout (a move, waiting on the bank deposit it became until a statement shows it). |
 | `core.agents.expenses.records` | `drive_id` | A drive's identity: whose and when it started. |
 | `core.agents.expenses.records` | `drive_sha` | A drive's fingerprint, where a receipt's is its file's: a report line and a card name a drive by it. |
-| `core.agents.expenses.records` | `drive_dollars` | A ministry drive in dollars at a rate per mile, to the cent. |
+| `core.agents.expenses.records` | `drive_dollars` | A ministry drive in dollars at a rate per mile, to the cent (the arithmetic is ``core.tax.mileage``'s). |
 | `core.agents.expenses.records` | `days` | Each receipt's own day, where one was said or read after it was sent (the latest wins). |
+| `core.agents.expenses.records` | `from_pay` | Receipts the person said they paid from their own pay: the latest category word on each that says whose it was (a later word without one leaves it as it was). |
 | `core.agents.expenses.records` | `dated_name` | A door receipt's name on its own day: the day it was sent replaced by the day it was paid, so its month and its rate are that day's. |
 | `core.agents.expenses.records` | `card_receipts` | The receipts a card names, by their full fingerprints. |
 | `core.agents.expenses.records` | `yeses` | Each receipt an approved review card said yes to, and when, while nothing it rests on has changed since. |
 | `core.agents.expenses.records` | `where` | Every receipt's record: how far along it is. |
+| `core.agents.expenses.report_lines` | `amounts_said` | Each door receipt's latest amount tag of ``kind`` ("$43.00", "NPR4300.00"): the person's words (``AMOUNT_EVENT``) or a photo's reading (``READ_EVENT``). |
+| `core.agents.expenses.report_lines` | `claim_name` | A door receipt's name as if the claim had been said with it, for the pricing that reads claims from names. |
+| `core.agents.expenses.report_lines` | `owed_back` | What a card line owes back to the person: all of it when they paid, nothing when the ministry did, and only their part when the ministry's cash ran short and theirs paid the rest. |
 | `core.agents.expenses.scan_split` | `pdf_page_count` | Pages in a PDF, or 1 when unreadable (a corrupt file goes through the normal single-file flow, where extraction fails loudly per file). |
 | `core.agents.expenses.scan_split` | `validate_groups` | '' when every page appears exactly once, else the human reason. |
 | `core.agents.expenses.scan_split` | `normalized_stem` | The original's stem with any project tag folded to underscore form, so children carry attribution intake can parse the same way. |
@@ -144,18 +229,61 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.agents.expenses.schema` | `parse_amount_tag` | A dollar amount written in a filename, as integer cents, or None. |
 | `core.agents.expenses.schema` | `parse_foreign_claim` | (day, amount, currency) a door receipt's name carries for a claim in a currency other than dollars, or None. |
 | `core.agents.expenses.schema` | `normalize_category` | Apply the standing category rules to a proposal (owner, 2026-07-22). |
+| `core.agents.expenses.statements` | `day_words` | A day as the person hears it: "Sep 2, 2026". |
 | `core.agents.expenses.statements` | `day_of` | A bank's day as YYYY-MM-DD, or None. |
 | `core.agents.expenses.statements` | `cents_of` | A bank's amount in cents: "$1,234.56", "-12.00", "(12.00)"; None when the cell is empty or isn't money. |
 | `core.agents.expenses.statements` | `parse` | Every line of a bank's CSV export, oldest first. |
-| `core.agents.expenses.statements` | `parse_school` | The person's school list: student, amount, date, school, and an optional currency (dollars when it has none). |
+| `core.agents.expenses.statements` | `parse_school` | The person's school list: student, amount, date, school, an optional currency (dollars when it has none), and an optional "Paid by" where "me" (or "myself", "mine", "own") says the person paid it themselves; anything else is the ministry's money (board w-school-cash). |
+| `core.agents.expenses.statements` | `names_a_person` | The person a deposit's words name (a payroll deposit's individual name), or nothing: a deposit naming a person is likely that person's pay (the EquipNet lesson, 2026-11-12), so Tim asks, never assumes. |
 | `core.agents.expenses.statements` | `looks_like` | Why a line on the person's own statement looks like the ministry's, in a few words, or "": Tim's proposal, never the person's pick. |
 | `core.agents.expenses.statements` | `match_transfers` | The ministry paying the person back: a line out of the ministry's account and the same dollars into the person's own within a few days, each line matched once, the nearest day first. |
-| `core.agents.expenses.statements` | `attach` | Which line each receipt stands behind (receipt sha to line sha): a line of money out, its day within a few days of the receipt's; in dollars, the same cents; in another currency, the card's dollars within the bank's spread of the day's rate. |
+| `core.agents.expenses.statements` | `attach` | Which line each receipt stands behind (receipt sha to line sha); the rules are ``seat``'s. |
+| `core.agents.expenses.statements` | `seat` | Which line each receipt stands behind (receipt sha to line sha), and the lines in doubt (line sha to the receipts that could each be it). |
 | `core.agents.expenses.statements` | `school_name` | A school payment as a door receipt's name, so the month prices it the one way a foreign amount is priced (fx.priced): at its day's rate. |
 | `core.agents.expenses.statements` | `receipts_in` | Every door receipt with a day and an amount, for matching to lines, and each one's landed payload. |
+| `core.agents.expenses.statements` | `kept_receipts` | Every door receipt Tim keeps with a day and an amount, as (sha, day, tag, person). |
+| `core.agents.expenses.statements` | `foreign_receipts` | Every receipt in another currency that has its day and its amount, as (sha, day, currency, amount): what needs that day's rate. |
+| `core.agents.expenses.statements` | `cash_words` | "NPR 40,000.00" from "NPR40000.00"; "" for anything else. |
+| `core.agents.expenses.statements` | `amount_of` | ("USD", 43) from "$43.00", ("NPR", 4300) from "NPR4300.00". |
+| `core.agents.expenses.statements` | `plus_tag` | Two amounts in one currency added, in ``tag``'s form; ``tag`` alone when ``more`` is empty or another currency. |
+| `core.agents.expenses.statements` | `splits` | Each split receipt's own part, as a tag (the latest said). |
+| `core.agents.expenses.statements` | `counts` | Every cash count, oldest first: who, the day, and the tag counted. |
+| `core.agents.expenses.statements` | `used` | Cash gone with no receipt, as said: whose use, the day, the tag. |
+| `core.agents.expenses.statements` | `used_name` | Cash used with no receipt as a door receipt's name, priced the one way a foreign amount is (fx.priced) when no cash stands under it. |
+| `core.agents.expenses.statements` | `cash` | What ATM cash paid for (each spend's ``fx.Drawn``), and what's left in hand by (person, currency): rupees and their cost in cents. |
+| `core.agents.expenses.statements` | `cash_age` | The oldest cash each person still holds, by (person, currency): the day it was drawn and how much of it is left (t-advance-clock). |
 | `core.agents.expenses.statements` | `month_lines` | Every kept statement line and school payment in ``month``, each with what it is (``role``), its dollars, the receipt standing behind it, its category, and what it still waits on. |
+| `core.agents.expenses.statements` | `pay_received` | The deposits on people's own accounts that are the ministry's pay to them arriving (#651): for each person paid, their pay lines out of the ministry's account and their own deposits of the same dollars, matched as a payback is (``match_transfers``: within a few days, each once, the nearest first), even a pay line matched as a payback first (#653). |
+| `core.agents.expenses.statements` | `shares` | ``cents`` in parts by whole percents that add to 100, to the cent: each part rounded down, and the cents left over go to the parts that lost the most to rounding (largest remainder). |
+| `core.agents.expenses.statements` | `apportion` | ``cents`` in parts in proportion to ``weights``, to the cent, by largest remainder: percents that add to 100, or the amounts a person said in the line's own money. |
+| `core.agents.expenses.statements` | `line_splits` | Each split line, as said (the owner, 2026-10-29; by amount 2026-11-10). |
+| `core.agents.expenses.statements` | `taken` | The amounts taken out of a line, all but the kind ``but`` names. |
+| `core.agents.expenses.statements` | `money` | Exact dollars as a string; a float never carries money. |
+| `core.agents.expenses.statements` | `take_cents` | A take's cents in the line's money, or None when it is in another. |
 | `core.agents.expenses.statements` | `attached` | Receipts standing behind a kept line: the line carries them, and they are never a line of their own. |
-| `core.agents.expenses.statements` | `moved_words` | The month's money that moved but wasn't spending, for the card: what was sent abroad, paid back, and what came in. |
+| `core.agents.expenses.statements` | `in_doubt` | Card lines Tim asks about: each line sha, with the person's receipts that could each be the one it carried. |
+| `core.agents.expenses.statements` | `held` | Receipts that are no line of their own: standing behind a line, or one of the receipts Tim asks about. |
+| `core.agents.expenses.statements` | `rode` | Which card line each receipt rode, as the person said (the latest). |
+| `core.agents.expenses.statements` | `came_in` | What came into the ministry's own account from ``start`` through ``end``, in cents: its gross receipts for a 990 (t-990n). |
+| `core.agents.expenses.statements` | `month_end` | The last day of ``month`` (YYYY-MM). |
+| `core.agents.expenses.statements` | `repay_words` | The month's ministry money the person spent on themselves, for the card: owed to the ministry, never on the total (t-cash-count). |
+| `core.agents.expenses.statements` | `cash_words_at` | The person's cash in hand on ``day``, with what it cost and how old the oldest of it is, for the reviewer's card (t-advance-clock); past the days to return it (120 unless an adopted plan says), and over the most the plan lets a person hold, it says so (chunk 3). |
+| `core.agents.expenses.statements` | `moved_words` | The month's money that moved but wasn't spending, for the card: what was sent abroad, drawn as cash, paid back, and what came in. |
+| `core.agents.expenses.tax_facts` | `status_of` | The filing status plain words name: SINGLE, JOINT, "other" for one Tim leaves to the preparer, or "" when they name none. |
+| `core.agents.expenses.tax_facts` | `facts` | A person's facts for ``year``; the newest word on each stands. |
+| `core.agents.expenses.tax_facts` | `shared_with` | Who else may read ``person``'s packet (their units), as they last said. |
+| `core.agents.expenses.tax_facts` | `trips` | A person's trips, by the day they left; the newest word on a day stands. |
+| `core.agents.expenses.tax_facts` | `fact_run` | Keep a tax fact as said (the door read the words and the dollars). |
+| `core.agents.expenses.tax_facts` | `travel_run` | Keep a trip as said (the door read the days). |
+| `core.agents.expenses.year_close` | `closed_years` | Each year closed now: the yeses on its close and reopen cards, in the order they came, the latest standing. |
+| `core.agents.expenses.year_close` | `closed_for` | The close that holds a day (or a month), or None when its year is open. |
+| `core.agents.expenses.year_close` | `refusal` | The one sentence a change to a closed year gets. |
+| `core.agents.expenses.year_close` | `from_cards` | closed_years over approval_queue rows (params as JSON text). |
+| `core.agents.expenses.year_close` | `read` | The closed years of a tenant, from its ledger. |
+| `core.agents.expenses.year_close` | `left_out` | What the person hears about lines a closed year kept out, or "". |
+| `core.agents.expenses.year_close` | `run` | The close card for a year, carrying the numbers the door read for it. |
+| `core.agents.expenses.year_close` | `warning` | What reopening a closed year may do, said before anyone says yes. |
+| `core.agents.expenses.year_close` | `reopen` | The reopen card for a closed year, naming who asked (the safeguards keep a church or an organization from answering its own) and carrying the warning. |
 | `core.agents.mail.schema` | `safe_attachment_name` | The sender's file name reduced to one path segment: the last component after any ``/`` or ``\``, control characters flattened, no leading dot (security review 2026-10-03, finding 6). |
 | `core.agents.mail.schema` | `sender_is_denied` | True when the sender matches any denylist entry (address or domain substring, case-insensitive). |
 | `core.agents.mail.schema` | `sender_address` | The bare, lower-cased address: ``"Name <a@b.com>"`` -> ``"a@b.com"``. |
@@ -167,7 +295,7 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 
 | Module | Name | What it does |
 |---|---|---|
-| `core.authority` | `parse_permission` | ``action:resource[@scope][<=limit]``, for example ``approve:expense.report@own<=500``. |
+| `core.authority` | `parse_permission` | ``action:resource[#kind][@scope][<=limit]``, for example ``approve:expense.report@own<=500`` or ``approve:expense.report#month``. |
 | `core.authority` | `parse_policy` | A parsed ``authority.toml``. |
 | `core.authority` | `evaluate` | The floor, then forbids, then grants, then the shape's safeguards. |
 | `core.authority` | `card_amount` | The money a card commits: zero for a card that commits none, None when a money card does not say (counted as past every limit). |
@@ -192,7 +320,7 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 |---|---|---|
 | `core.capabilities` | `acts` | Whether the tool changes anything (its MCP hints say so; none = it only reads). |
 | `core.capabilities` | `build` | The page as data: ask, tell, setup, on_its_own, not_yet. |
-| `core.capabilities.faq` | `load_faq` | Every entry, in page order. |
+| `core.capabilities.faq` | `load_faq` | Every entry for a ministry whose voice is ``voice``, in page order. |
 | `core.capabilities.faq` | `faq_for` | The entries for a person with these tools: the ones for everyone, then each one that explains a tool they have, in page order. |
 
 ## `core.engine`
@@ -201,11 +329,13 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 |---|---|---|
 | `core.engine.authority_gate` | `load_policy` | The tenant's policy, or None when it has no authority.toml. |
 | `core.engine.authority_gate` | `load_rules` | The ministry's policy rules (core/policy), checked against its own roles, people and categories; None when it has no ``rules/`` folder. |
+| `core.engine.authority_gate` | `witnessed_cards` | The card numbers a witness covers: its one card, or each on its list. |
 | `core.engine.authority_gate` | `route_of` | The card's rule and its route: the one kept on the card, or a new one computed from authority.toml, opened ``now``. |
 | `core.engine.authority_gate` | `decide_card` | ``principal`` decides this card on its route (#436). |
 | `core.engine.authority_gate` | `waiting` | Every pending card on its route: what it is, its step, who it waits on and by when (the brief's line for the process owner, and ``engine queue waiting``). |
 | `core.engine.authority_gate` | `load_delegations` | Every delegation given and not revoked (``route.delegated`` / ``route.revoked`` events from the routing lane); the caller checks each one's dates. |
 | `core.engine.authority_gate` | `lane_decision` | Whether the agent a lane runs as may take ``action`` on ``resource`` through a card with no one asked: (agent, decision) when allowed, None when no agent claims the lane or its grants do not reach. |
+| `core.engine.clock` | `utc_now` | The current instant in UTC: the one wall-clock read the routing lane and the route commands share, so a test freezes them together. |
 | `core.engine.clock` | `local_now` | The current (or supplied) instant viewed on the tenant's wall clock. |
 | `core.engine.clock` | `local_today` | Today's ISO date on the tenant's wall clock. |
 | `core.engine.clock` | `local_month` | The current YYYY-MM on the tenant's wall clock. |
@@ -225,13 +355,24 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.engine.init` | `render` | The tenant files as text, keyed by their file name. |
 | `core.engine.init` | `folders_for` | The folder skeleton the daily loop and the auditor expect, read back from the rendered config so the tree can never drift from the file. |
 | `core.engine.init` | `init_tenant` | Create ``tenants/<slug>/``, its data tree, and its ledger; run the first audit. |
+| `core.engine.keyfile` | `read_keys` | Each key's SHA-256 -> the person it belongs to; empty when the file is missing or unreadable. |
+| `core.engine.keyfile` | `add_key` | A new key for ``person``, shown once and kept only as its hash; with ``only_one``, the person's older keys in the file stop working. |
+| `core.engine.keyfile` | `drop_keys` | Retire every key ``person`` holds in the file; how many there were. |
+| `core.engine.keyfile` | `person_for_key` | The person a key belongs to, or None for a key nobody holds. |
 | `core.engine.kit` | `check_authority` | The whole policy must parse: the money rule, the safeguards, every permission, and every role a person or agent names (core/authority). |
 | `core.engine.kit` | `check_voice` | Every rule must be one `engine voice-check` can apply (core/voice). |
 | `core.engine.kit` | `load_part` | One kit part, checked; ``None`` when the file is absent. |
 | `core.engine.kit` | `load_kit` | Every kit part under ``tenant_dir``. |
+| `core.engine.private_file` | `plain_name` | A file or folder name for an id: the id when it is a plain slug, else a hash of it. |
+| `core.engine.private_file` | `keep` | Write ``text`` whole (a crash leaves the old file), private to the box's own account: the folders 0700, the file 0600. |
+| `core.engine.private_file` | `state_folder` | Where a tenant's box keeps what must outlive its process. |
+| `core.engine.queue_decide` | `take_back_refusal` | Why ``principal`` can't take back this card's decision, or None when they can: shared by :func:`take_back_in_ledger` and the button Tim puts up for words that come close, so a button never shows for a take-back its tap would refuse. |
+| `core.engine.queue_decide` | `take_back_in_ledger` | A person takes back their own yes or no (the owner's call of 2026-11-18, the persona year's A06): the card waits again, with who took it back, when, their words, and the decision it carried kept on it under ``taken_back``, so a run and the auditor see an ordinary waiting card. |
 | `core.engine.registry` | `load_approval_checks` | The agent's approval-time checks by action type; empty when the agent declares none (every card approves as before). |
 | `core.engine.registry` | `load_human_only` | The agent's human-only card types (``HUMAN_ONLY`` in its jobs.py): cards the queue refuses to resolve without a person at a terminal (#356). |
 | `core.engine.registry` | `load_card_authority` | What deciding each of the agent's card types is (``CARD_AUTHORITY`` in its jobs.py: action type -> ``core.authority.CardRule``). |
+| `core.engine.room` | `pack` | Fold ``room`` into ``out`` (a .tgz, 0600) with its manifest; returns it. |
+| `core.engine.room` | `restore` | Unpack ``packed`` as the new room folder ``into``, only after every file's hash and every table's count match its manifest; returns what was restored. |
 | `core.engine.runkey` | `touch` | Record that the active phase read ``path`` (no-op when not tracing). |
 | `core.engine.runkey` | `log_undeclared` | Append an audit line when ENGINE_KEY_AUDIT_LOG names a file (a migration aid: one suite run lists every job's undeclared inputs). |
 | `core.engine.runkey` | `undeclared` | Inputs ``run`` touched that ``key`` neither declared nor read. |
@@ -240,6 +381,8 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.engine.runkey` | `file_digest` | Content digest of a file, or a stable sentinel when the bytes are not readable here: ``cloud-only`` for a dataless placeholder (EDEADLK, the 2026-07-09 lesson) and ``missing`` for a path that is not a file. |
 | `core.engine.runner` | `resolve_ledger_root` | Per-deployment ledger directory for a tenant. |
 | `core.engine.runner` | `ledger_write_lock` | One ledger, one writer (#136). |
+| `core.engine.runner` | `run` | One job, run once under the ledger lock. |
+| `core.engine.runner` | `door_run` | :func:`run` for a person's own write through the door: it waits :data:`DOOR_WAIT` for the books. |
 | `core.engine.runner` | `resume_due` | Execute the tenant's due retries, one at a time under the run lock (``engine jobs resume``, row 7.23; a scheduler runs it every 15 minutes). |
 | `core.engine.schedule` | `template_path` | ``host/crontab.tmpl`` in THIS repository. |
 | `core.engine.schedule` | `entries` | The enabled entries, in ``ENTRY_ORDER``. |
@@ -268,7 +411,8 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 
 | Module | Name | What it does |
 |---|---|---|
-| `core.institution` | `mileage_rate` | The rate per mile for a drive on ``day`` and whose rate it is. |
+| `core.institution` | `irs_mileage_rate` | The IRS standard rate per mile for business use on ``day``, from the year's tax table (``core.tax.mileage``). |
+| `core.institution` | `mileage_rate` | The rate a drive on ``day`` is paid back at and whose rate it is: the ministry's when it sets one, else the IRS rate. |
 | `core.institution` | `claim_sink` | Where this ministry's claims go: None for its own books. |
 | `core.institution` | `submit` | Send the claims. |
 
@@ -283,7 +427,7 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 
 | Module | Name | What it does |
 |---|---|---|
-| `core.ledger.event_log` | `append_event_line` | Append one event record as a single JSON line under ``root``. |
+| `core.ledger.event_log` | `append_event_line` | Append one event record as a single JSON line under ``root`` (in ``filename``: the door's read log keeps its own file beside this one). |
 | `core.ledger.event_log` | `read_event_lines` | Read back every event record. |
 | `core.ledger.event_log` | `event_log_is_whole` | True when every line parses and there are at least ``row_count`` of them: exactly the state in which ``repair_event_log`` would change nothing, so the caller can skip loading SQLite's rows (#14). |
 | `core.ledger.event_log` | `repair_event_log` | Converge the JSONL file onto ``rows`` (SQLite's authoritative events). |
@@ -311,23 +455,27 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.llm.adapters.claude_sdk_complete` | `stream` | The SDK's one-shot query as an async iterator. |
 | `core.llm.adapters.claude_sdk_complete` | `read_lines` | What the session is told to read: the rendered pages of a scan, or the document itself for everything else. |
 | `core.llm.adapters.claude_sdk_complete` | `build_prompt` | One prompt string: the system text, then the turns, with the attachment read lines and the scratch directory in front of the first user turn. |
+| `core.llm.adapters.fixture` | `replies_from_file` | A seed that reads ``path`` one line a call (each line one whole reply, blank lines skipped). |
 | `core.llm.evals` | `eval_sets_root` | The sets root, read at call time so a test can point it elsewhere. |
 | `core.llm.evals` | `model_slug` | A model id as a filename. |
 | `core.llm.evals` | `gated_jobs` | Every job that owns at least one case. |
 | `core.llm.evals` | `current_commit` | The commit the harness ran from, for the results file. |
 | `core.llm.evals` | `document_pages` | Pages in the document a case's text builds: one per form feed. |
-| `core.llm.evals` | `seeded_fixture_adapter` | A fixture adapter answering this case's own expectation. |
+| `core.llm.evals` | `seeded_fixture_adapter` | A fixture adapter answering this case's own expectation, or its ``seed`` where the expectation is not itself a valid reply. |
 | `core.llm.evals` | `run_eval_set` | Run one job's cases against one model and report, case by case. |
 | `core.llm.evals` | `write_results` | Write the results file for this (job, model). |
 | `core.llm.evals` | `tier_model` | A tier as the gateway needs it, for the eval command's ``--tier``. |
 | `core.llm.evals` | `check_eval_gate` | Refuse a tenant that points a GATED job at an unproven model. |
 | `core.llm.gateway` | `complete` | Run one model job and return the validated output plus its record. |
+| `core.llm.policy` | `named_on` | Whether the ministry's file switches ``job_type`` on: the job named in ``[llm.jobs]`` with a tier, never ``deterministic``. |
 | `core.llm.policy` | `resolve` | Job type to tier (``[llm.jobs]``, then ``default``), tier to model. |
 | `core.llm.policy` | `tier_for_alias` | The tier a model site's ``--param`` alias names, or ``None`` to let the job type resolve through ``[llm.jobs]``. |
 | `core.llm.policy` | `resolved_tier_for_alias` | ``(tier, adapter, model)`` for what this alias would call, or ``None`` for the fixture alias (which calls no model). |
 | `core.llm.policy` | `build_adapter` | The adapter a tier names, constructed from the tier's connection details. |
 | `core.llm.policy` | `complete_for` | One model job under the tenant policy: resolve, budget, call, record. |
+| `core.llm.policy` | `complete_metered` | :func:`complete_for` for a caller that is not a job: the tenant's ``[llm]`` settings and a :class:`CallMeter` in place of a job's context. |
 | `core.llm.rasterize` | `pdf_text` | A PDF's text layer, or ``""`` when it has none and when anything at all goes wrong reading it. |
+| `core.llm.rasterize` | `pdf_pages` | A PDF's text layer page by page (``pdf_text`` joins them), from a file or from bytes already in hand; ``[]`` when anything at all goes wrong reading it. |
 | `core.llm.rasterize` | `has_text_layer` | Whether a model reading this file would find words in it. |
 | `core.llm.rasterize` | `render_attachment` | The one call an adapter makes: page images for this attachment, or ``None`` when it should travel exactly as it always has. |
 | `core.llm.rasterize` | `render_pdf` | Render up to the caps and return the PNG bytes, or ``None`` if this file cannot be rendered at all. |
@@ -349,6 +497,7 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.llm.skill_harness` | `check_transcript` | Apply a note contract to a runner transcript (``core.llm.transcript``): the ``run_end`` note goes through :func:`check_note`, and every command the session asked to run (allowed or refused) is swept for the banned strings, so a session that tried the merge command fails even when its note is silent about it. |
 | `core.llm.telemetry` | `record_call` | Insert one row and commit it. |
 | `core.llm.telemetry` | `month_to_date_usd` | The tenant's recorded spend since the first instant of the current UTC month. |
+| `core.llm.telemetry` | `month_by_job` | This month's rows for the tenant, by job type: ``calls`` (every gateway call, ok or failed), ``refused`` (calls the cap or the document rule turned away before they were made), ``usd`` (a Decimal). |
 | `core.llm.telemetry` | `run_totals` | The rows under one run key, summed: ``calls`` (every gateway call, ok or failed; refusals excluded), ``tokens_in``, ``tokens_out``, ``usd`` (a Decimal). |
 | `core.llm.telemetry` | `budget_refusals` | The budget refusals recorded under one run key, oldest first. |
 | `core.llm.tools` | `call_target` | The path or argv a call names, for the refusal record. |
@@ -366,6 +515,9 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 
 | Module | Name | What it does |
 |---|---|---|
+| `core.mileage.setup_link` | `app_link` | The tap that sets the app up on the phone itself. |
+| `core.mileage.setup_link` | `qr_text` | What the QR holds, for a person setting up from a computer. |
+| `core.mileage.setup_link` | `qr_rows` | ``text`` as a QR code: one string of 1s (dark) and 0s per row, for a page to draw. |
 | `core.mileage.trackers` | `add_tracker` | A new token for ``person``'s phone; shown once, kept only as its hash. |
 
 ## `core.onboarding`
@@ -378,9 +530,35 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.onboarding` | `record` | ``answers`` with ``qid`` answered; refuses an answer the question cannot take. |
 | `core.onboarding` | `missing` | The required questions for this shape that have no answer yet. |
 | `core.onboarding` | `plan` | Every answer resolved, defaults applied. |
+| `core.onboarding` | `persons_listed` | tenant.toml's text with its persons list made ``filers`` ((name, role) each): an owner books as owner, everyone else as a reimbursed person. |
+| `core.onboarding` | `filer_folders` | A drop folder for each person who files reports; the drop tree, or None where the tenant keeps none. |
+| `core.onboarding` | `person_table` | One person's table in authority.toml, as setup writes it. |
+| `core.onboarding` | `form_990_due` | The next Form 990 due date on or after ``today``: the 15th day of the fifth month after the fiscal year ends. |
 | `core.onboarding` | `apply` | Render the tenant and write the answers into it, then prove it loads and run doctor. |
+| `core.onboarding.accountable` | `write` | The plan's words and its rules for ``ministry``: the cash a Worker may hold, whom it covers (roles), and the role that adopts it. |
+| `core.onboarding.accountable` | `place` | Into the ministry's rules folder, beside any rules it already has. |
+| `core.onboarding.interview` | `ein_of` | An Employer Identification Number as "12-3456789", or "" for anything that can't be one: nine digits (a dash or spaces between them are fine), under a prefix the IRS issues. |
+| `core.onboarding.interview` | `all_words` | Every string a person can read, for the words test. |
+| `core.onboarding.interview` | `ministry_name` | "Hope Springs Ministries Inc." is called Hope Springs Ministries. |
+| `core.onboarding.interview` | `so_ill` | What Tim does with where she lives, said back on the same screen. |
+| `core.onboarding.interview` | `heard` | Screen 9: what she said, and what Tim assumes, each assumption read from the setup questions' defaults for her shape. |
+| `core.onboarding.interview` | `notices` | A note to whoever sent each link once she finished or stopped, for ``doorkeeper send-notices`` (kind ``interview``; sent once by its id). |
+| `core.onboarding.person` | `offered` | The steps this person is offered, in the order they're asked: each that fits them, and is baseline or one the ministry offers. |
+| `core.onboarding.person` | `at_sign_up` | The offered steps sign-up walks through: each meant for sign-up, and any other once the person asked for it or said yes to it (the sign-up goal, 2026-10-27: mileage and the calendar wait until they're wanted). |
+| `core.onboarding.person` | `next_step` | (step, "ask" \| "check") for the next screen, or None when every offered step is done or set aside for now. |
+| `core.onboarding.person` | `words` | The step's words for the screen, with the person's address in, and the name of whoever the ministry's expense plan covers. |
+| `core.onboarding.roster` | `add_people` | Bring on everyone ``said`` names, one per line; with ``check``, only say who would come on. |
+| `core.onboarding.roster` | `said_back` | What the command says: one line each, then what comes next. |
 | `core.onboarding.zones` | `zone_names` | Every zone name the resolver can return. |
 | `core.onboarding.zones` | `resolve_zone` | The IANA zone name ``said`` means, or ZoneAnswerError saying what to ask. |
+
+## `core.pack`
+
+| Module | Name | What it does |
+|---|---|---|
+| `core.pack` | `load_pack` | The pack in ``directory``. |
+| `core.pack` | `amounts` | Every amount over zero an authority file sets, by where it sits. |
+| `core.pack` | `check` | What keeps ``pack`` from setting up a ministry, each said plainly; empty when it is ready. |
 
 ## `core.policy`
 
@@ -390,7 +568,19 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.policy` | `looser` | Why ``lower`` reads looser than ``upper`` where the two overlap, or "". |
 | `core.policy` | `check_stricter` | Refuse a rule in a lower layer that reads looser than one above it. |
 | `core.policy` | `load_rulebook` | Every rules file under ``<tenant>/rules/``, highest layer first; None when the ministry has none (nothing changes for it). |
+| `core.policy` | `find_quote` | The page (from 1, in the copy's own order) where ``quote`` starts, or None when its words are not in the copy. |
+| `core.policy` | `clock` | The strictest numbers the rules in force set for this person, each left at its default where none does. |
+| `core.policy` | `money_words` | Dollars as a board reads them: "$1,500", or "$1,512.50" with cents (the accountable plan's words and a pay resolution's). |
+| `core.policy` | `monthly_cents` | A month's part of a yearly amount: a twelfth, to the cent, with what does not split evenly paid in December so the year adds up exactly. |
+| `core.policy` | `pay_for` | The pay in force for ``person`` in ``month`` (``YYYY-MM``): of the pay rules given (the ones adopted), the latest to start on or before that month in the same year. |
+| `core.policy` | `with_oks` | Each yes given before the spend covers ONE line: the earliest of its kind, on or after the day it was asked for, at or under its amount, not already covered under the same rules. |
 | `core.policy` | `check_month` | What the rules in force say about this person's month, rule by rule in their layer order. |
+| `core.policy.copies` | `read_copy` | The copy's sha256 and its words page by page: a PDF's text layer, or a text file's pages split at form feeds. |
+| `core.policy.drafts` | `draft` | The drafted rule and the rules file's new text, or ``PolicyError`` saying in plain words why not. |
+| `core.policy.drafts` | `rules_file` | Where a rules file lives: directly under the ministry's rules/ folder. |
+| `core.policy.pay` | `ordinal` | 1st, 2nd, 3rd, 4th ... |
+| `core.policy.pay` | `write` | The resolution's words and its one rule: ``person`` (their id) known as ``name``, paid ``yearly`` on ``day`` from ``start`` (YYYY-MM) through that December, adopted by the role ``adopted_by``. |
+| `core.policy.pay` | `place` | Into the ministry's rules folder, beside the rules it already has. |
 
 ## `core.redact`
 
@@ -400,35 +590,197 @@ listed (jobs, the CLI, and evals are not); the duplicate-code ceiling in
 | `core.redact` | `redact_text` | Rules 1 to 4 over one string. |
 | `core.redact` | `redact` | Redact every string inside a JSON-shaped object, recursively. |
 
+## `core.talk`
+
+| Module | Name | What it does |
+|---|---|---|
+| `core.talk.check` | `tool_named` | The first tool whose name (one no person types: it has an underscore) is in his words, or "". |
+| `core.talk.check` | `claims_done` | Whether his words say he did something to the books: "Done", "I've recorded", "I've already marked". |
+| `core.talk.check` | `says_its_so` | Whether his words say a change stands, the passive way: "September is reviewed and approved", "it's recorded". |
+| `core.talk.check` | `asks_for_photo` | Whether his words ask her to send or take a photo, and not "no need to send the photo". |
+| `core.talk.check` | `points_to_a_button` | Whether his words send her to a button or her yes page ("tap the button below", "tap the approval button on your yes page", "your yes page will ask for Face ID"), and not "no need to tap anything". |
+| `core.talk.check` | `asks_two` | Whether her message asks two things ("did the taxi go in, and is September sent?", "fix the date and move it to travel", "also make travel 900"), so an "Also" in his answer answers her. |
+| `core.talk.check` | `tacks_on` | Whether his words, after an answer, bring up something else he noticed ("I also need to flag something", "I noticed the taxi has no receipt", "one more thing", "Before you go, two things to check"), or start another sentence with "Also" when her message (``said``) asked one thing: it waits until she asks what's waiting. |
+| `core.talk.check` | `card_number` | The first place his words name a card, a record, or an item by its number ("card 1", "card #10", "(#10)"), or "". |
+| `core.talk.check` | `denies_the_button` | Whether his words say he can't give her a new link or button ("I can't send a new link from here", "there's no new button for it"). |
+| `core.talk.check` | `denies_hers` | Whether his words say a card isn't hers to decide ("it isn't yours to approve", "your board member decides both"). |
+| `core.talk.check` | `hers_note` | The note when his words say it isn't hers, and code finds ``about`` waiting on her own yes (the Haiku year's A09, 2026-11-19). |
+| `core.talk.check` | `misleads` | The note for the two faults that get a second try in a message (the Haiku year's A01, 2026-11-19: the redo, unchecked, said "card 3" and sent her to a yes button that wasn't there): a card's number in his words, or a button pointed to when none is under his message. |
+| `core.talk.check` | `problem` | The note for the model when his words would mislead her, or "". |
+| `core.talk.eval_set` | `system` | Tim's system text for the made-up missionary, as the loop builds it. |
+| `core.talk.hold` | `kind` | Which of the four kinds a tool is. |
+| `core.talk.hold` | `amounts` | Every number in ``text``, as a value: "$1,300.00", "1300" and "1,300" are one amount. |
+| `core.talk.hold` | `her_own` | Whether a her-words call may run on her word: every amount in it is one she said in this message, and one that needs an amount has one. |
+| `core.talk.hold` | `lines` | What a card says for each tool, with ``{names}`` code fills. |
+| `core.talk.hold` | `summary` | One plain line for a card: whose, what for, and how much, from the tool and its arguments alone. |
+| `core.talk.hold` | `asks_for` | Whether her own message asks for this decision ("approve my August report", "please sign off on it", "reject the water bill"): the word for it, with no "don't" or "never" before it, and not a question about whether she may ("can I approve it?"). |
+| `core.talk.hold` | `says_no` | Whether her message turns down a decision she asked for ("never mind", "not now", "leave it", or asking for the other one: "actually reject it"), so code does not put its yes button back (``core.talk.loop``). |
+| `core.talk.hold` | `plain_decision` | Her whole message, when it is a plain yes or no to a decision and nothing more ("It's approved.", "approve it", "reject it", "ok sign off on it"): "approve" or "reject", else "". |
+| `core.talk.hold` | `plain_yes` | Whether her message is a plain yes and nothing more ("yes", "ok, do it", "yep that's right"): every word one a yes is made of, at least one of them a yes, and any amount in it one on the held call (``args``). |
+| `core.talk.loop` | `words` | Tim's own lines for when the model cannot answer. |
+| `core.talk.loop` | `sitting` | The exchanges of her current sitting: back from now until a quiet gap of :data:`SITTING` or more. |
+| `core.talk.loop` | `reply` | Tim's reply to what the person said, with their tools (a ``core.tools.catalog.Tools`` already bound to them). |
+| `core.talk.loop` | `tapped` | Her tap on the Yes or Not now under Tim's message (card V2). |
+| `core.talk.meter` | `soft_line` | The spend past which Tim stops stepping up (``[llm.budget]``'s ``soft_percent`` of ``monthly_usd``, 80 unless the file says), to the cent; None where the ministry has no cap. |
+| `core.talk.meter` | `spend` | What a ministry's models cost this month (``engine spend``, card V3): the total, the cap and the soft line, and each job type's calls, refusals, and dollars. |
+| `core.talk.meter` | `spend_line` | The same report as one plain line, for the owner's board. |
+| `core.talk.speeds` | `rules` | The word lists and tool lists, as the owner wrote them. |
+| `core.talk.speeds` | `about_taxes` | Her words name taxes. |
+| `core.talk.speeds` | `for_tool` | The rule a call to ``tool`` fires, or "". |
+| `core.talk.speeds` | `again` | Her message is her last one again, case, spacing, and marks aside. |
+| `core.talk.speeds` | `plain_tier` | The ministry's file names a tier for ``job`` and that tier returns one plain reply per call (never an :data:`AGENT_ADAPTERS` session). |
+| `core.talk.speeds` | `voice_on` | Tim's own voice is on for the ministry: its file names a plain tier for everyday talk (card V1, issue #681). |
+| `core.talk.speeds` | `voice_on_for` | ``voice_on`` for a ministry, read from its file each time it's asked, so switching the voice on needs no restart; a file that can't be read leaves it off. |
+| `core.talk.speeds` | `two_speeds` | The ministry's file names a model for everyday talk and one for hard questions, both plain tiers. |
+| `core.talk.speeds` | `pick` | The speed a message starts at. |
+| `core.talk.speeds` | `at` | The UTC day of ``instant``, as the conversation store stamps it. |
+
+## `core.tax`
+
+| Module | Name | What it does |
+|---|---|---|
+| `core.tax.estimates` | `plan` | The year's estimated payments on ``expected`` cents of total tax. |
+| `core.tax.estimates` | `each` | Each of the four payments on ``total`` cents of tax, with no last-year figure: line 14a over four. |
+| `core.tax.estimates` | `four` | The four payments, a quarter each, the odd cents on the first. |
+| `core.tax.exclusion` | `year_days` | 365, or 366 in a leap year (Form 2555 line 37's divisor). |
+| `core.tax.exclusion` | `limit` | The year's most, prorated: Form 2555 line 38's decimal, rounded to three places, times line 37 (line 39). |
+| `core.tax.exclusion` | `earned_abroad` | The share of ``net`` earned abroad when the person hasn't said how it splits: evenly by day, ``abroad_days`` of ``whole`` [NEEDS REVIEW: the plan's split, not yet read by a preparer]. |
+| `core.tax.exclusion` | `half_disallowed` | The share of the deduction for half of self-employment tax tied to excluded income (Form 2555 line 44): excluded income over all self-employment income [NEEDS REVIEW, plan section 7 item 5]. |
+| `core.tax.exclusion` | `qualified_income` | The base of the qualified business income deduction when part of the work was abroad: the United States income less its own share of half of self-employment tax, United States income over all of it [NEEDS REVIEW, plan section 7 item 6]. |
+| `core.tax.exclusion` | `work_out` | Form 2555's lines for ``abroad`` (before stacking). |
+| `core.tax.exclusion` | `stacked_tax` | Income tax on ``taxable`` by the Foreign Earned Income Tax Worksheet: the tax on ``taxable`` plus the net exclusion, less the tax on the net exclusion alone. |
+| `core.tax.figures` | `problems` | What a year's table is missing, one line a problem, each starting with the figure or source it names: a source with no title or a non-government address; a figure with no value, no known source, no address, or no confirmed day (a real date, not in the future). |
+| `core.tax.figures` | `year` | The tax figures for year ``y``, or NoYear when Tim holds none. |
+| `core.tax.form1040` | `business_deduction` | The qualified business income deduction, the simple way (Form 8995): the smaller of 20% of qualified business income and 20% of taxable income before it, never under the $400 minimum once qualified income reaches $1,000, and never more than the taxable income it comes off. |
+| `core.tax.form1040` | `roll_up` | The year's federal return in cents for one person. |
+| `core.tax.forms` | `needs_1099_nec` | Whether a year's pay of ``cents`` to one person needs a 1099-NEC; None when Tim holds no figures for that year. |
+| `core.tax.income` | `tax_on` | Income tax in cents on ``taxable`` cents of taxable income. |
+| `core.tax.income` | `bracket` | The marginal bracket: the rate on the top dollar of taxable income (the lowest rate when there is none). |
+| `core.tax.mileage` | `irs_rate` | The IRS business rate per mile on ``day``. |
+| `core.tax.mileage` | `dollars` | A drive in dollars at a rate per mile, to the cent. |
+| `core.tax.mileage` | `below_irs` | Cents: what the drives were worth at the IRS rate less what was paid back, each drive ``(miles, irs_rate, paid_rate)``. |
+| `core.tax.presence` | `year_later` | The last day of the 12 months that start on ``day``. |
+| `core.tax.presence` | `full_days` | Every whole day abroad: after the day they left, before the day they came back; a stay still open runs through ``until`` (none counted without it). |
+| `core.tax.presence` | `best` | The 12 months in a row with the most full days abroad, among those that reach into ``year``; ``ahead`` names the days of it after ``today``, which count only if they stay. |
+| `core.tax.presence` | `in_year` | For a qualifying period ``p``: the days of it that fall in ``year`` (Form 2555 line 36, the qualifying days), and the full days abroad among them (what the year's income is split by, ``exclusion.earned_abroad``). |
+| `core.tax.se` | `cents` | An exact amount in cents, rounded half up to a whole cent as a form line is. |
+| `core.tax.se` | `self_employment` | Self-employment tax on ``net`` cents for ``year``, with ``wages`` the person's own W-2 wages in cents (figures.NoYear, a KeyError, for a year with no figures: say so, never guess). |
+| `core.tax.se` | `figures_from` | Where the year's self-employment figures came from. |
+
 ## `core.tools`
 
 | Module | Name | What it does |
 |---|---|---|
-| `core.tools.catalog` | `money` | Exact dollars as a string; a float never carries money. |
+| `core.tools.board_pack_page` | `sections` | The pack as titled tables of (label, dollars, is_total) rows: the one shape both the page and the PDF lay out. |
+| `core.tools.board_pack_page` | `checks` | What the pack proves about itself, in words. |
+| `core.tools.board_pack_page` | `blocks` | The pack as ``paper`` blocks: its title, what it says, each statement, its checks. |
+| `core.tools.board_pack_page` | `pdf` | The pack as a PDF, one or more Letter pages. |
+| `core.tools.calendar_feed` | `add_calendar_link` | A standing feed key for ``person``: shown once, kept only as its hash; their older one stops working. |
+| `core.tools.calendar_feed` | `drop_calendar_link` | Retire ``person``'s feed link; how many there were. |
+| `core.tools.calendar_feed` | `feed_person` | Whose feed ``path`` is, or None for anything else. |
+| `core.tools.calendar_feed` | `links` | What the setup screen hands over: the feed, the one-tap subscribe (iPhone, Mac, Outlook), Google's add-by-link (Android, any computer), and a QR of the feed for a phone across the table. |
+| `core.tools.calendar_feed` | `by_a_calendar` | A calendar fetching the feed, not a browser opening the link. |
+| `core.tools.calendar_feed` | `render` | The person's open dates as a calendar file. |
+| `core.tools.decide` | `asks_to_take_back` | Whether her own words ask to take a decision back. |
+| `core.tools.decide` | `comes_close_to_take_back` | Whether her words come close to taking a decision back. |
+| `core.tools.decide` | `who_approves` | Who may approve, in the books' words, beside the ``yours`` flag (take 5 of the persona year, A09: "you can approve it yourself, unless your board rules say otherwise, check that first"). |
 | `core.tools.decide` | `write_answer` | The person's answer, witnessed by their Face ID or said by word under the tenant's line (``said``: their own words), decided through the terminal's own path (core/engine/queue_decide.py) under the ledger's write lock. |
 | `core.tools.decide` | `finisher_for` | The finisher for a tenant whose authority.toml opened the door, with a doorkeeper to hear from; otherwise None. |
 | `core.tools.decide` | `plain_words` | The card as the person reads it on the Approve page: what it is, who or what it is about, and the money it commits, then each receipt in it on its own line, so what they read is what their Face ID says yes to. |
 | `core.tools.decide` | `done_words` | What the person's page says once it is written. |
 | `core.tools.decide` | `card_words` | A card in the person's terms: what it is, whose, and how much ("an expense report for Ruth Hollis, $686.40"). |
+| `core.tools.decide` | `batch_words` | Several cards as the person reads them on the Approve page: one line each, so what they read is what their one Face ID says yes to. |
 | `core.tools.decide` | `plain_refusal` | The engine's exact reason, said the way a person reads it through the door: what happened and what to do, never an id, a rule or a file name. |
+| `core.tools.doc_read` | `ask` | The model's validated reply for one document, or None whenever there is none to check: ``job`` is off, the file is not a photo or a PDF, or the call failed, was refused, timed out, or hit the month's cap. |
+| `core.tools.doc_read` | `on` | Whether the ministry's file switches ``job`` on. |
+| `core.tools.first_time` | `words` | The full words for ``moment``: what, why, the rule, and the once line. |
+| `core.tools.first_time` | `page_words` | The why and the rule as the yes page shows them under the card: the doorkeeper sets the lines after a blank line apart, and only when the yes is Face ID's (an emailed link takes none). |
+| `core.tools.first_time` | `due` | The first moment ``me`` meets in their books and hasn't been shown. |
+| `core.tools.first_time` | `closing` | The first-time words an answer through ``t``'s door carries, if any, marked shown as they go out. |
+| `core.tools.first_time` | `face_id_due` | Whether this person's yes, if it takes Face ID, is their first. |
+| `core.tools.interview_page` | `csp` | The start page runs its one script; every other page none. |
+| `core.tools.interview_page` | `start_page` | ``/start``: the link's fragment, posted, so it is never in a URL a server sees. |
+| `core.tools.interview_page` | `screen_html` | One screen's body for ``token``, with what to ask when ``error``. |
+| `core.tools.interview_page` | `read_back_html` | What her letter reads, for her tap (card R2): one plain line, and a form whose Yes posts the name and the number as her answer, the way she would have typed them. |
+| `core.tools.interview_page` | `answer` | One form post to the interview, from this box's own pages: (status, headers, body). |
+| `core.tools.letter_read` | `on` | Whether the box's file switches the reader on. |
+| `core.tools.letter_read` | `read` | What her letter reads, or None whenever it can't be trusted to show her (:func:`checked`), or there is no reading at all. |
+| `core.tools.letter_read` | `checked` | The reply as a :class:`LetterReading`, or None. |
 | `core.tools.mcp_http` | `service_url` | A sign-in service's address: https, or http on loopback, where the doorkeeper sits on a Tim box; never a query or fragment. |
 | `core.tools.mcp_http` | `new_token` | A fresh invitation token for ``person``; its hash is added to the file and the token is returned once, to hand to that person. |
 | `core.tools.mcp_http` | `make_server` | An HTTP server for ``tenant``'s read tools. |
 | `core.tools.month_page` | `csp` | No script at all; the page's own style; a form may post only here. |
 | `core.tools.month_page` | `answer` | One form post to the month page, from the box's door: (status, headers, body). |
 | `core.tools.month_page` | `page_for` | The month page, on a box whose doorkeeper can vouch for a reviewer. |
+| `core.tools.month_page` | `without_you` | Where a month approver was named and the person approved their own month instead, the words that tell the approver so (board c48, the owner's decision of 2026-11-17); "" otherwise. |
+| `core.tools.month_page` | `all_words` | Every string a reviewer may read from the words file. |
+| `core.tools.month_page` | `checks` | (``yes`` \| ``no`` \| ``none``, the words) for each thing Tim checked, in the reviewer's order: receipts, the ministry's rules, the bank. |
+| `core.tools.month_page` | `worth_a_look` | The one thing a reviewer should look at first: what the ministry's rules say about the month, else cash held past its nudge day; else nothing. |
 | `core.tools.month_page` | `render` | One person's month, every word escaped here. |
+| `core.tools.months` | `cash_when` | When the month's cash in hand is as of: its last day, or today in the month still running. |
+| `core.tools.next_thing` | `of` | The one next thing for the person ``t`` answers as (core/tools/catalog.Tools), from their books' event log (read here when not given). |
+| `core.tools.paper` | `html` | The blocks as one plain page with no script. |
+| `core.tools.paper` | `pdf` | The blocks as a PDF, one or more Letter pages. |
+| `core.tools.payables` | `open_deadlines` | (obligation, due, days left, its lead days) for every open date this person may see within ``days``, soonest first: the deadlines tool's rows and the person's calendar feed (core/tools/calendar_feed.py). |
+| `core.tools.receipt_read` | `on` | Whether the ministry's file switches the reader on: ``receipt_read`` named in ``[llm.jobs]`` with a tier. |
+| `core.tools.receipt_read` | `read` | What the photo reads, or None whenever the answer can't be trusted to show her: the reader is off, the call failed, was refused, timed out, or hit the month's cap, or the reply names no amount, no known currency, or is not a receipt. |
+| `core.tools.receipt_read` | `checked` | The reply as a :class:`Reading`, or None. |
+| `core.tools.receipt_read` | `money` | An amount the way a person says it: "$9", "$12.40", "4,300 rupees", "€18.50", "CHF 40". |
+| `core.tools.receipt_read` | `words` | The page's lines for a reading (``receipt_read.toml``). |
 | `core.tools.receipts` | `settled` | The claim with its currency code filled in from the word the person used and where they are, when that settles it; otherwise unchanged. |
+| `core.tools.receipts` | `local_currency` | The money of the place on the person's clock, when the table above knows it (Asia/Kathmandu: NPR); "" otherwise. |
+| `core.tools.receipts` | `days_named` | Each day their words name, as MM-DD ("march 7", "7th of March", "2026-03-07" all give "03-07"); a word like "yesterday" names none. |
+| `core.tools.receipts` | `slip_amount` | The one number in an ATM slip's words once its dates are set aside ("Feb 14 gave 26,500"); None when none, or more than one, is left. |
 | `core.tools.receipts` | `currency_name` | 'NPR' -> 'Nepali rupees', from the names people use above; '' when this table doesn't know the code. |
 | `core.tools.receipts` | `claim_in` | The first amount in the person's words that says what it is in: a symbol ($43), a currency code (NPR 4300, 1,250 MZN), or a word (43 dollars, 4,300 rupees). |
+| `core.tools.receipts` | `add_home_link` | A standing link for ``person``'s home screen: shown once, kept only as its hash; their older one stops working. |
+| `core.tools.receipts` | `drop_home_link` | Retire ``person``'s home-screen link (the ministry's one line). |
+| `core.tools.receipts` | `home_person` | Whose standing link ``key`` is, or None. |
+| `core.tools.receipts` | `home_route` | ("page" \| "manifest", key) or ("icon", size) for a home-screen path. |
+| `core.tools.receipts` | `icon` | Tim's mark at ``size`` pixels square, for the home screen. |
+| `core.tools.receipts` | `manifest` | The home screen's own entry: it opens straight to this person's page. |
+| `core.tools.receipts` | `record_read` | What a receipt's photo reads, recorded as a proposal and never as anyone's word: the amount (with who it reads as paid, and for what) waits for the person's yes; the day files it in its month. |
+| `core.tools.receipts` | `agree_read` | The person's yes to one reading: the amount as read (``tag``) becomes their word, and a category read (when nobody placed the receipt yet) places it. |
 | `core.tools.receipts` | `from_tag` | A claim back from its tag ("$43.00", "NPR4300.00"). |
 | `core.tools.receipts` | `reader_for` | The ministry's photo reader ([expenses] reader), or None. |
+| `core.tools.receipts` | `filer_name` | The name ``person`` files expenses under in the drop tree, or "" for someone who files none here (add_receipt and setup offer nothing). |
+| `core.tools.receipts` | `person_entry` | What authority.toml says beside ``person`` (their address, their zone), read as plain data; empty when there is nothing. |
+| `core.tools.receipts` | `person_zone` | Her own clock: the zone onboarding wrote beside her, else the ministry's. |
 | `core.tools.receipts` | `kind_of` | The file's real type from its first bytes, as a suffix; "" for anything that is not a photo or a PDF, whatever it claims to be. |
 | `core.tools.receipts` | `take_photo` | One upload from the receipt page: (status, body). |
+| `core.tools.receipts` | `keep_statement` | Her tap on a statement Tim read (card R2). |
+| `core.tools.receipts` | `answer_read` | Her tap on the page's question about a receipt it read (card R1). |
 | `core.tools.receipts` | `upload` | One POST to the receipt page, from headers and body to (status, body, close the connection): the page's own origin, a size it will read, then the photo. |
+| `core.tools.receipts` | `file_name` | The name the page says her phone gave the file (``X-Receipt-Name``, URL-encoded), its last part only and never past ``MOST`` characters; "" when it gave none. |
+| `core.tools.receipts` | `shell` | A page in Tim's look: his mark, whose Tim it is, ``body`` on one card, the page's own extra style (``more``) and ``head`` lines, and its one ``script``, each under this response's nonce. |
+| `core.tools.receipts` | `app_manifest` | A home-screen entry that opens straight to ``start``, wearing Tim's mark (the icons ``icon`` serves). |
 | `core.tools.receipts` | `page` | The receipt page: one button that opens the camera; or, for a catch-up link (``many``), one button that picks every receipt at once from the camera roll or Files, lists each file by name, and sends them one by one on a second tap (the 10/14 phone run: the picker once sent a real photo by mistake). |
+| `core.tools.setup_page` | `page_for` | Setup, on a box whose doorkeeper vouches for people. |
+| `core.tools.spec` | `register` | Put a tool from its own module on the door, offered when ``offered(tools)``. |
+| `core.tools.statement_names` | `side_of` | ``statements.MINISTRY`` or ``statements.OWN`` when the file's name says whose account it is, else "" (it says neither, or both). |
+| `core.tools.statement_names` | `ask` | The one question for statements whose names say it: ``ministry`` of them the ministry's, ``own`` of them the person's. |
+| `core.tools.statement_read` | `on` | Whether the ministry's file switches the reader on. |
+| `core.tools.statement_read` | `read` | The model's reading of the file, unchecked, or None when there is none (the reader off, a failure, a refusal, a timeout, the cap). |
+| `core.tools.statement_read` | `cents` | A decimal string as whole cents, or None: no more than two places after the point (a fraction of a cent is a misreading, never rounded). |
+| `core.tools.statement_read` | `check` | ``(proven, "")`` when the reading is the statement's own arithmetic, else ``(None, why)``. |
+| `core.tools.statement_read` | `dollars` | Cents the way a statement prints them: "$1,234.56", "-$12.00". |
+| `core.tools.statement_read` | `day_words` | "October 1, 2026". |
+| `core.tools.statement_read` | `words` | The page's lines for a statement (``statement_read.toml``). |
+| `core.tools.statement_read` | `proposal` | What the page says of a statement that adds up, for her tap. |
+| `core.tools.talk_page` | `words` | Every line a person reads on the page. |
+| `core.tools.talk_page` | `csp` | Each page runs at most its own one script, under the nonce: her page's, where Tim's voice is on, shows him working after Send; the sign-in's talks only to this box. |
+| `core.tools.talk_page` | `cookie_name` | The one cookie that is the box's own: only the ``__Host-`` one on https, which a sibling site can never set. |
+| `core.tools.talk_page` | `sign_in_page` | One sign-in for a browser the box doesn't remember yet; it goes on to ``back`` once signed in. |
+| `core.tools.talk_page` | `tapped_line` | Her tap on a button, as the one dated line that stays in the thread: what the button named, then her answer and when, on her own clock ("Sent to Eli. |
+| `core.tools.talk_page` | `render` | Her page: the next thing, the last few exchanges, what waits on her tap, the box, Send, and the photo button for someone who files receipts. |
+| `core.tools.talk_page` | `page_for` | The talk page, on a box whose doorkeeper remembers browsers. |
+| `core.tools.tax_facts` | `whose` | Whose tax facts, trips, and packet these are: the person's own; for whoever looks over every month, the missionary they name (the owner, 2026-11-15: the president does the missionary's books, so decision 2's privacy waits for a missionary with a tax picture of their own); or a missionary who shared their packet with the person asking. |
+| `core.tools.tax_facts` | `said_back` | What the person told Tim for ``year``, for their packet. |
 | `core.tools.viewer` | `unit_of` | The unit a row's person is in: the id authority.toml gives a person (the slug of their name, as onboarding writes it). |
 | `core.tools.viewer` | `display_name` | ``carol-jennings`` reads as "Carol Jennings": a person's id said back as their name (the inverse of ``unit_of``). |
+| `core.tools.viewer` | `first_name` | A name said the way Tim greets someone: "Daniel Reyes" reads "Daniel", and a couple's both: "Tom and Jen Baker" reads "Tom and Jen". |
+| `core.tools.viewer` | `filers` | The people who file their own expense reports: whose months there are. |
+| `core.tools.viewer` | `sees_every_month` | Whether the person looks over every month in the ministry: every filer's reports reach them (who may set its budget, close its year, and is mailed its board pack). |
 | `core.tools.viewer` | `viewer_for` | The viewer for ``person`` (their id in authority.toml) in tenant ``slug``. |
 
 ## `core.voice`

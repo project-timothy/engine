@@ -88,15 +88,24 @@ code. The gateway never hands a float to anyone for money."""
 @dataclass(frozen=True)
 class Pricing:
     """List price per million tokens, as Decimals. Comes from the tenant
-    policy (row 7.9); the gateway never guesses a price."""
+    policy (row 7.9); the gateway never guesses a price. A tier that names no
+    price for cached tokens is charged the full input price for them, so a
+    discount is never assumed and a budget errs toward stopping early."""
 
     input_usd_per_mtok: Decimal
     output_usd_per_mtok: Decimal
+    cache_write_usd_per_mtok: Decimal | None = None
+    cache_read_usd_per_mtok: Decimal | None = None
 
     def usd(self, usage: Usage) -> Decimal:
+        write = self.cache_write_usd_per_mtok
+        read = self.cache_read_usd_per_mtok
         total = (
             Decimal(usage.input_tokens) * self.input_usd_per_mtok
             + Decimal(usage.output_tokens) * self.output_usd_per_mtok
+            + Decimal(usage.cache_write_tokens)
+            * (self.input_usd_per_mtok if write is None else write)
+            + Decimal(usage.cache_read_tokens) * (self.input_usd_per_mtok if read is None else read)
         )
         return total / Decimal(1_000_000)
 
@@ -105,7 +114,9 @@ class Pricing:
 class CallRecord:
     """Telemetry for one gateway call, summed over its attempts. The caller
     persists it (the ``llm_calls`` table, row 7.9); the gateway never writes
-    to the ledger."""
+    to the ledger. ``input_tokens`` is every token that went in, whatever it
+    cost; the two cache counts say how many of those the provider wrote to
+    or read from its prompt cache."""
 
     job_type: str
     adapter: str
@@ -116,6 +127,8 @@ class CallRecord:
     usd: Decimal | None
     retries: int
     latency_ms: int
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -212,13 +225,15 @@ def complete[T: BaseModel](
     attachments: list[Attachment] | None = None,
     timeout_s: int = 120,
     pricing: Pricing | None = None,
+    cache: bool = False,
 ) -> GatewayResult[T]:
     """Run one model job and return the validated output plus its record.
 
     ``model`` is the provider's model id as resolved by the tenant policy;
     the gateway never chooses it. The JSON schema of ``output_model`` goes to
     the adapter (providers with constrained decoding use it structurally) AND
-    into a system turn (every provider sees it as text). Raises
+    into a system turn (every provider sees it as text). ``cache`` asks the
+    provider to cache the system text (``PromptBundle.cache``). Raises
     :class:`GatewaySchemaError`, :class:`GatewayTransportError`, or
     :class:`GatewayValidationError`; nothing else escapes.
     """
@@ -231,12 +246,12 @@ def complete[T: BaseModel](
     files = tuple(attachments or ())
     replies: list[str] = []
     errors: list[str] = []
-    input_tokens = output_tokens = 0
+    input_tokens = output_tokens = cache_write = cache_read = 0
     provider_model: str | None = None
     started = time.perf_counter()
 
     for attempt in range(2):
-        bundle = PromptBundle(job_type, model, history, files, timeout_s)
+        bundle = PromptBundle(job_type, model, history, files, timeout_s, cache)
         try:
             raw = adapter.complete(bundle, schema)
         except GatewayError:
@@ -255,6 +270,8 @@ def complete[T: BaseModel](
             ) from exc
         input_tokens += raw.usage.input_tokens
         output_tokens += raw.usage.output_tokens
+        cache_write += raw.usage.cache_write_tokens
+        cache_read += raw.usage.cache_read_tokens
         provider_model = raw.model or provider_model
         try:
             output = _parse_reply(raw.text, output_model)
@@ -269,17 +286,19 @@ def complete[T: BaseModel](
                 Message("user", _RETRY_INSTRUCTION.format(error=exc)),
             )
             continue
-        usage = Usage(input_tokens, output_tokens)
+        usage = Usage(input_tokens, output_tokens, cache_write, cache_read)
         record = CallRecord(
             job_type=job_type,
             adapter=adapter.name,
             model=model,
             provider_model=provider_model,
-            input_tokens=input_tokens,
+            input_tokens=input_tokens + cache_write + cache_read,
             output_tokens=output_tokens,
             usd=pricing.usd(usage) if pricing else None,
             retries=attempt,
             latency_ms=int((time.perf_counter() - started) * 1000),
+            cache_write_tokens=cache_write,
+            cache_read_tokens=cache_read,
         )
         return GatewayResult(output=output, record=record)
 

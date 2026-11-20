@@ -1,0 +1,22 @@
+# Whose account a statement's file name says it is (board
+# t-account-from-name, the owner's walkthrough of 2026-10-16). Code reads
+# the name and picks the question; these are only the words. A name never
+# settles an account on its own: the person's yes does. A test fails on an
+# em dash or a machinery word in [ask].
+
+[names]
+# Words that say it's the ministry's account. The ministry's own name says
+# so too (its first two words or more, in order).
+ministry = ["ministry", "ministries", "church", "organization", "org", "nonprofit"]
+# Words that say it's the person's own.
+own = ["my", "mine", "own", "personal"]
+# Words of a ministry's legal name that don't tell it apart.
+plain = ["inc", "llc", "corp", "corporation", "co", "ltd", "the", "of", "a", "an", "and"]
+
+[ask]
+# The one question Tim asks when the names say it: how many of each.
+both = "Going by the names, the ministry's and yours, right?"
+ministry_one = "Going by its name, that's the ministry's, right?"
+ministry_many = "Going by their names, those are the ministry's, right?"
+own_one = "Going by its name, that one's yours, right?"
+own_many = "Going by their names, those are yours, right?"

@@ -34,21 +34,26 @@ import secrets
 import time
 import urllib.error
 from collections.abc import Callable
+from datetime import UTC, datetime
+from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlencode, urlsplit
 
 from ..engine import web
-from ..engine.config import load_tenant
+from ..engine.config import load_tenant, tenant_dir
 from ..mileage.door import TrackDoor
+from ..mileage.setup_link import TRACK_PATH
+from ..onboarding.interview import INTERVIEWS, InterviewBook
+from ..onboarding.person import SetupBook
+from ..talk import voice_on_for
 from .catalog import Tools
 from .mcp_stdio import INSTRUCTIONS, SUPPORTED_VERSIONS, McpServer
 from .viewer import ViewerError, viewer_for
 
 ENDPOINT = "/mcp"
 PRM_PATH = "/.well-known/oauth-protected-resource"
-TRACK_PATH = "/track"  # a phone's tracker app reports here (core/mileage)
 MAX_BODY = 1_000_000
 
 
@@ -201,6 +206,7 @@ def make_server(
     desk: Any = None,
     receipts: Any = None,
     tracker: Any = None,
+    month_key: Path | None = None,
 ) -> ThreadingHTTPServer:
     """An HTTP server for ``tenant``'s read tools. Bind it to localhost and put
     a TLS proxy in front; ``resource`` is the public URL of the endpoint.
@@ -215,10 +221,14 @@ def make_server(
     the doorkeeper's month page posts after their Face ID."""
     from . import month_page as mp
     from . import receipts as rcpt
+    from . import setup_page as sp
+    from . import talk_page as tk
     from .decide import AskBook, Decider
+    from .first_time import Shown
 
     asks = AskBook()
     ministry = load_tenant(tenant, tenants_root=tenants_root).identity.legal_name
+    shown = Shown(tenant_dir(tenant, tenants_root=Path(tenants_root) if tenants_root else None))
     origin = "{0.scheme}://{0.netloc}".format(urlsplit(resource))
     prm_url = origin + PRM_PATH
     prm = {
@@ -255,11 +265,65 @@ def make_server(
             today=today(),
             viewer=viewer,
             ministry=ministry,
+            shown=shown,
+            talk_page=_own_page(desk, tenant, tenants_root, origin),
             **kwargs,
         )
 
-    door = _Door(verifier, tools_for, origin, prm_url)
-    month = mp.page_for(desk, tools_for=tools_for, ministry=ministry)
+    folder = tenant_dir(tenant, tenants_root=Path(tenants_root) if tenants_root else None)
+    book = SetupBook(folder)
+    reads = partial(_reads, tenant, tenants_root)
+
+    asked = _Asked(book)
+    door = _Door(verifier, tools_for, origin, prm_url, on_asked=asked)
+    month = mp.page_for(desk, tools_for=tools_for, ministry=ministry, key_file=month_key)
+    # The missionary's own setup questions, from a link a maintainer made on
+    # this box (core/onboarding/interview.py, board c49): kept beside its books.
+    interviews = InterviewBook(Path(ledger_root).parent / INTERVIEWS)
+    setup = sp.page_for(
+        desk,
+        tenant=tenant,
+        tenants_root=tenants_root,
+        origin=origin,
+        ministry=ministry,
+        connector=resource,
+        tools_for=tools_for,
+    )
+    # Tim's own page, where a person talks to him (Standalone Tim, card T1):
+    # who is asking is the browser the doorkeeper remembers. Someone still
+    # in her own setup gets Tim's strong model (card V3), by setup's word.
+    # Where his voice is on (card T2), her first word to him here finishes
+    # setup's "where do you want to talk to me" step, as her AI's first
+    # question does, and his page opened from her home screen finishes that
+    # step.
+    talk = tk.page_for(
+        desk,
+        in_setup=setup.unfinished if setup is not None else None,
+        on_talked=asked,
+        on_home=lambda person: _seen(book, person, "home_screen"),
+        tenant=tenant,
+        tenants_root=tenants_root,
+        ledger_root=ledger_root,
+        origin=origin,
+        tools_for=tools_for,
+        receipts=receipts,
+        ministry=ministry,
+        # Her yes page is the doorkeeper's: the box's own origin behind its
+        # proxy, or the doorkeeper's own where nothing stands in front.
+        yes_origin="{0.scheme}://{0.netloc}".format(urlsplit(authorization_servers[0]))
+        if authorization_servers
+        else "",
+    )
+    home = (
+        rcpt.HomeLinks(
+            tenant,
+            tenants_root=tenants_root,
+            desk=receipts,
+            on_home=lambda person: _seen(book, person, "home_screen"),
+        )
+        if receipts is not None
+        else None
+    )
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "timothy-engine"
@@ -285,7 +349,8 @@ def make_server(
             self.send_header(
                 "Content-Security-Policy",
                 f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'nonce-{nonce}'; "
-                "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                "connect-src 'self'; manifest-src 'self'; img-src 'self'; base-uri 'none'; "
+                "form-action 'none'; frame-ancestors 'none'",
             )
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Cache-Control", "no-store")
@@ -310,7 +375,15 @@ def make_server(
             path, _, query = self.path.partition("?")
             if receipts is not None and path == rcpt.PAGE_PATH:
                 nonce = secrets.token_urlsafe(16)
-                self._page(rcpt.page(nonce, many=query == "many", ministry=ministry), nonce)
+                many = query == "many"
+                page = rcpt.page(
+                    nonce,
+                    many=many,
+                    ministry=ministry,
+                    reads=reads(),
+                    statements=many and _statements(tenant, tenants_root),
+                )
+                self._page(page, nonce)
             elif path in (PRM_PATH, PRM_PATH + ENDPOINT):
                 self._reply(200, prm)
             elif path == ENDPOINT:
@@ -332,13 +405,209 @@ def make_server(
             body = self.rfile.read(length) if 0 < length <= MAX_BODY else b""
             self._reply(*door.answer(self.headers, body, too_large=length > MAX_BODY))
 
+    feeding = _feeding(
+        _interviewing(
+            _monthly(_talking(Handler, talk), month, origin),
+            interviews,
+            origin,
+            partial(_read_letter, tenant, tenants_root, ledger_root),
+        ),
+        folder,
+        tools_for,
+        book,
+        ministry,
+    )
     tracking = _tracking(
-        _monthly(Handler, month, origin),
-        TrackDoor(tenant, tenants_root=tenants_root, ledger_root=ledger_root, tracker=tracker),
+        _setting_up(feeding, home, setup, origin, ministry, reads),
+        TrackDoor(
+            tenant,
+            tenants_root=tenants_root,
+            ledger_root=ledger_root,
+            tracker=tracker,
+            on_heard=lambda person: _seen(book, person, "mileage"),
+        ),
     )
     server = ThreadingHTTPServer((host, port), tracking)
     server.flush_drives = tracking.tracks.flush  # type: ignore[attr-defined]  # the minute timer
     return server
+
+
+def _own_page(desk: Any, tenant: str, tenants_root: Any, origin: str) -> str:
+    """Tim's own page, where his voice is on and the box has it (a doorkeeper
+    that remembers browsers): start_here names it (card T2)."""
+    from .talk_page import TALK_PATH
+
+    return origin + TALK_PATH if desk is not None and voice_on_for(tenant, tenants_root) else ""
+
+
+def _reads(tenant: str, tenants_root: Any) -> bool:
+    """Whether the ministry's file has Tim read a receipt as it lands (card
+    R1), read at each page so the switch needs no restart."""
+    from .receipt_read import on
+
+    return on(load_tenant(tenant, tenants_root=tenants_root).llm)
+
+
+def _statements(tenant: str, tenants_root: Any) -> bool:
+    """Whether the ministry's file has Tim read a statement's photo or PDF
+    sent on a catch-up link (card R2), read at each page."""
+    from .statement_read import on
+
+    return on(load_tenant(tenant, tenants_root=tenants_root).llm)
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _seen(book: SetupBook, person: str, step: str) -> bool:
+    """Setup hears that ``step`` works for ``person``: True once it is done."""
+    book.saw(person, step, now=_now())
+    return bool(book.answers(person).get(step, {}).get("seen"))
+
+
+class _Asked:
+    """Their first question from their own AI finishes setup's AI step
+    (chunk 11): a tool call through the door, as them."""
+
+    def __init__(self, book: SetupBook) -> None:
+        self.book = book
+        self.done: set[str] = set()
+
+    def __call__(self, person: str) -> None:
+        if person not in self.done and _seen(self.book, person, "ai_connector"):
+            self.done.add(person)
+
+
+def _feeding(
+    handler: type, folder: Path, tools_for: Callable[[str], Tools], book: SetupBook, ministry: str
+) -> type:
+    """The door's handler, also answering a person's calendar feed at
+    ``/cal/<key>.ics`` (core/tools/calendar_feed.py, chunk 11)."""
+    from . import calendar_feed as cal
+
+    class Feeding(handler):  # type: ignore[valid-type, misc]
+        def do_GET(self) -> None:  # noqa: N802
+            path = self.path.split("?")[0]
+            if not path.startswith(cal.CAL_PATH):
+                super().do_GET()
+                return
+            person = cal.feed_person(folder, path)
+            try:
+                tools = tools_for(person) if person else None
+            except ViewerError:
+                tools = None
+            if person is None or tools is None:
+                self._reply(404, {"error": "not found"})
+                return
+            data = cal.render(tools, ministry).encode("utf-8")
+            if cal.by_a_calendar(self.headers):
+                _seen(book, person, "calendar")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/calendar; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    return Feeding
+
+
+def _setting_up(
+    handler: type,
+    home: Any,
+    setup: Any,
+    origin: str,
+    ministry: str,
+    reads: Callable[[], bool] = lambda: False,
+) -> type:
+    """The door's handler, also serving a person's setup (core/tools/
+    setup_page.py) and the receipt page on their home screen (core/tools/
+    receipts.py, chunk 10), each only where the box has its part."""
+    from . import receipts as rcpt
+    from . import setup_page as sp
+
+    class SettingUp(handler):  # type: ignore[valid-type, misc]
+        def _routed(self) -> tuple[str, str] | None:
+            return rcpt.home_route(self.path.split("?")[0]) if home is not None else None
+
+        def do_GET(self) -> None:  # noqa: N802
+            routed = self._routed()
+            if routed is None:
+                super().do_GET()
+                return
+            kind, value = routed
+            if kind == "page":
+                nonce = secrets.token_urlsafe(16)
+                self._page(rcpt.page(nonce, ministry=ministry, home=value, reads=reads()), nonce)
+                return
+            if kind == "manifest":
+                data = json.dumps(rcpt.manifest(value, ministry)).encode("utf-8")
+                kind, cache = "application/manifest+json", "no-store"
+            else:
+                data, kind, cache = rcpt.icon(value), "image/png", "max-age=86400"
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            self.send_header("Cache-Control", cache)
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_POST(self) -> None:  # noqa: N802
+            path = self.path.split("?")[0]
+            routed = self._routed()
+            limit = 256 if routed else sp.MAX_FORM
+            if not (routed and routed[0] == "page") and not (setup and path in sp.PATHS):
+                super().do_POST()
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(min(max(length, 0), limit + 1))
+            if setup is not None and path in sp.PATHS:
+                self._reply(*setup.answer(path, self.headers, raw))
+            elif self.headers.get("Origin") not in (None, origin):
+                self._reply(403, {"say": "That didn't come from Tim's page."})
+            else:
+                standalone = raw.decode("utf-8", "replace") == "standalone=1"
+                self._reply(*home.ticket(routed[1], standalone=standalone))
+
+    return SettingUp
+
+
+def _talking(handler: type, talk: Any) -> type:
+    """The door's handler, also serving Tim's own page (core/tools/
+    talk_page.py) when the box has a doorkeeper to say who is asking."""
+    from . import talk_page as tk
+
+    class Talking(handler):  # type: ignore[valid-type, misc]
+        def _talk(self, method: str) -> bool:
+            if talk is None or not tk.is_talk(self.path):
+                return False
+            raw = b""
+            if method == "POST":
+                length = max(int(self.headers.get("Content-Length") or 0), 0)
+                raw = self.rfile.read(min(length, tk.MAX_FORM + 1))
+                if length > len(raw):
+                    self.close_connection = True  # an unread body never reaches the next request
+            status, headers, data = talk.answer(method, self.path, self.headers, raw)
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(data)
+            return True
+
+        def do_GET(self) -> None:  # noqa: N802
+            if not self._talk("GET"):
+                super().do_GET()
+
+        def do_POST(self) -> None:  # noqa: N802
+            if not self._talk("POST"):
+                super().do_POST()
+
+    return Talking
 
 
 def _monthly(handler: type, month: Any, origin: str) -> type:
@@ -361,6 +630,74 @@ def _monthly(handler: type, month: Any, origin: str) -> type:
             self.wfile.write(data)
 
     return Monthly
+
+
+def _read_letter(tenant: str, tenants_root: Any, ledger_root: Any, photo: bytes) -> Any:
+    """What an interview's IRS letter reads, where the box's own file
+    switches the reader on (card R2), or None; read at each photo so the
+    switch needs no restart."""
+    from datetime import date
+
+    from . import letter_read
+    from .receipts import kind_of
+
+    settings = load_tenant(tenant, tenants_root=tenants_root).llm
+    if not letter_read.on(settings):
+        return None
+    return letter_read.read(
+        photo,
+        kind_of(photo),
+        settings=settings,
+        ledger_root=ledger_root,
+        tenant=tenant,
+        today=date.today(),
+    )
+
+
+def _interviewing(
+    handler: type, interviews: Any, origin: str, letter: Callable[[bytes], Any] | None = None
+) -> type:
+    """The door's handler, also serving a missionary's own setup questions
+    at ``/start`` (core/tools/interview_page.py), reading her IRS letter
+    with ``letter`` (card R2)."""
+    from . import interview_page as ip
+
+    class Interviewing(handler):  # type: ignore[valid-type, misc]
+        def do_GET(self) -> None:  # noqa: N802
+            if self.path.split("?")[0] != ip.START_PATH:
+                super().do_GET()
+                return
+            nonce = secrets.token_urlsafe(16)
+            data = ip.start_page(nonce).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", ip.csp(nonce, script=True))
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_POST(self) -> None:  # noqa: N802
+            if self.path.split("?")[0] not in ip.PATHS:
+                super().do_POST()
+                return
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > ip.MAX_BODY:
+                self.close_connection = True  # an unread body never reaches the next request
+                self._reply(413, None)
+                return
+            raw = self.rfile.read(max(length, 0))
+            status, headers, data = ip.answer(
+                interviews, self.path, self.headers, raw, origin, letter=letter
+            )
+            self.send_response(status)
+            for key, value in headers.items():
+                self.send_header(key, value)
+            self.end_headers()
+            self.wfile.write(data)
+
+    return Interviewing
 
 
 def _tracking(handler: type, tracks: TrackDoor) -> type:
@@ -394,12 +731,19 @@ class _Door:
     headers): origin, then sign-in, then the message, then the person's tools."""
 
     def __init__(
-        self, verifier: Verifier, tools_for: Callable[[str], Tools], origin: str, prm_url: str
+        self,
+        verifier: Verifier,
+        tools_for: Callable[[str], Tools],
+        origin: str,
+        prm_url: str,
+        *,
+        on_asked: Callable[[str], None] = lambda person: None,
     ):
         self.verifier = verifier
         self.tools_for = tools_for
         self.origin = origin
         self.prm_url = prm_url
+        self.on_asked = on_asked
 
     def _challenge(self, error: str = "") -> tuple[int, dict, dict]:
         detail = f', error="{error}"' if error else ""
@@ -434,10 +778,22 @@ class _Door:
             tools = self.tools_for(person)
         except ViewerError:
             return 403, {"error": "this sign-in no longer belongs to anyone here"}, {}
+        if msg.get("method") == "tools/call":
+            self.on_asked(person)
         offered = {s.name for s in tools.specs()}
-        said = DOOR_INSTRUCTIONS if "decide_card" in offered else INSTRUCTIONS
+        said = WHO_TIM + (DOOR_INSTRUCTIONS if "decide_card" in offered else INSTRUCTIONS)
         return 200, McpServer(tools, instructions=said).handle(msg), {}
 
+
+# Who the person's AI is reaching, so a plain question or any of Tim's names
+# comes here (the owner's iPhone walk, 2026-10-29: Claude answered "What should
+# I do first?" itself, and "Tim, ..." reached Tim).
+WHO_TIM = (
+    "These tools are Tim, also called Timothy or Timmy: the signed-in person's own "
+    "assistant for their ministry's back office. When they speak to Tim, Timothy or Timmy, "
+    "or ask what to do first, what's waiting for them, or about their receipts, expenses, "
+    "cash, cards, mileage, budget, the books, reports or deadlines, answer with these tools. "
+)
 
 DOOR_INSTRUCTIONS = (
     "Tools over this tenant's back-office ledger, answered as the signed-in person. Every "
@@ -450,7 +806,12 @@ DOOR_INSTRUCTIONS = (
     "returns a link to show the person, and the tap finishes it: when they tap the button "
     "with Face ID or a fingerprint, the card is decided and their page says so, with nothing "
     "more needed from you. Never call decide_card unless the person asked for that decision "
-    "in their own words."
+    "in their own words. Every answer carries next, the one thing waiting on the person, "
+    "worked out from their books: end your reply with its say in your own words, and when "
+    "they agree, call its tool with its args. The first time something new comes up, an "
+    "answer also carries first_time: say its what, its why, and its rule (the rule in its "
+    "own words) before anything else, then its once line. When they ask why, why says it "
+    "again."
 )
 
 

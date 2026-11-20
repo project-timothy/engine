@@ -1,0 +1,12 @@
+{
+  "name": "inr_train",
+  "note": "a plain ticket that prints only the day of travel: the total and its currency read off it, and no day it was paid, so Tim asks her (the owner's call of 2026-11-19)",
+  "document": "inr_train.png",
+  "text": "INDIAN RAILWAYS\nNew Delhi to Agra\nJourney 2026-10-19\n2 Adults, Chair Car\nFare INR 1,830.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "1830.00",
+    "currency": "INR",
+    "invoice_date": null
+  }
+}

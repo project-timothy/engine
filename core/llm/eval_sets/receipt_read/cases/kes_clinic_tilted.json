@@ -1,0 +1,12 @@
+{
+  "name": "kes_clinic_tilted",
+  "note": "a tilted receipt: the total, its currency, and its day read off the picture",
+  "document": "kes_clinic_tilted.png",
+  "text": "UZIMA MEDICAL CLINIC\nKisumu, Kenya\nReceipt 0448  2026-10-30\nConsultation 1,000.00\nLab test 1,500.00\nAmount paid KSh 2,500.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "2500.00",
+    "currency": "KES",
+    "invoice_date": "2026-10-30"
+  }
+}

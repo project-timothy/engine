@@ -637,6 +637,33 @@ class Ledger:
             self._conn.commit()
         return cur.rowcount == 1
 
+    def ran_since(self, tenant: str, at: str) -> bool:
+        """Whether any run of the tenant was recorded after ``at``."""
+        return (
+            self._conn.execute(
+                "SELECT 1 FROM runs WHERE tenant = ? AND created_at > ? LIMIT 1", (tenant, at)
+            ).fetchone()
+            is not None
+        )
+
+    def reopen_approval(self, tenant: str, approval_id: int, params: dict[str, Any]) -> bool:
+        """Put a decided card back to waiting with ``params`` (a take-back, the
+        owner's call of 2026-11-18), only while no run of the tenant has been
+        recorded since it was decided, so nothing has acted on it: checked and
+        written in one statement. False, writing nothing, otherwise. The
+        caller holds the ledger's write lock, so no run is under way."""
+        cur = self._conn.execute(
+            "UPDATE approval_queue SET status = 'pending', resolved_at = NULL, params_json = ? "
+            "WHERE tenant = ? AND id = ? AND status IN ('approved', 'rejected') "
+            "AND resolved_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM runs "
+            "WHERE runs.tenant = approval_queue.tenant "
+            "AND runs.created_at > approval_queue.resolved_at)",
+            (json.dumps(params, sort_keys=True), tenant, approval_id),
+        )
+        if not self._in_txn:
+            self._conn.commit()
+        return cur.rowcount == 1
+
     def approval_by_idempotency_key(self, idempotency_key: str) -> dict[str, Any] | None:
         """The approval row holding this subject key, or None.
 

@@ -16,6 +16,11 @@ which job type (``[llm.jobs]``), and caps the month's spend
   row and raises :class:`BudgetExceeded` before any adapter is touched;
   the runner turns that row into an ``llm.budget`` anomaly on the run.
 
+A job's calls are counted against its own ledger connection. A caller that
+runs outside any job (Tim's own voice, ``core.talk``) hands
+:func:`complete_metered` its own :class:`CallMeter` and gets the same
+resolve, budget, call, and record, in the same order.
+
 Nothing here names a model or a provider: every id and every key variable
 comes from the tenant file. The decision behind the table's shape is
 ``docs/decisions/2026-09-12-llm-policy-table-shape.md``.
@@ -23,11 +28,14 @@ comes from the tenant file. The decision behind the table's shape is
 
 from __future__ import annotations
 
+import os
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from pathlib import Path
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
@@ -93,8 +101,38 @@ class DocumentTierRefused(LlmPolicyError):
 # The engine's jobs that send a document to a model, as an attachment. A test
 # holds this to the agents' own constants; engine doctor checks their routes.
 DOCUMENT_JOB_TYPES = frozenset(
-    {"invoice_extract", "receipt_extract", "inbox_classify", "scan_group"}
+    {
+        "invoice_extract",
+        "receipt_extract",
+        "inbox_classify",
+        "scan_group",
+        "receipt_read",
+        "letter_read",
+        "statement_read",
+    }
 )
+
+NAMED_ONLY = frozenset({"receipt_read", "letter_read", "statement_read", "talk", "talk_hard"})
+"""Jobs a tenant switches on only by naming them in ``[llm.jobs]``: a
+``default`` tier never covers them. ``receipt_read`` is the receipt page
+reading a photo the moment it lands (Standalone Tim, card R1); a ministry
+whose file does not name it keeps the page exactly as it was, and the eval
+gate, which checks the jobs a file names, always sees the tier it runs.
+``letter_read`` and ``statement_read`` are the interview reading her IRS
+letter and the catch-up link reading a bank statement's photo or PDF (card
+R2), each on only by its own line. ``talk`` and ``talk_hard`` are Tim's own
+voice at its two speeds (card V3, ``core/talk/speeds.py``): a ``default``
+line never switches his voice on or picks the model a hard question steps
+up to."""
+
+
+def named_on(settings: Any, job_type: str) -> bool:
+    """Whether the ministry's file switches ``job_type`` on: the job named in
+    ``[llm.jobs]`` with a tier, never ``deterministic``. The test every
+    :data:`NAMED_ONLY` job's switch reads (the receipt reader, card R1; Tim's
+    own voice, card T2)."""
+    tier = settings.jobs.get(job_type)
+    return bool(tier) and tier != DETERMINISTIC
 
 
 class BudgetExceeded(RuntimeError):
@@ -139,6 +177,8 @@ def _resolved(name: str, tier: LlmTier) -> ResolvedModel:
         pricing=Pricing(
             input_usd_per_mtok=tier.pricing.input_usd_per_mtok,
             output_usd_per_mtok=tier.pricing.output_usd_per_mtok,
+            cache_write_usd_per_mtok=tier.pricing.cache_write_usd_per_mtok,
+            cache_read_usd_per_mtok=tier.pricing.cache_read_usd_per_mtok,
         ),
         fallback=tuple(tier.fallback),
     )
@@ -152,7 +192,8 @@ def resolve(settings: Any, job_type: str) -> ResolvedModel:
     ``llm.jobs`` and ``llm.tiers``).
     """
     jobs: dict[str, str] = settings.jobs
-    tier_name = jobs.get(job_type, jobs.get(DEFAULT_JOB))
+    fallback = None if job_type in NAMED_ONLY else jobs.get(DEFAULT_JOB)
+    tier_name = jobs.get(job_type, fallback)
     if tier_name is None:
         raise UnresolvedJobError(job_type)
     if tier_name == DETERMINISTIC:
@@ -235,12 +276,23 @@ def _resolve_tier(settings: Any, name: str) -> ResolvedModel:
 # ---- adapters ------------------------------------------------------------------
 
 
+FIXTURE_REPLIES_ENV = "ENGINE_FIXTURE_REPLIES"
+"""Names a file of scripted replies for every ``fixture`` tier, one a line
+(``core.llm.adapters.fixture.replies_from_file``): how a harness that runs
+the engine as a program plays the model. It reaches a ``fixture`` tier
+only, which calls no model, so it can never stand in for a real one."""
+
+
 def _fixture(resolved: ResolvedModel) -> Adapter:
-    from core.llm.adapters.fixture import FixtureAdapter
+    from core.llm.adapters.fixture import FixtureAdapter, replies_from_file
 
     # A bare fixture tier answers nothing: every call is a non-transient
     # "no fixture reply" transport failure. A test or an eval hands
-    # complete_for() its seeded adapter through the ``adapter`` argument.
+    # complete_for() its seeded adapter through the ``adapter`` argument;
+    # a harness outside the engine names a file of replies.
+    scripted = os.environ.get(FIXTURE_REPLIES_ENV)
+    if scripted:
+        return FixtureAdapter(replies_from_file(Path(scripted)))
     return FixtureAdapter({})
 
 
@@ -301,6 +353,29 @@ def _detail(text: str, redact: bool) -> str:
     return WITHHELD_DETAIL if redact else text
 
 
+class CallMeter(Protocol):
+    """Where a policy call is counted: this month's recorded spend for a
+    tenant, and one ``llm_calls`` row per gateway call (the keywords of
+    :func:`core.llm.telemetry.record_call`)."""
+
+    def month_to_date_usd(self, tenant: str, *, now: datetime | None = None) -> Decimal: ...
+
+    def record_call(self, **row: Any) -> int: ...
+
+
+@dataclass(frozen=True)
+class _LedgerConn:
+    """A job's meter: its own ledger connection, held under the run lock."""
+
+    conn: sqlite3.Connection
+
+    def month_to_date_usd(self, tenant: str, *, now: datetime | None = None) -> Decimal:
+        return telemetry.month_to_date_usd(self.conn, tenant, now=now)
+
+    def record_call(self, **row: Any) -> int:
+        return telemetry.record_call(self.conn, **row)
+
+
 def complete_for[T: BaseModel](
     ctx: JobContext,
     job_type: str,
@@ -313,6 +388,7 @@ def complete_for[T: BaseModel](
     tier: str | None = None,
     redact_detail: bool = False,
     now: datetime | None = None,
+    cache: bool = False,
 ) -> GatewayResult[T]:
     """One model job under the tenant policy: resolve, budget, call, record.
 
@@ -324,28 +400,65 @@ def complete_for[T: BaseModel](
     refused, because that word outranks any caller. ``redact_detail`` keeps a
     failure's text out of the ``llm_calls`` row for a job whose replies may
     carry private content (:data:`WITHHELD_DETAIL`). ``now`` is the budget
-    clock, injectable for tests. Every gateway call writes one ``llm_calls``
-    row, ok or failed; a transient transport failure walks the tier's
-    ``fallback`` list, one row per attempt. Raises what the gateway raises,
-    plus :class:`LlmPolicyError` (config) and :class:`BudgetExceeded` (the
-    cap, before any call).
+    clock, injectable for tests. ``cache`` asks the provider to cache the
+    system text (``PromptBundle.cache``). Every gateway call writes one
+    ``llm_calls`` row, ok or failed; a transient transport failure walks the
+    tier's ``fallback`` list, one row per attempt. Raises what the gateway
+    raises, plus :class:`LlmPolicyError` (config) and :class:`BudgetExceeded`
+    (the cap, before any call).
     """
-    settings = ctx.tenant.llm
+    return complete_metered(
+        ctx.tenant.llm,
+        _LedgerConn(ctx.ledger.conn),
+        job_type,
+        messages,
+        output_model,
+        tenant=ctx.tenant_slug,
+        run_key=ctx.run_key,
+        attachments=attachments,
+        timeout_s=timeout_s,
+        adapter=adapter,
+        tier=tier,
+        redact_detail=redact_detail,
+        now=now,
+        cache=cache,
+    )
+
+
+def complete_metered[T: BaseModel](
+    settings: Any,
+    meter: CallMeter,
+    job_type: str,
+    messages: list[Message],
+    output_model: type[T],
+    *,
+    tenant: str,
+    run_key: str,
+    attachments: list[Attachment] | None = None,
+    timeout_s: int = 120,
+    adapter: Adapter | None = None,
+    tier: str | None = None,
+    redact_detail: bool = False,
+    now: datetime | None = None,
+    cache: bool = False,
+) -> GatewayResult[T]:
+    """:func:`complete_for` for a caller that is not a job: the tenant's
+    ``[llm]`` settings and a :class:`CallMeter` in place of a job's context.
+    Same resolve, same budget check before any call, same one row per
+    gateway call."""
     if tier is None:
         resolved = resolve(settings, job_type)
     else:
         if settings.jobs.get(job_type) == DETERMINISTIC:
             raise DeterministicJobError(job_type)
         resolved = _resolve_tier(settings, tier)
-    conn = ctx.ledger.conn
-    common = {"tenant": ctx.tenant_slug, "job_type": job_type, "run_key": ctx.run_key}
+    common = {"tenant": tenant, "job_type": job_type, "run_key": run_key}
 
     allowed = settings.document_tiers
     gated = bool(attachments) and allowed is not None
     if gated and resolved.tier not in allowed:
         refused = DocumentTierRefused(job_type, resolved.tier, list(allowed))
-        telemetry.record_call(
-            conn,
+        meter.record_call(
             **common,
             tier=resolved.tier,
             adapter=resolved.adapter,
@@ -357,11 +470,10 @@ def complete_for[T: BaseModel](
 
     cap = settings.budget.monthly_usd
     if cap is not None:
-        spent = telemetry.month_to_date_usd(conn, ctx.tenant_slug, now=now)
+        spent = meter.month_to_date_usd(tenant, now=now)
         if spent >= cap:
             refusal = BudgetExceeded(job_type, spent, cap)
-            telemetry.record_call(
-                conn,
+            meter.record_call(
                 **common,
                 tier=resolved.tier,
                 adapter=resolved.adapter,
@@ -387,10 +499,10 @@ def complete_for[T: BaseModel](
                 attachments=attachments,
                 timeout_s=timeout_s,
                 pricing=attempt.pricing,
+                cache=cache,
             )
         except GatewayValidationError as exc:
-            telemetry.record_call(
-                conn,
+            meter.record_call(
                 **common,
                 tier=attempt.tier,
                 adapter=wire.name,
@@ -401,8 +513,7 @@ def complete_for[T: BaseModel](
             )
             raise
         except GatewayTransportError as exc:
-            telemetry.record_call(
-                conn,
+            meter.record_call(
                 **common,
                 tier=attempt.tier,
                 adapter=wire.name,
@@ -414,8 +525,7 @@ def complete_for[T: BaseModel](
                 continue
             raise
         record = result.record
-        telemetry.record_call(
-            conn,
+        meter.record_call(
             **common,
             tier=attempt.tier,
             adapter=record.adapter,

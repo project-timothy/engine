@@ -13,11 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from core.capabilities import DOOR_SPECS, acts, build, load_lanes, load_tools, markdown
+from core.capabilities import DOOR_SPECS, RULES_ONLY, acts, build, load_lanes, load_tools, markdown
 from core.engine.cli import main
 from core.engine.registry import list_agents
 from core.onboarding import SHAPES, load_questions
 from core.tools.catalog import SPECS
+from tests.unit.test_door_my_words import no_plan, solo  # noqa: F401  (fixture)
 
 DOC = Path(__file__).resolve().parents[2] / "docs" / "what-tim-can-do.md"
 
@@ -52,6 +53,22 @@ def test_the_page_names_every_tool_every_question_and_every_shown_lane():
         "keep_own_lines",
         "keep_school_list",
         "explain_bank_line",
+        "split_line",
+        "count_cash",
+        "explain_cash",
+        "pick_card_receipt",
+        "ask_for_ok",
+        "set_budget",
+        "close_year",
+        "reopen_year",
+        "paid_it_myself",
+        "set_program_share",
+        "letter_details",
+        "keep_payers",
+        "keep_tax_facts",
+        "keep_travel",
+        "draft_rule",
+        "set_pay",
     }
     assert [q["ask"] for q in page["setup"]] == [q.ask for q in load_questions()]
     shown = {name for name, lane in load_lanes().items() if lane.get("shown", True)}
@@ -99,3 +116,15 @@ def test_the_docs_page_is_the_page_the_code_builds():
     """docs/what-tim-can-do.md, for anyone reading on GitHub. Regenerate:
     uv run engine capabilities > docs/what-tim-can-do.md"""
     assert DOC.read_text(encoding="utf-8") == markdown(build())
+
+
+def test_a_ministry_with_no_rules_is_not_told_about_rules(solo, capsys):  # noqa: F811
+    """The start sheet handed to a ministry lists what its door offers: with
+    no handbook rules, no rules tools (the alpha's solo ministry, 10/15)."""
+    no_plan(solo)
+    every = {t["name"] for t in [*build()["ask"], *build()["tell"]]}
+    assert RULES_ONLY <= every
+    assert main(["capabilities", "--format", "json", "--tenant", "living-water"]) == 0
+    page = json.loads(capsys.readouterr().out)
+    offered = {t["name"] for t in [*page["ask"], *page["tell"]]}
+    assert offered == every - RULES_ONLY

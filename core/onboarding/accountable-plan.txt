@@ -1,0 +1,52 @@
+${ministry}
+Accountable Reimbursement and Field Cash Plan
+
+1.  Purpose
+
+${ministry} (the "ministry") pays for and reimburses the expenses of the people who carry out its work under an accountable plan, as Internal Revenue Code section 62(c) and Treasury Regulation section 1.62-2 describe. Amounts paid under this plan are not income to the person who receives them.
+
+2.  Who this plan covers
+
+This plan covers every director, officer, employee, and volunteer who spends the ministry's funds, or spends personal funds for the ministry (each, a "Worker").
+
+3.  What the ministry pays for
+
+The ministry pays for ordinary and necessary expenses of carrying out its exempt purposes: scholarships and school fees paid for students, travel for the ministry's work, supplies, and the bank and ATM fees on the ministry's accounts.
+
+The ministry does not pay a Worker's personal living expenses (the Worker's own housing, food, and family costs) under this plan. Any such payment is compensation and requires a separate act of the Board.
+
+4.  Accounting for each expense
+
+Within ${account_days} days after paying an expense, the Worker accounts for it to the ministry with its amount, date, place, and ministry purpose. A receipt is required for any single expense of ${receipt_from} or more and for all lodging. An expense with no receipt available (local transport, small vendors, tips) is accounted for by a record made at or near the time it was paid, giving the same facts.
+
+An expense paid in another currency is recorded in that currency. The ministry values it in dollars at what that currency actually cost: the dollars charged for a card purchase, or for cash, the dollars withdrawn divided into the currency the withdrawal gave. When neither applies, the ministry uses the published exchange rate for the day the expense was paid.
+
+5.  Cash drawn from the ministry's accounts
+
+Cash a Worker draws from a ministry account, including foreign currency from an ATM, remains the ministry's property, held by the Worker for the ministry's work. The Worker reports the cash actually on hand, by count, at least once a month.
+
+Each month the ministry gives the Worker a statement of the cash drawn and the expenses accounted for, showing any amount not yet accounted for. This is the periodic statement that Treasury Regulation section 1.62-2(g)(2) describes. Cash on hand is not to exceed the equivalent of ${cash_ceiling} without the approval of a director.
+
+6.  Returning what is not accounted for
+
+Any amount on a monthly statement that is neither accounted for as an expense nor counted as cash on hand is returned to a ministry account within ${return_days} days after that statement. An amount not accounted for or returned within that time is treated as the law requires (as income to the Worker where it applies), and the Board may require its repayment.
+
+7.  Personal and mixed spending
+
+The ministry's funds are never used for personal expenses. A personal expense paid with the ministry's funds by mistake is reported in the next monthly accounting and repaid within ${return_days} days. A single purchase that is partly personal is divided when it is accounted for, and only the ministry's part is the ministry's expense.
+
+8.  Review and approval
+
+Each month's accounting is reviewed and approved by the Treasurer or another director who did not spend the funds. No Worker approves the Worker's own expenses.
+
+9.  Records
+
+The ministry keeps the records under this plan for at least seven years. Records kept through the ministry's bookkeeping assistant satisfy this plan when they carry the facts this plan requires.
+
+10.  Changes
+
+The Board may change this plan at any time by resolution. A change applies to expenses paid after the change is adopted.
+
+Resolution
+
+RESOLVED, that the Board of Directors of ${ministry} adopts this Accountable Reimbursement and Field Cash Plan, effective on the date below, and that it applies to all cash drawn from the ministry's accounts and not yet accounted for on that date.

@@ -77,7 +77,9 @@ evidence. Design of record: `docs/expenses-design.md` (approved 2026-08-04).
   words, the latest one wins, and a month already waiting for its yes is
   raised again showing it (the older card superseded). Every nonprofit
   shape starts from one starter list (tenants/_templates/ministry_categories.toml)
-  until the sending organization's own chart replaces it. A door receipt's
+  until the sending organization's own chart replaces it. A ministry adds
+  what it spends on beyond that list to its own (a scholarship ministry's
+  Scholarships, where its school list files). A door receipt's
   card line reads its day, its amount (a foreign one as said, with its
   rate), its category ("Uncategorized" when nobody placed it), and its fund.
 - **amount** — a door receipt's amount after its photo (board item
@@ -121,7 +123,7 @@ evidence. Design of record: `docs/expenses-design.md` (approved 2026-08-04).
   institution's, else the IRS table). A drive nobody spoke for waits on their
   word. A ministry drive rides the month's card (the owner, 2026-10-14): one
   line in the reviewer's words ("Oct 12: 14.0 miles, visiting the church
-  in Pokhara, $10.15 at 72.5 cents a mile"), filed as a report line once
+  in Pokhara, $10.64 at 76 cents a mile"), filed as a report line once
   approved, a record like a receipt (`records.drive_sha`). Personal or
   unexplained drives never become money. A ministry whose claims go to its
   institution does not send drives yet (AGWM drive claims wait on Robb).
@@ -135,13 +137,69 @@ evidence. Design of record: `docs/expenses-design.md` (approved 2026-08-04).
   own account: Tim proposes what looks like the ministry's, the person picks,
   and only the picked lines are ever kept; the rest is never written. A
   line's fingerprint leaves the bank's words out (banks reword memos), so a
-  statement sent twice is the same lines. Never counted twice: a remittance
+  statement sent twice is the same lines, and a run writes only lines and
+  balances not already kept. The bank's balance (board t-books-page,
+  2026-11-11; `balances.py`): when the export has a Balance column, the
+  ministry's account keeps, per statement, each day's closing balance and
+  every line it held (`bank.balances`; the day's last line in the order the
+  balances follow; a blank one is never guessed). The books are checked
+  only with lines a balanced statement held, so another account's lines, or
+  a statement sent with no balance, never read as a gap. The earliest
+  balance is where the books start; each later one checks them, and a gap
+  names its days and dollars once. `books` answers `in_the_bank`. The person's own account never keeps a balance. Never counted twice: a remittance
   send (Remitly and the like) is money moving, its receipts and the school
   list are the spending; the ministry paying the person back is matched to
-  their own statement by amount and day (`bank.transfer_matched`). A
-  receipt stands behind the line it paid (day within 3, same cents; in
+  their own statement by amount and day (`bank.transfer_matched`). Cash
+  from an ATM (board t-atm-cash, 2026-10-15) is money moving too: the
+  withdrawal waits on the rupees it gave (the slip, or the person's word
+  through `explain_bank_line`, kept as the purpose's `cash`), which set what
+  each rupee cost; rupee receipts no card line carries and rupee school
+  payments spend that cash down oldest first at that cost (`statements.cash`;
+  cash is drawn on the day the bank's words carry, `Line.drawn_on`, else up
+  to 3 days before it posted, since a weekend withdrawal abroad posts late;
+  priced through `fx.priced(..., drawn)`), paid by the ministry when the cash
+  came from its account, so nothing is owed back; month_report says the
+  cash on hand. The bank's ATM or foreign fee is spending, never waiting
+  (Bank Fees, else Other). The cash is counted (board t-cash-count, 2026-10-15):
+  `count_cash` takes the person's word for what's in hand (kept as
+  `bank.cash_counted`) and says the gap against `statements.cash`;
+  `explain_cash` says where the gap went, the ministry's spending or their own
+  use (`bank.cash_used`, the expenses `cash` job; an amount from their words,
+  a bare number asks, none takes the whole gap). Ministry cash used with no
+  receipt is the ministry paid; their own cash on the ministry is owed back;
+  the ministry's cash on themselves is "owed to the ministry" (role REPAY,
+  never spending, never on the card's total: the card's `repay`). A line on
+  the ministry's account bought for themselves is the same: `explain_bank_line`
+  with `whose` own keeps it on the purpose (`whose`), and the line reads REPAY
+  (Caleb's first night, 2026-10-25). A send home on the ministry's account
+  that was their own reads REPAY too (medicine for themselves, 2026-10-29).
+  **line_split** (`split_line`) takes an amount out of one line in the
+  person's words, in the line's money, never a percent (`bank.line_split`
+  with `take`, the owner 2026-11-10): "1,300 of that was mine" (whose own: owed
+  to the ministry when its money paid; nothing when their own account did)
+  or "5,000 of that was scholarships" (a category). The rest stays where it
+  was. One take per kind; the same kind said again replaces it. The line
+  reads as its parts, adding to the line to the cent (largest remainder);
+  only spending splits. Splits by whole percent (2026-10-29) are no longer
+  written but stay readable: an amount comes off the whole first and the
+  percents divide what is left. Tim never asks for a split. On a receipt
+  (`events#`), `split_line` with whose own is the receipt split below.
+  Both explain tools name the category
+  their words point to; with none, they list the ministry's categories and
+  take the one the person agrees to back as `category` (off the list: nothing
+  written). A receipt's split keeps the ministry's part as the receipt's amount and the
+  rest as `expense.receipt_split`: a line still carries the whole receipt and
+  splits in the same proportion. The ministry's cash pays first, then the
+  person's own; a purchase from both owes back only their part
+  (`fx.Drawn.own_cents`, the owner 2026-10-16). Cash ages (t-advance-clock):
+  month_report's `cash_oldest` from 45 days, the card's `cash` past 120, and
+  the routing notices ask for a count on the 1st and once at 45 days. A receipt stands behind its own person's line it paid, never a bank fee, every receipt that can find a line seated (day within 3, same cents; in
   rupees, within the bank's 6% of the day's rate), the card's dollars win,
-  and it rides that line instead of being a line of its own. A line with no
+  and it rides that line instead of being a line of its own. Two rupee
+  receipts that could each be one line, one left over, are never guessed
+  (t-ask-which-receipt): neither is cash or a line, the line waits, month_report
+  lists `could_be`, and `pick_card_receipt` records the person's answer as
+  `expense.receipt_rode` (the expenses `cash` job, `what = rode`). A line with no
   receipt waits on what it was for (`bank.line_purpose`). On the month's
   card: what the person paid is owed back and filed as report lines; what
   the ministry paid itself is listed for the yes and never owed; what only
@@ -206,3 +264,164 @@ evidence. Design of record: `docs/expenses-design.md` (approved 2026-08-04).
   records, approval-gated, and never writes without a card.
 - Credit-card receipts are filed paper (`_cc_charges/`), not ledger rows;
   statement reconciliation is a later build.
+
+## budget (t-year-budget, 2026-10-15)
+
+`engine run <t> expenses budget --param year=2026 --param kind=Scholarships
+--param amount=12000.00 --param by=<person> --param said=<their words>`: one
+`expenses.budget_set` event, the kind spelled as the ministry's own category.
+The newest one said for a kind and year is the budget; the year report
+(core/tools) reads it back beside the month report's own dollars: spent,
+left, and how much of the year is gone (core/agents/expenses/budget.py).
+Holds and moves no money. The door's `set_budget` offers it only to someone
+who looks over every month.
+
+## close_year (the owner, 2026-11-10: the books close once a year, by calendar year)
+
+`engine run <t> expenses close_year --param year=2026 --param digest=<sha256>
+--param by=<person> --param said=<their words> --param what=<the card's words>`
+plus the year's numbers (`came_in`, `spent`, `spent_by_kind`, `owed_back`,
+`owed_to_ministry`, `waiting`): one `expenses.close_year` card
+(core/agents/expenses/year_close.py), decided as a month's review is (approve
+on expense.report; it commits no money, so the door takes Face ID or the
+emailed yes). The door's `close_year` computes the numbers with the books
+tool's own code and offers it only to someone who looks over every month, once
+the year is over; months still waiting on a yes show on the card and never
+refuse it. The same numbers asked again are the same card; a card turned down
+is asked afresh. A yes closes the year: the door refuses every write naming
+something dated in it in one sentence (a late receipt's day is offered the open
+year), the statement and school jobs leave its lines out, and a month of it
+raises no new review card. Reads are untouched. Events and cards only; no
+schema change. A ministry that never closed a year keeps every key it had.
+
+## reopen_year (the owner, 2026-11-10: the right people for each size of ministry)
+
+`engine run <t> expenses reopen_year --param year=2026 --param by=<person>
+--param said=<their words>`: one `expenses.reopen_year` card for a closed year,
+carrying the warning that reopening may change the numbers last year's 1099s
+and 990 came from. Its rule is approve on books with `submitter=by`, so the
+ministry's own safeguards say who answers: a solo ministry (self-approval
+allowed) lets the missionary reopen alone; a church or an organization
+(self-approval never) needs someone else who approves for the books (a
+church's pastor for its treasurer; another person in finance). It commits no
+money, so the door takes Face ID or the emailed yes. The latest yes stands: a
+reopen's yes opens the year, and a close after it closes it again (that close
+card's key carries `:after-reopen-N`). Each close gets its own reopen card; one
+turned down is asked afresh. A ministry that never closed a year keeps every
+key it had.
+
+## letter_detail (c32, donors and their letters; the owner, 2026-11-12)
+
+Keeps what the donor letters need that the books don't hold, as said at the
+door (`letter_details`): the ministry's EIN, its mailing address, who signs
+and their title, a sentence on what gifts did, and a donor's mailing address.
+One `donors.letter_detail` event per word said; the newest on each field
+stands. No money, no ledger row: the letters themselves are read from the
+books (`donors.py`) and written as pages and PDFs by `engine donor-letters`,
+which sends nothing. A gift is a ministry deposit explained with `gift_from`
+(`fund_grant` for a donor-advised fund's grant) or booked under a kind named
+"Gifts from <name>".
+
+## payer, payer_form (c33, payers and the tax packet; the owner, 2026-11-12)
+
+Keeps who pays a missionary, as said at the door (`keep_payers`): one
+`payers.payer` event per payer said (the person's unit, the payer's name, its
+kind: support platform, sending church, agency, or personal gift; the words
+the bank prints on its deposits; W-2 for an agency that employs them), the
+newest word on a payer standing. In January, one `payers.form_figure` event
+per payer and year (what its tax form reports, in cents, read by the door from
+the person's words). No money moves, no migration, no ledger row. The packet
+(`tax_packet`, `payers.py`) reads the year's bank rows: a deposit that was the
+person's own (`their own money in`, c31) matches to the one payer whose words
+it carries (two as likely, or none, is the person's to say); a personal gift
+is listed and kept off; a deposit still counted as the ministry's that carries
+a payer's words is asked about, never moved. A deposit on their own account
+that is a `their pay` line of the ministry arriving (the same person, the same
+dollars, within a few days, matched as a payback is) reads as `their pay
+received` (#651, the owner, 2026-11-16): the same money as the pay line, kept
+beside it on the packet, never paid back and never added. Code decides it;
+nobody is asked. A line named someone's pay stays their pay even when keeping
+their own statement had matched it as a payback first, and keeping their own
+statement never matches a pay line as one (#653). A missionary's packet is theirs
+the missionary's, whoever looks over every month (who may also keep their tax
+facts and trips, naming them), and anyone they share it with. The owner,
+2026-11-15, after decision 2: the president does the missionary's books, so
+decision 2's "theirs alone" waits for a missionary with a tax picture of
+their own.
+
+c38 PR 2 (gaps B and D): a W-2's form figure is its box 1 wages, with box 2,
+federal income tax withheld, on the same `payers.form_figure` event
+(`withheld`); wages never reach Schedule C, and take-home pay is never
+compared against them. A payer kept as a personal gift whose name reads as an
+organization, or whose deposits come about monthly (three in a row, 25 to 38
+days apart), is asked once, "Do they send this because of your ministry
+work?"; the answer is kept on the payer event (`work`, yes or no) and carried
+when the payer is said again. A yes is income with no tax form, on Schedule C
+(`with_no_form`). A deposit of their own money explained with `gift_from` is a
+gift for them on that one line, whatever payer its words match, and never a
+donor's gift to the ministry (donor letters read `came in` lines only). A
+payer whose form isn't kept yet says to keep what it says once it comes, even
+when it differs (persona finding Y02).
+
+## tax_fact, tax_travel (c38, what only the person tells Tim; the owner, 2026-11-15)
+
+Keeps what the missionary says about their own taxes, at the door
+(`keep_tax_facts`, `keep_travel`, `core/tools/tax_facts.py`). One `tax.fact`
+event per call, for a tax year: filing status (single, or married filing
+jointly; any other is left to the preparer and nothing is kept), a spouse's
+wages and federal tax withheld (only as a pair, only on a joint return), last
+year's total tax, an estimate paid with its day, and who else may read the
+packet (`shared_with`, units on the ministry's list, or "no one"; no year).
+Newest wins field by field; an estimate said again for its day replaces it.
+One `tax.travel` event per trip: the day they left the United States, the day
+back (empty while away), the country; newest wins per day left, and `forget`
+drops it; an overlapping trip is asked about and nothing kept. The person says
+these, or whoever looks over every month for them; the packet shows them back
+as `what_they_said`.
+No money moves, no migration, no ledger row.
+
+The packet's tax half (`packet.py`, pure): Schedule C income is every 1099
+payer's form figure, or what Tim saw when no figure is kept yet; costs are
+every line on their own account they said was paid from their own pay
+(`whose` pay, role `paid from their pay`, c33): never owed back, never the
+ministry's spending, so the books and expense reports leave it out.
+Self-employment tax
+is 12.4% (to the wage base) plus 2.9% of 92.35% of the net, each part rounded
+as the form does, none below $400 of earnings; a W-2 agency's pay carries
+none. The days abroad are a draft from the days the bank shows spending in
+another currency, with each gap of more than two weeks named for the person.
+The estimate dates move past a weekend, Martin Luther King Jr. Day, and
+Emancipation Day. Each year's figures sit in `packet.YEARS` with their source;
+a year without them says so and works out no tax. `packet.page` lays the
+answer out as one page of blocks (formal register, every acronym spelled out),
+and `engine tax-packet` writes it as a page and a PDF through `core/tools/paper.py`,
+the donor letters' writer; it changes no books and sends nothing.
+
+
+c38 PR 3 (gap E): the packet's days abroad are counted from the trips said
+(`core/tax/presence.py`, pure): full days only, so the day they left and the
+day they came back don't count; the best 12 months in a row (365 days, 366
+across February 29) among those reaching into the tax year, then the one most
+in the year; a trip still open runs to the period's end, and the days after
+today are named (`days_still_ahead`). The bank's foreign spending stays beside
+it as the cross-check: each day it shows spending abroad that falls on no
+trip said is named (`bank_abroad_on_days_home`). With no trips said, the
+bank's draft stands as before.
+## processor (c32, gifts through a payment service; the owner, 2026-11-12)
+
+Keeps a payment service's export (PayPal, a church giving app; any CSV with a
+day, a gross, and a fee or a net, read by `processors.py` by header name),
+sent through the catch-up link and confirmed at the door as the ministry's own
+account (`bank_statement` with `account=ministry`, plus `service` when the
+export doesn't say which). One `processor.payment` event per completed gift,
+refund, or payout, keyed by the row's transaction id; pending, failed, holds,
+conversions, and money spent from the balance are left out and named back. No
+migration, no ledger row. The month reads each gift as money in at its gross
+with its donor named (`gift_from`; a giving fund's grant sets `fund_grant`)
+and its fee as spending from the service; the service is its own account in
+the journal (`Assets:Processor:<service>:<person>`). A payout is matched on
+every read to the bank deposit it became (same dollars, that day or within a
+week after, the same person's ministry account): the deposit carries the move
+(`moved between its accounts`), never income, and the 990's gross receipts
+count the gift once, at the service. A fee is no one's yes: it never goes on
+the reviewer's card.

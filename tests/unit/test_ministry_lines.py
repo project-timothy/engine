@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from core.agents.expenses.categories import canonical, from_words
-from core.agents.expenses.jobs import REVIEW_CARD
+from core.agents.expenses.records import REVIEW_CARD
 from core.engine.runner import run
 from core.tools import catalog
 from core.tools.receipts import Claim, ReceiptDesk, Receipts, take_photo
@@ -61,6 +61,21 @@ STARTER = [
 )
 def test_the_category_comes_from_the_persons_own_words(said, category):
     assert from_words(said, STARTER) == category
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "tuition for Anita at the secondary school",
+        "a scholarship for Bipana",
+        "school uniforms for two girls",
+    ],
+)
+def test_a_scholarship_ministry_files_school_costs_under_its_own_category(said):
+    """A scholarship ministry adds Scholarships to its list (2026-10-15); a
+    ministry without it never has school costs guessed into it."""
+    assert from_words(said, [*STARTER, "Scholarships"]) == "Scholarships"
+    assert from_words(said, STARTER) == ""
 
 
 def test_a_category_the_ministry_does_not_keep_is_never_chosen():
@@ -220,7 +235,7 @@ def test_both_the_filer_and_the_reviewer_are_offered_it(solo):  # noqa: F811
 
 
 def test_a_fund_is_named_only_when_the_lines_span_more_than_one():
-    from core.agents.expenses.jobs import _line_words
+    from core.agents.expenses.report_lines import _line_words
 
     line = {
         "file": "2026-10-12_receipt_x.jpg",

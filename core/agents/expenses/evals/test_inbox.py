@@ -243,7 +243,7 @@ def test_moved_inbox_file_with_no_event_is_recorded_on_the_next_run(
     "already filed"."""
     import shutil
 
-    from core.agents.expenses import jobs as exp_jobs
+    from core.agents.expenses import job_inbox
 
     sha = _seed(tmp_path, "IMG_8008.jpg", b"lunch-receipt", {"receipt": True, "confidence": 0.9})
     _run_inbox(tmp_path)
@@ -255,7 +255,7 @@ def test_moved_inbox_file_with_no_event_is_recorded_on_the_next_run(
         real_move(src, dst)
         raise RuntimeError("died after the move")
 
-    monkeypatch.setattr(exp_jobs.shutil, "move", move_then_die)
+    monkeypatch.setattr(job_inbox.shutil, "move", move_then_die)
     crashed = _run_inbox(tmp_path)
     assert crashed.status == "error"
     dest = tmp_path / "drop" / PERSON / "P26_2001" / "IMG_8008.jpg"
@@ -265,7 +265,7 @@ def test_moved_inbox_file_with_no_event_is_recorded_on_the_next_run(
             e for e in ledger.read_event_log() if e["event_type"] == "expense.inbox_filed"
         ] == []
 
-    monkeypatch.setattr(exp_jobs.shutil, "move", real_move)
+    monkeypatch.setattr(job_inbox.shutil, "move", real_move)
     if erase_record:
         # The pre-record shape (a run from before 2026-09-10, or a hand move):
         # nothing but the file itself says what happened.

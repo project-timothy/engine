@@ -1,0 +1,190 @@
+{
+  "job": "letter_read",
+  "model_id": "fixture-model",
+  "adapter": "fixture",
+  "tier": "",
+  "seeded": true,
+  "ran_at": "2026-11-18T05:26:52.824581+00:00",
+  "engine_commit": "4d8345b286e2c4c2afee9b6148e0ee1f1be5a711",
+  "provider_models": [],
+  "cases": 6,
+  "passed": 6,
+  "failed": 0,
+  "summary": "letter_read: 6 of 6 cases passed on model 'fixture-model' (adapter fixture); replies seeded from the cases, so this scores the harness, not a model",
+  "results": [
+    {
+      "case": "determination_clean",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "irs_letter",
+          "actual": "irs_letter",
+          "passed": true
+        },
+        {
+          "field": "ein",
+          "expected": "84-1234567",
+          "actual": "84-1234567",
+          "passed": true
+        },
+        {
+          "field": "legal_name",
+          "expected": "Hope Springs Ministries Inc.",
+          "actual": "Hope Springs Ministries Inc.",
+          "passed": true
+        },
+        {
+          "field": "organization",
+          "expected": "nonprofit",
+          "actual": "nonprofit",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "determination_faded",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "irs_letter",
+          "actual": "irs_letter",
+          "passed": true
+        },
+        {
+          "field": "ein",
+          "expected": "27-3456789",
+          "actual": "27-3456789",
+          "passed": true
+        },
+        {
+          "field": "legal_name",
+          "expected": "Tallgrass Lamp Ministries",
+          "actual": "Tallgrass Lamp Ministries",
+          "passed": true
+        },
+        {
+          "field": "organization",
+          "expected": "nonprofit",
+          "actual": "nonprofit",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "determination_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "irs_letter",
+          "actual": "irs_letter",
+          "passed": true
+        },
+        {
+          "field": "ein",
+          "expected": "61-2345678",
+          "actual": "61-2345678",
+          "passed": true
+        },
+        {
+          "field": "legal_name",
+          "expected": "Quiet Harbor Mission",
+          "actual": "Quiet Harbor Mission",
+          "passed": true
+        },
+        {
+          "field": "organization",
+          "expected": "nonprofit",
+          "actual": "nonprofit",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "determination_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "irs_letter",
+          "actual": "irs_letter",
+          "passed": true
+        },
+        {
+          "field": "ein",
+          "expected": "82-4567891",
+          "actual": "82-4567891",
+          "passed": true
+        },
+        {
+          "field": "legal_name",
+          "expected": "Willow Ford Fellowship Missions",
+          "actual": "Willow Ford Fellowship Missions",
+          "passed": true
+        },
+        {
+          "field": "organization",
+          "expected": "nonprofit",
+          "actual": "nonprofit",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "ein_notice_business",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "irs_letter",
+          "actual": "irs_letter",
+          "passed": true
+        },
+        {
+          "field": "organization",
+          "expected": "other",
+          "actual": "other",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "ein_notice_nonprofit",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "doc_type",
+          "expected": "irs_letter",
+          "actual": "irs_letter",
+          "passed": true
+        },
+        {
+          "field": "ein",
+          "expected": "47-5550123",
+          "actual": "47-5550123",
+          "passed": true
+        },
+        {
+          "field": "legal_name",
+          "expected": "Juniper Well Outreach, Inc.",
+          "actual": "Juniper Well Outreach, Inc.",
+          "passed": true
+        },
+        {
+          "field": "organization",
+          "expected": "nonprofit",
+          "actual": "nonprofit",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

@@ -1942,6 +1942,7 @@ def _statement_explained(ctx: JobContext) -> tuple[set[str], set[str]]:
         "ap.reconcile.paid",
         REF_BACKFILL_EVENT,
         REVIEW_PAID_EVENT,
+        SPLIT_PIECE_EVENT,
     )
     answered: set[str] = set()
     flagged: set[str] = set()
@@ -2506,6 +2507,8 @@ def _execute_review_cards(
                 # record behind it is the chosen row's own payment (the
                 # auditor verifies qbo_id there), else nothing to verify.
                 payload["qbo_id"] = str(row.get("qbo_payment_id") or "")
+                if "," in payload["qbo_id"]:
+                    payload["qbo_id"] = ""  # a split row's ids name no one record (#688)
                 payload["evidence"] = STATEMENT_UNKNOWN_SOURCE
                 payload["statement_id"] = p["qbo_id"]
             events.append(
@@ -3453,6 +3456,145 @@ def _statement_settle(
         out.settled += 1
 
 
+SPLIT_PIECE_EVENT = "ap.reconcile.split_piece_cleared"
+
+
+def _split_pieces_cleared(ctx: JobContext) -> dict[int, dict[str, dict]]:
+    """Row id -> check -> the statement line that cleared that piece, from
+    the event log (issue #688). The pieces of one bill can clear on
+    different statements, so the answer is remembered between runs."""
+    cleared: dict[int, dict[str, dict]] = {}
+    for e in ctx.ledger.read_event_log():
+        if e.get("event_type") != SPLIT_PIECE_EVENT:
+            continue
+        payload = e.get("payload") or {}
+        cleared.setdefault(int(payload["invoice_id"]), {})[str(payload["check"])] = payload
+    return cleared
+
+
+def _split_payment_ids(ctx: JobContext, row_id: int) -> dict[str, str]:
+    """Check -> the engine's own BillPayment for one piece of a split row,
+    from the payment-record events (the record the auditor verifies)."""
+    from .qbo_push_payments import PAYMENT_EVENT
+    from .reconcile import norm_check_ref
+
+    ids: dict[str, str] = {}
+    for e in ctx.ledger.read_event_log():
+        payload = e.get("payload") or {}
+        if e.get("event_type") == PAYMENT_EVENT and row_id in (payload.get("invoice_ids") or []):
+            ids[norm_check_ref(str(payload.get("check_ref", "")))] = str(payload.get("qbo_id", ""))
+    return ids
+
+
+def _statement_split_piece(
+    ctx: JobContext,
+    out: _ReconcileOut,
+    line,
+    instrument: str,
+    row: dict,
+    pieces: dict[int, dict[str, dict]],
+) -> None:
+    """One check of a row paid with several (issue #688). The piece is
+    remembered; when every check the row names has cleared, the row settles
+    with the last clearing date, its split reference kept, and one
+    ``ap.reconcile.paid`` per piece naming that piece's own record."""
+    from .reconcile import norm_check_ref
+    from .split_checks import read_split
+
+    split = read_split(
+        str(row["check_ref"]),
+        total_cents=int(row["amount_cents"]),
+        base_date=str(row["payment_date"] or "")[:10],
+    )
+    check = norm_check_ref(line.check_ref)
+    label = f"{row['vendor']} / {row['invoice_number']} (${row['amount_cents'] / 100:,.2f})"
+    if ctx.shadow:
+        out.already_recorded += 1
+        out.actions.append(f"would record {instrument} as one check of {label}")
+        return
+    piece_payload = {
+        "invoice_id": row["id"],
+        "vendor": row["vendor"],
+        "invoice_number": row["invoice_number"],
+        "check": check,
+        "check_ref": line.check_ref,
+        "amount_cents": line.amount_cents,
+        "date": line.date,
+        "statement_id": line.statement_id,
+        "split_of": row["check_ref"],
+    }
+    out.events.append(
+        EventSpec(
+            key=f"splitpiece:{line.statement_id}:{row['id']}",
+            event_type=SPLIT_PIECE_EVENT,
+            payload=piece_payload,
+        )
+    )
+    cleared = pieces.setdefault(int(row["id"]), {})
+    cleared[check] = piece_payload
+    waiting = [c for c in split.checks if c not in cleared] if split else []
+    if waiting:
+        out.already_recorded += 1
+        out.actions.append(
+            f"{instrument} paid one check of {label}; waiting on check(s) {', '.join(waiting)}"
+        )
+        return
+    last = max(str(p["date"]) for p in cleared.values())
+    store.update_status(
+        ctx.ledger,
+        invoice_id=row["id"],
+        status_to="Paid",
+        actor="engine:reconcile",
+        note="every check of the split cleared on the bank statement ("
+        + ", ".join(f"{c} on {cleared[c]['date']}" for c in split.checks)
+        + ")",
+        flip_key=f"stmt:{line.statement_id}:{row['id']}",
+    )
+    store.record_payment_details(ctx.ledger, invoice_id=row["id"], payment_date=last)
+    payment_ids = _split_payment_ids(ctx, int(row["id"]))
+    for c in split.checks:
+        p = cleared[c]
+        out.events.append(
+            EventSpec(
+                key=f"reconciled:{p['statement_id']}:{row['id']}",
+                event_type="ap.reconcile.paid",
+                payload={
+                    "invoice_id": row["id"],
+                    "vendor": row["vendor"],
+                    "invoice_number": row["invoice_number"],
+                    "amount_cents": p["amount_cents"],
+                    "qbo_id": payment_ids.get(c, ""),
+                    "payment_date": p["date"],
+                    "check_ref": p["check_ref"],
+                    "evidence": STATEMENT_UNKNOWN_SOURCE,
+                    "statement_id": p["statement_id"],
+                },
+            )
+        )
+    out.events.append(
+        EventSpec(
+            key=f"statement_paid:{line.statement_id}:{row['id']}",
+            event_type=REVIEW_PAID_EVENT,
+            payload={
+                "invoice_id": row["id"],
+                "vendor": row["vendor"],
+                "invoice_number": row["invoice_number"],
+                "amount_cents": row["amount_cents"],
+                "qbo_ids": [payment_ids[c] for c in split.checks if payment_ids.get(c)],
+                "payment_date": last,
+                "check_ref": row["check_ref"],
+                "evidence": STATEMENT_UNKNOWN_SOURCE,
+                "statement_id": line.statement_id,
+                "resolved_by": STATEMENT_UNKNOWN_SOURCE,
+            },
+        )
+    )
+    row["status"] = "Paid"  # later lines see the settle
+    row["payment_date"] = last
+    out.actions.append(f"settled {label} <- every check of the split ({instrument} last)")
+    out.settled += 1
+
+
 def _reconcile_statement_tier(
     ctx: JobContext,
     out: _ReconcileOut,
@@ -3493,6 +3635,7 @@ def _reconcile_statement_tier(
     if stmt_lines:
         rows = _reconcile_rows(ctx)  # the snapshot after everything above flipped
         stmt_answered, stmt_flagged_only = _statement_explained(ctx)
+        pieces = _split_pieces_cleared(ctx)  # #688: earlier statements' pieces
         # #305: the statement side of the cross-source identity, computed
         # here because every numberless card this run parks is known by now.
         # Both directions must be unique: two checks written the same day for
@@ -3553,6 +3696,9 @@ def _reconcile_statement_tier(
 
             elif decision.kind == "settle":
                 _statement_settle(ctx, out, line, instrument, decision.rows)
+
+            elif decision.kind == "split_piece":
+                _statement_split_piece(ctx, out, line, instrument, decision.rows[0], pieces)
 
             elif decision.kind == "review":
                 out.review += 1

@@ -20,9 +20,12 @@ from typing import Any
 EVENT_LOG_FILENAME = "event_log.jsonl"
 
 
-def append_event_line(root: Path, record: dict[str, Any]) -> None:
-    """Append one event record as a single JSON line under ``root``."""
-    path = root / EVENT_LOG_FILENAME
+def append_event_line(
+    root: Path, record: dict[str, Any], *, filename: str = EVENT_LOG_FILENAME
+) -> None:
+    """Append one event record as a single JSON line under ``root`` (in
+    ``filename``: the door's read log keeps its own file beside this one)."""
+    path = root / filename
     line = json.dumps(record, sort_keys=True, separators=(",", ":"))
     with path.open("a", encoding="utf-8") as handle:
         handle.write(line + "\n")

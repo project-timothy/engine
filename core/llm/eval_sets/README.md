@@ -66,8 +66,18 @@ answer with it and the contract fill in the rest. The results file still
 records the whole reply the model gave, so a reader sees everything that was
 not asserted.
 
-Every document is `conftest.minimal_pdf(case["text"])`, and a test pins that,
-so the file and the inlined text can never drift apart. One form feed (`\f`)
+A set of PICTURES says so in `job.json` with `built_by`, the script that
+draws every document and case (`receipt_read`: 40 receipt photos, built by
+`scripts/receipt_read_set.py`; `letter_read` and `statement_read` are built
+the same way, with the same drawing code, `scripts/picture_set.py`). The
+pictures are Mac-built: `manifest.json` holds every file by SHA-256 on any
+machine, the plain JSON matches a rebuild byte for byte, and on a Mac each
+picture draws what a rebuild draws; no picture carries a text layer. Every other document is
+`conftest.minimal_pdf(case["text"])`, and a test pins that,
+so the file and the inlined text can never drift apart. A CONVERSATION's
+set (`talk`) attaches no document: each case carries `messages`, the
+conversation up to the person's latest message, and `job.json` names
+`system_from`, the function that builds the system text when the set runs. One form feed (`\f`)
 in the case text is one page break in the document, so a multi-page case is
 still one readable string. Cases carry synthetic businesses and synthetic
 amounts only, the same shapes the agent evals already use.

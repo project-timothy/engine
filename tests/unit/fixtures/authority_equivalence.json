@@ -216,7 +216,7 @@
    [
     "create",
     "Work permit renewal (Jane)",
-    "2026-11-20",
+    "2026-11-23",
     10080
    ],
    [
@@ -232,13 +232,13 @@
      "action_type": "deadlines.calendar_sync",
      "agent": "deadlines",
      "id": 1,
-     "idempotency_key": "apr:demo:deadlines:deadlines.calendar_sync:calendar:0839367ac8fe5058",
+     "idempotency_key": "apr:demo:deadlines:deadlines.calendar_sync:calendar:093b8a58f0eac8db",
      "params_json": {
       "changes": [
-       "create: Work permit renewal (Jane) 2026-11-20",
+       "create: Work permit renewal (Jane) 2026-11-23",
        "create: Quarterly report 2026-12-31"
       ],
-      "plan": "0839367ac8fe5058",
+      "plan": "093b8a58f0eac8db",
       "provider": "graph"
      },
      "status": "approved"
@@ -248,13 +248,13 @@
     {
      "agent": "deadlines",
      "event_type": "deadlines.calendar",
-     "idempotency_key": "deadlines.calendar.<key>:evt:cal:permit-20261120:created",
+     "idempotency_key": "deadlines.calendar.<key>:evt:cal:permit-20261123:created",
      "payload_json": {
       "event_id": "E1",
-      "fp": "2ad15c908198a3a6",
+      "fp": "c26ca26863d13966",
       "op": "created",
       "subject": "Work permit renewal (Jane)",
-      "uid": "permit-20261120"
+      "uid": "permit-20261123"
      }
     },
     {
@@ -281,10 +281,10 @@
       "action_type": "deadlines.calendar_sync",
       "params": {
        "changes": [
-        "create: Work permit renewal (Jane) 2026-11-20",
+        "create: Work permit renewal (Jane) 2026-11-23",
         "create: Quarterly report 2026-12-31"
        ],
-       "plan": "0839367ac8fe5058",
+       "plan": "093b8a58f0eac8db",
        "provider": "graph"
       },
       "reason": "write deadlines to your calendar (2 to create)"
@@ -363,7 +363,7 @@
    [
     "create",
     "Work permit renewal (Jane)",
-    "2026-11-20",
+    "2026-11-23",
     10080
    ],
    [
@@ -379,13 +379,13 @@
     {
      "agent": "deadlines",
      "event_type": "deadlines.calendar",
-     "idempotency_key": "deadlines.calendar.<key>:evt:cal:permit-20261120:created",
+     "idempotency_key": "deadlines.calendar.<key>:evt:cal:permit-20261123:created",
      "payload_json": {
       "event_id": "E1",
-      "fp": "2ad15c908198a3a6",
+      "fp": "c26ca26863d13966",
       "op": "created",
       "subject": "Work permit renewal (Jane)",
-      "uid": "permit-20261120"
+      "uid": "permit-20261123"
      }
     },
     {

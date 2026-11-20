@@ -1,0 +1,241 @@
+# The 2026 federal tax figures (board chunk c36). One file a year: each
+# November the next year's file is one pull request that a person reads
+# against the IRS's own release.
+#
+# Every figure carries four things: its value, the source it came from (a
+# key under [sources]), where in that source (its address), and the day
+# someone read it there (confirmed). tests/unit/test_tax_tables.py fails the
+# build on a figure missing any of them.
+#
+# Money is in dollars as a string ("16100" or "192979.25"); a rate is a
+# decimal string ("0.124"). A bracket row is [up to, rate, the printed base
+# amount]; the top row's "up to" is "" (no ceiling).
+
+year = "2026"
+
+[sources]
+rp-2025-32 = { title = "IRS Revenue Procedure 2025-32", url = "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf" }
+schedule-se = { title = "2026 Schedule SE (Form 1040), Self-Employment Tax", url = "https://www.irs.gov/pub/irs-pdf/f1040sse.pdf" }
+i-schedule-se = { title = "Instructions for Schedule SE (Form 1040) (2026)", url = "https://www.irs.gov/pub/irs-pdf/i1040sse.pdf" }
+form-1040-es = { title = "2026 Form 1040-ES, Estimated Tax for Individuals", url = "https://www.irs.gov/pub/irs-pdf/f1040es.pdf" }
+i-form-2555 = { title = "Instructions for Form 2555 (2026), Foreign Earned Income", url = "https://www.irs.gov/pub/irs-pdf/i2555.pdf" }
+notice-2026-25 = { title = "IRS Notice 2026-25, foreign housing limits for 2026", url = "https://www.irs.gov/pub/irs-drop/n-26-25.pdf" }
+mileage = { title = "IRS standard mileage rates (IR-2025-128 and IR-2026-29)", url = "https://www.irs.gov/tax-professionals/standard-mileage-rates" }
+form-8995 = { title = "Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed", url = "https://www.irs.gov/pub/irs-pdf/f8995.pdf" }
+i-form-1099-nec = { title = "Instructions for Forms 1099-MISC and 1099-NEC (Rev. December 2026)", url = "https://www.irs.gov/pub/irs-pdf/i1099mec.pdf" }
+
+# ---- income tax brackets --------------------------------------------------------------
+
+[figures."brackets.single"]
+value = [
+  ["12400", "0.10", "0"],
+  ["50400", "0.12", "1240"],
+  ["105700", "0.22", "5800"],
+  ["201775", "0.24", "17966"],
+  ["256225", "0.32", "41024"],
+  ["640600", "0.35", "58448"],
+  ["", "0.37", "192979.25"],
+]
+source = "rp-2025-32"
+address = "section 4.01, Table 3 (unmarried individuals)"
+confirmed = "2026-11-15"
+
+[figures."brackets.married_jointly"]
+value = [
+  ["24800", "0.10", "0"],
+  ["100800", "0.12", "2480"],
+  ["211400", "0.22", "11600"],
+  ["403550", "0.24", "35932"],
+  ["512450", "0.32", "82048"],
+  ["768700", "0.35", "116896"],
+  ["", "0.37", "206583.50"],
+]
+source = "rp-2025-32"
+address = "section 4.01, Table 1 (married individuals filing joint returns)"
+confirmed = "2026-11-15"
+
+# ---- the standard deduction -----------------------------------------------------------
+
+[figures."standard_deduction.single"]
+value = "16100"
+source = "rp-2025-32"
+address = "section 4.14(1)"
+confirmed = "2026-11-15"
+
+[figures."standard_deduction.married_jointly"]
+value = "32200"
+source = "rp-2025-32"
+address = "section 4.14(1)"
+confirmed = "2026-11-15"
+
+[figures."standard_deduction.head_of_household"]
+value = "24150"
+source = "rp-2025-32"
+address = "section 4.14(1)"
+confirmed = "2026-11-15"
+
+[figures."standard_deduction.aged_or_blind"]
+value = "1650"
+source = "rp-2025-32"
+address = "section 4.14(3), married"
+confirmed = "2026-11-15"
+
+[figures."standard_deduction.aged_or_blind_unmarried"]
+value = "2050"
+source = "rp-2025-32"
+address = "section 4.14(3), unmarried and not a surviving spouse"
+confirmed = "2026-11-15"
+
+# ---- self-employment tax --------------------------------------------------------------
+
+[figures."self_employment.wage_base"]
+value = "184500"
+source = "i-schedule-se"
+address = "What's New, page 1 (also Form 1040-ES worksheet line 5)"
+confirmed = "2026-11-15"
+
+[figures."self_employment.earnings_share"]
+value = "0.9235"
+source = "schedule-se"
+address = "line 4a"
+confirmed = "2026-11-15"
+
+[figures."self_employment.social_security"]
+value = "0.124"
+source = "schedule-se"
+address = "line 10"
+confirmed = "2026-11-15"
+
+[figures."self_employment.medicare"]
+value = "0.029"
+source = "schedule-se"
+address = "line 11"
+confirmed = "2026-11-15"
+
+[figures."self_employment.floor"]
+value = "400"
+source = "schedule-se"
+address = "line 4c (less than $400: no self-employment tax)"
+confirmed = "2026-11-15"
+
+[figures."self_employment.half"]
+value = "0.50"
+source = "schedule-se"
+address = "line 13 (deduction for one-half of self-employment tax)"
+confirmed = "2026-11-15"
+
+# ---- the Foreign Earned Income Exclusion and foreign housing --------------------------
+
+[figures."exclusion.most"]
+value = "132900"
+source = "rp-2025-32"
+address = "section 4.39 (also Form 2555 instructions, What's New)"
+confirmed = "2026-11-15"
+
+[figures."housing.base"]
+value = "21264"
+source = "notice-2026-25"
+address = "section 2, base housing amount (16% of $132,900)"
+confirmed = "2026-11-15"
+
+[figures."housing.limit"]
+value = "39870"
+source = "notice-2026-25"
+address = "section 2, general limit (30% of $132,900)"
+confirmed = "2026-11-15"
+
+# ---- the qualified business income deduction ------------------------------------------
+
+[figures."qualified_business_income.share"]
+value = "0.20"
+source = "form-8995"
+address = "lines 5 and 14"
+confirmed = "2026-11-15"
+
+[figures."qualified_business_income.threshold_single"]
+value = "201750"
+source = "rp-2025-32"
+address = "section 4.26, all other returns"
+confirmed = "2026-11-15"
+
+[figures."qualified_business_income.threshold_married_jointly"]
+value = "403500"
+source = "rp-2025-32"
+address = "section 4.26, married individuals filing joint returns"
+confirmed = "2026-11-15"
+
+[figures."qualified_business_income.minimum_deduction"]
+value = "400"
+source = "rp-2025-32"
+address = "section 2.12 (section 199A(i) minimum deduction)"
+confirmed = "2026-11-15"
+
+[figures."qualified_business_income.minimum_income"]
+value = "1000"
+source = "rp-2025-32"
+address = "section 2.12 (at least $1,000 of qualified business income)"
+confirmed = "2026-11-15"
+
+# ---- estimated tax --------------------------------------------------------------------
+
+[figures."estimates.owed_at"]
+value = "1000"
+source = "form-1040-es"
+address = "Who Must Make Estimated Tax Payments, General Rule 1"
+confirmed = "2026-11-15"
+
+[figures."estimates.this_year_share"]
+value = "0.90"
+source = "form-1040-es"
+address = "General Rule 2a"
+confirmed = "2026-11-15"
+
+[figures."estimates.last_year_share"]
+value = "1.00"
+source = "form-1040-es"
+address = "General Rule 2b"
+confirmed = "2026-11-15"
+
+[figures."estimates.last_year_share_high_income"]
+value = "1.10"
+source = "form-1040-es"
+address = "Higher income taxpayers (110% for 100% in 2b)"
+confirmed = "2026-11-15"
+
+[figures."estimates.high_income"]
+value = "150000"
+source = "form-1040-es"
+address = "Higher income taxpayers (2025 adjusted gross income over $150,000)"
+confirmed = "2026-11-15"
+
+# ---- mileage, credits, and forms ------------------------------------------------------
+
+[figures."mileage.business_to_june_30"]
+value = "0.725"
+source = "mileage"
+address = "2026 (Jan. 1 to June 30), IR-2025-128"
+confirmed = "2026-11-15"
+
+[figures."mileage.business_from_july_1"]
+value = "0.76"
+source = "mileage"
+address = "2026 (July 1 to Dec. 31), IR-2026-29"
+confirmed = "2026-11-15"
+
+[figures."child_tax_credit.most"]
+value = "2200"
+source = "rp-2025-32"
+address = "section 4.05(1)"
+confirmed = "2026-11-15"
+
+[figures."child_tax_credit.refundable"]
+value = "1700"
+source = "rp-2025-32"
+address = "section 4.05(2)"
+confirmed = "2026-11-15"
+
+[figures."form_1099_nec.threshold"]
+value = "2000"
+source = "i-form-1099-nec"
+address = "What's New (payments after 2025)"
+confirmed = "2026-11-15"

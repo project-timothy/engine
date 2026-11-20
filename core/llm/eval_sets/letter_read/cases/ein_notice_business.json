@@ -1,0 +1,10 @@
+{
+  "name": "ein_notice_business",
+  "note": "a plain IRS letter: whether it is to a nonprofit, and its name and number, read off the picture",
+  "document": "ein_notice_business.png",
+  "text": "Internal Revenue Service      Department of the Treasury\nP.O. Box 2508, Cincinnati OH 45201\nDate of this notice: 04-15-2025\nEmployer Identification Number: 88-7654321\nForm: SS-4   Type of organization: Limited liability company\n\nCole Family Coffee LLC\n40 Front Street\nLebanon, TN 37087\n\nWE ASSIGNED YOU AN EMPLOYER IDENTIFICATION NUMBER\nThank you for applying for an Employer Identification\nNumber (EIN). We assigned you EIN 88-7654321. You\nmust file Form 1065, U.S. Return of Partnership Income,\neach year.\nNotice CP 575",
+  "expect": {
+    "doc_type": "irs_letter",
+    "organization": "other"
+  }
+}

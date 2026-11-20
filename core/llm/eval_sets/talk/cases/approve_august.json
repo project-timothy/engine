@@ -1,0 +1,28 @@
+{
+  "note": "She asks for a decision in her own words and Tim has found the card: he calls the deciding tool, whose yes page she taps, and never says it's approved himself.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Approve my August report."
+    },
+    {
+      "role": "assistant",
+      "content": "{\"call\": {\"tool\": \"waiting_cards\", \"args_json\": \"{}\"}}"
+    },
+    {
+      "role": "user",
+      "content": "<books tool=\"waiting_cards\">\n{\"rows\": [{\"about\": \"Daniel Reyes's August 2026 expense report, $612.40, waiting for his yes\", \"card\": 41, \"agent\": \"expenses\", \"action_type\": \"expenses.report_approval\", \"status\": \"pending\", \"created_at\": \"2026-09-02T14:10:00+00:00\", \"params\": {\"submitter\": \"daniel-reyes\", \"month\": \"2026-08\", \"total\": \"612.40\"}, \"source\": \"approval_queue#41\"}], \"next\": {\"say\": \"Your August expense report is waiting for your yes.\", \"tool\": \"decide_card\", \"args\": {\"card\": 41}}}\n</books>"
+    }
+  ],
+  "expect": {
+    "call": {
+      "tool": "decide_card"
+    }
+  },
+  "seed": {
+    "call": {
+      "tool": "decide_card",
+      "args_json": "{\"card\": 41, \"decision\": \"approve\", \"said\": \"Approve my August report.\"}"
+    }
+  }
+}

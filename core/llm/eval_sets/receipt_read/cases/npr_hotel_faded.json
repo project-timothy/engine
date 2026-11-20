@@ -1,0 +1,12 @@
+{
+  "name": "npr_hotel_faded",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "npr_hotel_faded.png",
+  "text": "HOTEL LAKESIDE VIEW\nPokhara-6, Nepal\nBill date 2026-10-13\nRoom 2 nights 6,000.00\nBreakfast 1,200.00\nService charge 720.00\nVAT 1,029.60\nNET TOTAL NPR 8,949.60",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "8949.60",
+    "currency": "NPR",
+    "invoice_date": "2026-10-13"
+  }
+}

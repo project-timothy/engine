@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
+
 from core.adapters.pretend_reader import MARK, PretendReader
 from core.contracts.reader import Reading, ReceiptReader
 from core.tools.receipts import Claim, ReceiptDesk, Receipts, take_photo
@@ -69,6 +71,7 @@ def test_no_amount_in_the_words_still_gets_the_link(solo):  # noqa: F811
     assert "how much" in out["say"]
 
 
+@pytest.mark.security("SEC-12")
 def test_with_no_reader_tim_asks_how_much_and_nothing_is_counted(solo):  # noqa: F811
     said = _unpriced_snap(solo)
     assert said.startswith("Got it.") and "How much was it?" in said
@@ -87,6 +90,7 @@ def test_their_words_set_the_amount_afterward(solo, feed):  # noqa: F811
     assert line["waiting_on"] is None
 
 
+@pytest.mark.security("SEC-12")
 def test_the_photo_reading_is_only_a_proposal_until_their_yes(solo):  # noqa: F811
     _reader(solo)
     said = _unpriced_snap(solo, photo=JPEG + MARK + b"43.00 USD")
@@ -100,6 +104,7 @@ def test_the_photo_reading_is_only_a_proposal_until_their_yes(solo):  # noqa: F8
     assert line["dollars"] == "43.00" and line["read"] is None
 
 
+@pytest.mark.security("SEC-12")
 def test_their_own_amount_wins_over_the_reading(solo):  # noqa: F811
     _reader(solo)
     _unpriced_snap(solo, photo=JPEG + MARK + b"43.00 USD")
@@ -173,3 +178,89 @@ def test_the_country_names_the_currency():
     assert claim_in("1,200 Kenyan shillings for airtime").currency == "KES"
     assert claim_in("500 Philippine pesos").currency == "PHP"
     assert claim_in("4,300 rupees").currency == ""  # still settled by where they are
+
+
+# ---- a number with no money named (persona finding S13, 2026-11-15) -----------------------
+# "12.49 total" for an online-store receipt filed the photo with no amount, and his AI
+# asked "how much?"; he said "i already told u." Tim never guesses which money,
+# so the question is only which money, keeping the number he said.
+
+
+@pytest.mark.parametrize(
+    ("said", "bare"),
+    [
+        ("12.49 total for two Kindle books", "12.49"),
+        ("it was 4,300", "4,300"),
+        ("950 for the taxi", "950"),
+        ("receipt from Oct 3", ""),  # a day isn't an amount
+        ("the 12/14 bus ticket", ""),
+        ("$12.49 for the books", ""),  # money named: no question
+        ("12.49 and 3.50", ""),  # two numbers: ask how much
+        ("here's a receipt", ""),
+    ],
+)
+def test_a_number_with_no_money_named(said, bare):
+    from core.tools.receipts import _bare_number
+
+    assert _bare_number(said) == bare
+
+
+def test_a_bare_number_is_asked_which_money_never_how_much(solo):  # noqa: F811
+    receipts = Receipts(
+        "living-water",
+        tenants_root=solo["root"],
+        ledger_root=solo["ledger_root"],
+        person="daniel-reyes",
+        desk=ReceiptDesk(),
+        base_url="https://tim.example.org/receipt",
+    )
+    out = receipts.add("12.49 total for two Kindle books")
+    assert out["status"] == "tap_to_add"
+    assert "whether 12.49 was dollars or rupees" in out["say"]
+    assert "never how much again" in out["say"]
+
+
+def test_set_amount_with_a_bare_number_asks_which_money(solo):  # noqa: F811
+    _unpriced_snap(solo)
+    out = _set(solo, "12.49 total")
+    assert out["status"] == "needs_currency" and "dollars or rupees" in out["say"]
+    assert "12.49" in out["say"] and _line(solo)["dollars"] is None
+
+
+def test_a_receipt_tim_already_keeps_is_named_never_asked_for_again(solo):  # noqa: F811
+    """Persona night S08 (2026-11-16): "march 7 bhat-bhateni receipt 4380
+    rupees, 430 of that was cooking oil for my kitchen" was a receipt Tim
+    already kept, yet Tim sent a camera link for it, the person went to find
+    the paper, and the 430 rupees never came out. The same amount in the same
+    money on a day their words name is that receipt: Tim names it, and its
+    source to split. With no day named it is a new one (S01: taxi fares recur)."""
+    from tests.unit.test_ministry_lines import _snap
+
+    _snap(solo, "4,380 rupees for groceries", Claim(Decimal("4380"), "", "rupees"))
+    source = _line(solo)["source"]
+    daniel = _door(solo, "daniel-reyes")
+    said = "oct 12 bhat-bhateni receipt 4380 rupees 430 of that was cooking oil for my kitchen"
+    out = daniel.call("add_receipt", {"said": said})
+    assert out["status"] == "already_kept" and "show" not in out
+    assert "NPR 4,380.00" in out["say"] and "2026-10-12" in out["say"]
+    assert source in out["say"] and "split_line" in out["say"]
+    again = daniel.call("add_receipt", {"said": said, "another": True})
+    assert again["status"] == "tap_to_add"
+    assert daniel.call("add_receipt", {"said": "500 rupees for tea"})["status"] == "tap_to_add"
+    for fresh in ("the bhat-bhateni receipt from yesterday, 4380 rupees", "oct 13, 4380 rupees"):
+        assert daniel.call("add_receipt", {"said": fresh})["status"] == "tap_to_add", fresh
+
+
+@pytest.mark.parametrize(
+    ("said", "days"),
+    [
+        ("march 7 bhat-bhateni receipt 4380 rupees", {"03-07"}),
+        ("the 7th of March, 4,380 rupees", {"03-07"}),
+        ("receipt dated 2026-03-07", {"03-07"}),
+        ("taxi receipt from yesterday, 950 rupees", set()),
+    ],
+)
+def test_the_days_their_words_name(said, days):
+    from core.tools.receipts import days_named
+
+    assert days_named(said) == days

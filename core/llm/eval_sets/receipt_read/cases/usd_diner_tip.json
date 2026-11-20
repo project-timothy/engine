@@ -1,0 +1,12 @@
+{
+  "name": "usd_diner_tip",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_diner_tip.png",
+  "text": "BLUE PLATE DINER\nAsheville NC\n11/02/2026\n2 Specials 24.00\nCoffee x2 5.00\nSubtotal 29.00\nTax 2.03\nTip 5.00\nTOTAL $36.03",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "36.03",
+    "currency": "USD",
+    "invoice_date": "2026-11-02"
+  }
+}

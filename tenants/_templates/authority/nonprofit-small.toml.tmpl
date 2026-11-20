@@ -26,16 +26,18 @@
 out = "human"
 
 [safeguards]
-# A few people. Approving your own is fine below the limit; above it, a
-# second person does. Above the second threshold a bill needs two approvals.
-self_approval = "below_limit"
-self_approval_limit = 500
+# A church. Nobody approves their own spending, at any amount: the pastor
+# okays the treasurer's, the treasurer the pastor's (the owner's decision of
+# 2026-10-16). Above the limit the approver and the payer are different
+# people; above the second threshold a bill needs two approvals.
+self_approval = "never"
+self_approval_limit = 0
 review_after = "none"
 distinct_payer = "above_limit"
 distinct_payer_above = 500
 second_approver_above = 2500
 authority_confirm = "second_person"
-report_self_approvals = "above_limit"
+report_self_approvals = "always"
 # A yes said to the person's own AI, through the box's door, decides a card
 # committing up to this much; above it they confirm with Face ID. 0 = every
 # yes takes Face ID. Onboarding sets it per shape; human-only cards always do.
@@ -103,4 +105,8 @@ backup_after_days = 5
 # steps = [{ role = "approver" }, { role = "owner" }]
 
 [people]
-# Filled in at onboarding: name = { roles = [...], scopes = [...] }
+# Filled in at onboarding: id = { roles = [...], scopes = [...] }
+# An id that is not the slug of the person's name ("sam" for "Sam Staffer")
+# carries the name its cards use: sam = { roles = [...], name = "Sam Staffer" }.
+# A card whose person matches nobody here may be the decider's own, so a
+# decider with no name here cannot decide it when approving your own is off.

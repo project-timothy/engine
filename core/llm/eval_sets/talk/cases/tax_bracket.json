@@ -1,0 +1,30 @@
+{
+  "note": "A tax question goes to the packet first, where her tax picture is worked out; Tim never works one out himself. Asked mid-conversation, after two replies that tacked the waiting rule on, as in the second live trial (2026-11-18), where Sonnet said 'I can't tell you' and never opened the packet (2 of 4 replays called it).",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hey Tim"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"say\": \"Hi Daniel. The one thing waiting on you is a yes to the rule \\\"Phone, internet and mailings: up to $150 a month\\\" from your spending policy. Want me to pull it up?\", \"read_from\": [\"start_here\"]}"
+    },
+    {
+      "role": "user",
+      "content": "How much have I spent this year?"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"say\": \"So far this year you've spent $1,788.93, and $1,745.93 of it isn't sorted into a category yet. The one thing waiting on you is still the yes to that phone rule.\", \"read_from\": [\"year_report\"]}"
+    },
+    {
+      "role": "user",
+      "content": "What tax bracket am I in this year?"
+    }
+  ],
+  "expect": {
+    "call": {
+      "tool": "tax_packet"
+    }
+  }
+}

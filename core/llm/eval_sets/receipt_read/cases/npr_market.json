@@ -1,0 +1,12 @@
+{
+  "name": "npr_market",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "npr_market.png",
+  "text": "BHATBHATENI MART\nKathmandu, Nepal\nPAN 600112233\nDate: 2026-11-12\nRice 5kg 1,150.00\nLentils 2kg 640.00\nOil 1L 410.00\nSub Total 2,200.00\nVAT 13% 286.00\nGrand Total Rs. 2,486.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "2486.00",
+    "currency": "NPR",
+    "invoice_date": "2026-11-12"
+  }
+}

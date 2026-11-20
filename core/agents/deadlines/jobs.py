@@ -34,7 +34,7 @@ done would list every missed occurrence; the newest 24 are plenty to act on."""
 # ---- inputs -------------------------------------------------------------------
 
 
-def _obligations_path(ctx: JobContext) -> Path:
+def obligations_path(ctx: JobContext) -> Path:
     override = ctx.params.get("obligations_file") or ctx.tenant.deadlines.file
     return Path(override) if override else tenant_dir(ctx.tenant_slug) / "obligations.toml"
 
@@ -68,7 +68,7 @@ def _key(ctx: JobContext, job: str) -> RunKey:
     key.param("ics_path")
     key.param("today")
     key.config("deadlines", "identity.timezone", "identity.legal_name")
-    path = _obligations_path(ctx)
+    path = obligations_path(ctx)
     key.add("obligations", path.read_bytes().hex() if path.is_file() else "absent")
     key.value("today", _today(ctx).isoformat())
     done, fired = _ledger_state(ctx)
@@ -124,7 +124,7 @@ def _scan_key(ctx: JobContext) -> str:
 
 
 def _scan_run(ctx: JobContext) -> JobOutput:
-    path = _obligations_path(ctx)
+    path = obligations_path(ctx)
     if not path.is_file():
         return JobOutput(status="ok", summary=f"deadlines: no obligations file ({path})")
     obligations = load_obligations(path)
@@ -228,7 +228,7 @@ def _done_run(ctx: JobContext) -> JobOutput:
     """``--param id=<id>`` (and optionally ``due=YYYY-MM-DD``; default the
     earliest open occurrence): the owner did the thing."""
     ob_id = str(ctx.params.get("id") or "")
-    obligations = {ob.id: ob for ob in load_obligations(_obligations_path(ctx))}
+    obligations = {ob.id: ob for ob in load_obligations(obligations_path(ctx))}
     if ob_id not in obligations:
         raise ValueError(
             f"no obligation {ob_id!r}; ids: {', '.join(sorted(obligations)) or 'none'}"

@@ -37,6 +37,7 @@ from ...engine.runkey import RunKey
 from . import store
 from .inputs import retry_day, vendors
 from .registry import VendorRegistry
+from .split_checks import Split, read_split
 
 PAYMENT_CARD = "ap.qbo_payment_batch"
 PAYMENT_EVENT = "ap.qbo.payment_created"
@@ -79,8 +80,7 @@ def _payment_scope(ctx: JobContext) -> tuple[list[dict], list[dict]]:
                        AND h.status_to IN ('Scheduled', 'Scheduled in bill pay')
                        AND h.status_from != '(new row)') AS scheduled_at
               FROM ap_invoices i
-             WHERE i.tenant = ? AND (i.qbo_payment_id IS NULL OR i.qbo_payment_id = '')
-               AND i.check_ref != '' AND i.amount_cents > 0
+             WHERE i.tenant = ? AND i.check_ref != '' AND i.amount_cents > 0
              ORDER BY i.id
             """,
             (ctx.tenant_slug,),
@@ -88,9 +88,21 @@ def _payment_scope(ctx: JobContext) -> tuple[list[dict], list[dict]]:
     ]
     rows = [r for r in rows if is_committed(str(r["status"]))]
     registry = vendors(ctx)
+    # Issue #688: a row paid with several checks (a bank's per-check cap) is
+    # read apart from the rest; a row with one check and a payment record
+    # already is done.
+    splits: list[tuple[dict, Split]] = []
     by_check: dict[str, list[dict]] = {}
     for row in rows:
-        by_check.setdefault(norm_check_ref(str(row["check_ref"])), []).append(row)
+        split = read_split(
+            str(row["check_ref"]),
+            total_cents=int(row["amount_cents"]),
+            base_date=str(row["payment_date"] or "")[:10],
+        )
+        if split is not None:
+            splits.append((row, split))
+        elif not str(row["qbo_payment_id"] or ""):
+            by_check.setdefault(norm_check_ref(str(row["check_ref"])), []).append(row)
 
     def _skip(members: list[dict], reason: str) -> None:
         for r in members:
@@ -144,7 +156,59 @@ def _payment_scope(ctx: JobContext) -> tuple[list[dict], list[dict]]:
                 "rows": members,
             }
         )
+    for row, split in splits:
+        groups.extend(_split_groups(ctx, row, split, set(by_check), _skip))
     return groups, skipped
+
+
+def _split_groups(
+    ctx: JobContext, row: dict, split: Split, plain_checks: set[str], skip: Callable
+) -> list[dict]:
+    """One group per check of a row paid with several checks (issue #688):
+    each check is its own partial payment of the one bill, so each bank line
+    finds its own exact match. A check already recorded (its done record's
+    id is on the row) is not offered again; a split the reference does not
+    spell out, a row with no bill, or a check number another row also wears
+    is skipped whole, never written as one lump."""
+    names = " and ".join(split.checks)
+    if not split.ok:
+        skip([row], f"split across checks {names}: {split.problem}")
+        return []
+    if not str(row["qbo_bill_id"] or ""):
+        skip([row], f"split across checks {names}, but no QBO bill to apply them to")
+        return []
+    clash = [p.check for p in split.pieces if p.check in plain_checks]
+    if clash:
+        skip([row], f"split across checks {names}, but check {clash[0]} also names another row")
+        return []
+    recorded = {v for v in str(row["qbo_payment_id"] or "").split(",") if v}
+    done = {
+        str(r["payload"].get("engine_key", "")): str(r["payload"].get("qbo_payment_id") or "")
+        for r in ctx.records(PAYMENT_WRITE_DONE)
+        if r["payload"].get("qbo_payment_id")
+    }
+    fallback = str(row["payment_date"] or "")[:10] or str(row["scheduled_at"] or "")[:10]
+    out: list[dict] = []
+    for piece in split.pieces:
+        key = _payment_engine_key(ctx.tenant_slug, piece.check)
+        if done.get(key) and f"BillPayment:{done[key]}" in recorded:
+            continue
+        out.append(
+            {
+                "check": piece.check,
+                "check_ref": piece.check,
+                "vendor": str(row["vendor"]),
+                "row_ids": [int(row["id"])],
+                "invoice_numbers": [str(row["invoice_number"])],
+                "qbo_bill_ids": [str(row["qbo_bill_id"])],
+                "amount_cents": piece.amount_cents,
+                "payment_date": piece.send_date or fallback or retry_day(ctx),
+                "engine_key": key,
+                "split_of": str(row["check_ref"]),
+                "rows": [row],
+            }
+        )
+    return out
 
 
 def _payment_card_entry(group: dict) -> dict:
@@ -197,7 +261,11 @@ def check_payment_batch(ledger, tenant: str, params: dict) -> str | None:
                 "SELECT status, qbo_payment_id FROM ap_invoices WHERE tenant = ? AND id = ?",
                 (tenant, int(raw)),
             ).fetchone()
-            if row is not None and is_committed(str(row["status"])) and not row["qbo_payment_id"]:
+            if row is None or not is_committed(str(row["status"])):
+                continue
+            # A split check's row keeps a payment id per check already written
+            # (#688); the job itself skips a check it already recorded.
+            if not row["qbo_payment_id"] or (entry or {}).get("split_of"):
                 return None
     return (
         "nothing on this card is still writable: every row is settled or already carries "
@@ -265,7 +333,12 @@ def _bill_payment_payload(group: dict, vendor_id: str, bank_account_id: str) -> 
         "PrivateNote": f"engine:{group['engine_key']}",
         "Line": [
             {
-                "Amount": round(int(r["amount_cents"]) / 100, 2),
+                # A split check pays its own piece of the bill (#688).
+                "Amount": round(
+                    int(group["amount_cents"] if group.get("split_of") else r["amount_cents"])
+                    / 100,
+                    2,
+                ),
                 "LinkedTxn": [{"TxnId": str(r["qbo_bill_id"]), "TxnType": "Bill"}],
             }
             for r in group["rows"]
@@ -619,9 +692,14 @@ class _PaymentBatch:
         event. False when the readback disagrees: the batch stops."""
         key = g["engine_key"]
         for rid in g["row_ids"]:
-            store.record_qbo_ids(
-                self.ctx.ledger, invoice_id=rid, payment_id=f"BillPayment:{payment_id}"
-            )
+            if g.get("split_of"):
+                store.add_qbo_payment_id(
+                    self.ctx.ledger, invoice_id=rid, payment_id=f"BillPayment:{payment_id}"
+                )
+            else:
+                store.record_qbo_ids(
+                    self.ctx.ledger, invoice_id=rid, payment_id=f"BillPayment:{payment_id}"
+                )
         if verified is None:
             verified, readback_note = _readback_bill_payment(self.client, payment_id, g, vendor_id)
         self.events.append(

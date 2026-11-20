@@ -15,7 +15,7 @@ import pytest
 
 from core.engine.runner import run
 from core.ledger import Ledger
-from core.mileage import STOP_SECONDS, Fix, Tracker, haversine_miles
+from core.mileage import GAP_SECONDS, STOP_SECONDS, Fix, Tracker, haversine_miles
 from core.mileage.trackers import add_tracker, person_for
 from tests.unit.test_door_my_words import solo  # noqa: F401  (fixture)
 
@@ -70,6 +70,74 @@ def test_a_stop_ends_the_drive_and_the_next_starts_fresh():
     _drive(tracker, "daniel-reyes", 1_000_000.0, legs=5)
     later = _drive(tracker, "daniel-reyes", 1_000_000.0 + 300 + STOP_SECONDS + 60, legs=5)
     assert len(later) == 1 and later[0].miles == Decimal("0.7")
+
+
+# ---- a phone that goes quiet mid-drive (iOS pauses reporting; the owner, 2026-10-15) ----
+# 0.005 degrees of latitude a minute is about 21 mph: driving, not walking.
+FAST = 0.005
+
+
+def test_a_phone_that_goes_quiet_mid_drive_keeps_the_miles():
+    tracker = Tracker()
+    t0, at = 1_000_000.0, START
+    for i in range(6):  # five minutes north at speed, then nothing
+        assert tracker.add("daniel-reyes", Fix(t0 + 60 * i, *at)) == []
+        at = _north(at, FAST)
+    quiet_from = t0 + 300
+    resume = t0 + 300 + 12 * 60  # twelve minutes of silence, about four miles on
+    at = _north(_north(at, -FAST), 0.058)
+    for i in range(6):
+        assert tracker.add("daniel-reyes", Fix(resume + 60 * i, *at)) == []
+        at = _north(at, FAST)
+    [drive] = tracker.flush(resume + 300 + GAP_SECONDS + 1)
+    straight = haversine_miles(START, _north(at, -FAST))  # one road north, gap included
+    assert drive.miles == Decimal(str(round(straight, 1)))
+    assert drive.start == t0 and drive.end == resume + 300
+    assert quiet_from < resume
+
+
+def test_a_quiet_phone_holds_its_drive_open_no_longer_than_the_gap():
+    tracker = Tracker()
+    t0, at = 1_000_000.0, START
+    for i in range(6):
+        tracker.add("daniel-reyes", Fix(t0 + 60 * i, *at))
+        at = _north(at, FAST)
+    assert tracker.flush(t0 + 300 + STOP_SECONDS + 1) == []  # quiet at speed: may still be driving
+    assert tracker.positions_held() == 1
+    [drive] = tracker.flush(t0 + 300 + GAP_SECONDS + 1)
+    assert drive.end == t0 + 300  # the drive ends where it last moved
+    assert tracker.positions_held() == 0
+
+
+def test_parked_and_quiet_then_driving_again_is_two_drives():
+    tracker = Tracker()
+    t0, at = 1_000_000.0, START
+    for i in range(6):
+        tracker.add("daniel-reyes", Fix(t0 + 60 * i, *at))
+        at = _north(at, FAST)
+    parked = _north(at, -FAST)
+    resume = t0 + 300 + 20 * 60  # back in the car twenty minutes later, where it parked
+    at = _north(parked, 0.0003)
+    closed = []
+    for i in range(6):
+        closed += tracker.add("daniel-reyes", Fix(resume + 60 * i, *at))
+        at = _north(at, FAST)
+    assert len(closed) == 1 and closed[0].end == t0 + 300
+    [second] = tracker.flush(resume + 300 + GAP_SECONDS + 1)
+    assert second.start == resume
+
+
+def test_a_phone_that_keeps_reporting_while_still_ends_after_the_stop():
+    tracker = Tracker()
+    t0, at = 1_000_000.0, START
+    for i in range(6):
+        tracker.add("daniel-reyes", Fix(t0 + 60 * i, *at))
+        at = _north(at, FAST)
+    parked = _north(at, -FAST)
+    for i in range(1, 5):  # the app's stationary heartbeat: it speaks, and it isn't moving
+        tracker.add("daniel-reyes", Fix(t0 + 300 + 60 * i, *parked))
+    [drive] = tracker.flush(t0 + 300 + STOP_SECONDS + 1)
+    assert drive.end == t0 + 300
 
 
 def test_a_phone_is_known_only_by_its_token(tmp_path):
@@ -143,3 +211,34 @@ def test_the_phone_reports_to_the_box_and_the_box_keeps_a_drive(solo, tmp_path):
         server.shutdown()
     [drive] = _drives(solo)
     assert drive["person"] == "Daniel Reyes" and drive["miles"] == "1.4"
+
+
+def test_hearing_a_phone_finishes_setups_mileage_step(solo, tmp_path):  # noqa: F811
+    """Chunk 10: the mileage step isn't done until the box hears the phone."""
+    from core.mileage.door import TrackDoor
+    from core.onboarding.person import SetupBook
+
+    folder = tenant_dir("living-water", tenants_root=solo["root"])
+    book = SetupBook(folder)
+    book.record("daniel-reyes", "mileage", "yes", now="2026-10-22T14:00:00+00:00")
+    token = add_tracker(folder, "daniel-reyes", only_one=True)
+    told: list[str] = []
+
+    def heard(person: str) -> bool:
+        told.append(person)
+        book.saw(person, "mileage", now="2026-10-22T14:01:00+00:00")
+        return bool(book.answers(person)["mileage"].get("seen"))
+
+    door = TrackDoor(
+        "living-water",
+        tenants_root=solo["root"],
+        ledger_root=solo["ledger_root"],
+        tracker=Tracker(),
+        on_heard=heard,
+    )
+    door.take("id=nobody&lat=1&lon=1&timestamp=1760000000")
+    assert told == []  # a stranger's id is never heard
+    door.take(f"id={token}&lat=-25.9&lon=32.6&timestamp=1760000000")
+    door.take(f"id={token}&lat=-25.9&lon=32.6&timestamp=1760000060")
+    assert told == ["daniel-reyes"]  # told once, then left alone
+    assert book.answers("daniel-reyes")["mileage"]["seen"] == "2026-10-22T14:01:00+00:00"

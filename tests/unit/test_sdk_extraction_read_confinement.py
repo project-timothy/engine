@@ -15,6 +15,8 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from core.llm.adapters.claude_sdk_complete import ClaudeSdkCompleteAdapter
 from core.llm.gateway import Attachment, Message, PromptBundle
 
@@ -74,6 +76,7 @@ def _decide(kwargs: dict, tool: str, tool_input: dict) -> bool:
     return out.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
 
 
+@pytest.mark.security("SEC-17")
 def test_read_is_confined_to_the_attachment_and_the_scratch(monkeypatch, tmp_path):
     doc = tmp_path / "in" / "invoice.pdf"
     doc.parent.mkdir()
@@ -92,6 +95,7 @@ def test_read_is_confined_to_the_attachment_and_the_scratch(monkeypatch, tmp_pat
     assert not _decide(kwargs, "Read", {})
 
 
+@pytest.mark.security("SEC-17")
 def test_every_other_tool_is_denied_by_the_hook(monkeypatch, tmp_path):
     doc = tmp_path / "invoice.pdf"
     doc.write_bytes(b"%PDF-1.4 stub")

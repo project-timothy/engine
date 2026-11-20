@@ -34,7 +34,7 @@ from ...engine.authority_gate import lane_decision
 from ...engine.contracts import ApprovalSpec, EventSpec, JobContext, JobOutput
 from ...engine.result import Anomaly
 from ...engine.runkey import RunKey
-from .jobs import _label, _ledger_state, _obligations_path, _today, open_occurrences
+from .jobs import _label, _ledger_state, _today, obligations_path, open_occurrences
 from .schema import load_obligations
 
 CAL_EVENT = "deadlines.calendar"
@@ -148,7 +148,7 @@ def _synced(ctx: JobContext) -> dict[str, dict]:
 
 
 def _desired(ctx: JobContext) -> dict[str, dict]:
-    path = _obligations_path(ctx)
+    path = obligations_path(ctx)
     if not path.is_file():
         return {}
     done, _ = _ledger_state(ctx)

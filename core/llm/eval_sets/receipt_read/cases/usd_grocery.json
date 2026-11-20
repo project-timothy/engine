@@ -1,0 +1,12 @@
+{
+  "name": "usd_grocery",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_grocery.png",
+  "text": "CORNER FRESH MARKET\n118 Elm St, Dayton OH\n2026-10-03 14:22\nBread 3.49\nMilk 4.19\nApples 5.06\nSUBTOTAL 12.74\nTAX 0.89\nTOTAL $13.63\nVISA ****4410",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "13.63",
+    "currency": "USD",
+    "invoice_date": "2026-10-03"
+  }
+}

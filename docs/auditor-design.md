@@ -169,8 +169,11 @@ while the path is unset.
    inside the 90-day window. An owner-hand-written check that never touched
    the ledger is exactly what this catches. Bank-assigned electronic ids
    share the shape and gap on design, so `series` names the paper series to
-   watch. Config: `[auditor.check_gaps]` (window_days, min_observed,
-   series).
+   watch. Two checkbooks sharing a band (two owners) are told apart by
+   `book_starts`, the first number of each later book: gaps are measured
+   only inside one book, so one book's unwritten rest is never a hole
+   (2026-11-18). Config: `[auditor.check_gaps]` (window_days, min_observed,
+   series, book_starts).
 15. **Reconcile unknowns.** Money that left the bank and matched no ledger
    row is recorded by the engine as `ap.reconcile.unknown` and was never
    mentioned again (the 2026-05-19 lesson: an unlogged payment, not a

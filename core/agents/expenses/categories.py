@@ -28,9 +28,16 @@ WORDS: dict[str, frozenset[str]] = {
         "doctor clinic hospital pharmacy medicine medicines prescription dental".split()
     ),
     "Housing": frozenset("rent electricity utilities utility".split()),
+    "Work Equipment": frozenset(
+        "laptop laptops computer computers tablet ipad camera generator monitor".split()
+    ),
     "Ministry Supplies": frozenset(
         "bible bibles tracts printing printer ink toner paper pens pencils notebooks "
         "stationery chalk markers curriculum projector supplies books".split()
+    ),
+    # Not on the starter list: a scholarship ministry adds it to its own.
+    "Scholarships": frozenset(
+        "scholarship scholarships tuition uniform uniforms textbooks".split()
     ),
 }
 

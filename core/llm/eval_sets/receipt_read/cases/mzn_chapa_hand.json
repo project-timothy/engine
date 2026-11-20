@@ -1,0 +1,12 @@
+{
+  "name": "mzn_chapa_hand",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "mzn_chapa_hand.png",
+  "text": "Recibo\nTransporte Beira - Dondo\nValor: 1.200,00 MZN\n18 Out 2026",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "1200.00",
+    "currency": "MZN",
+    "invoice_date": "2026-10-18"
+  }
+}

@@ -65,9 +65,10 @@ class McpServer:
                     "tools": [
                         {
                             "name": s.name,
+                            "title": s.title,
                             "description": s.description,
                             "inputSchema": s.schema,
-                            "annotations": s.annotations or READ_ONLY,
+                            "annotations": {**(s.annotations or READ_ONLY), "title": s.title},
                         }
                         for s in self.tools.specs()
                     ]
