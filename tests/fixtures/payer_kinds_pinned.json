@@ -1,0 +1,762 @@
+{
+  "a church and a gift for their work": {
+    "as_of": "2026-10-13",
+    "asks": [],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "1626.36",
+        "balance": "247.27",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "247.27",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "247.27",
+        "withheld": "0.00"
+      }
+    },
+    "payers": [
+      {
+        "came_in_seen": "250.00",
+        "deposits": [
+          {
+            "date": "2026-08-05",
+            "dollars": "250.00"
+          }
+        ],
+        "form": "1099-NEC",
+        "kind": "sending church",
+        "name": "Hope Fellowship"
+      },
+      {
+        "came_in_seen": "1500.00",
+        "deposits": [
+          {
+            "date": "2026-06-01",
+            "dollars": "500.00"
+          },
+          {
+            "date": "2026-07-01",
+            "dollars": "500.00"
+          },
+          {
+            "date": "2026-08-03",
+            "dollars": "500.00"
+          }
+        ],
+        "form": "",
+        "kind": "gift for their ministry work",
+        "name": "Mom"
+      }
+    ],
+    "person": "Daniel Reyes",
+    "personal_gifts": [],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. Hope Fellowship paid $250.00 that Tim saw arrive. When Hope Fellowship's 1099-NEC comes, keep what it says, even if it differs: the packet checks it. Mom paid $1,500.00 that Tim saw arrive. With no tax form, it counts as income on Schedule C. Self-employment tax on $1,750.00 of 1099 income, net of costs, is $247.27; the Foreign Earned Income Exclusion never lowers it. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $247.27. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "1750.00",
+      "net": "1750.00",
+      "with_no_form": "1500.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "123.64",
+      "on": "1616.13",
+      "tax": "247.27"
+    },
+    "unmatched": [],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  },
+  "a gift said on one line": {
+    "as_of": "2026-10-13",
+    "asks": [
+      {
+        "ask": "This deposit carries EquipNet's name but counts as the ministry's money. Was it their pay?",
+        "date": "2026-08-17",
+        "dollars": "400.00",
+        "payer": "EquipNet"
+      }
+    ],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "836.42",
+        "balance": "127.16",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "127.16",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "127.16",
+        "withheld": "0.00"
+      }
+    },
+    "payers": [
+      {
+        "came_in_seen": "400.00",
+        "deposits": [
+          {
+            "date": "2026-08-03",
+            "dollars": "400.00"
+          }
+        ],
+        "form": "1099-NEC",
+        "form_says": "900.00",
+        "kind": "support platform",
+        "name": "EquipNet",
+        "not_seen": "500.00"
+      }
+    ],
+    "person": "Daniel Reyes",
+    "personal_gifts": [
+      {
+        "date": "2026-08-09",
+        "dollars": "100.00",
+        "from": "Aunt Maria"
+      },
+      {
+        "date": "2026-08-12",
+        "dollars": "300.00",
+        "from": "Mom"
+      }
+    ],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. EquipNet paid $400.00 that Tim saw arrive. Its 1099-NEC says $900.00, so $500.00 went to an account Tim doesn't see. 1 deposit carries a payer's name but count as the ministry's: ask. Self-employment tax on $900.00 of 1099 income, net of costs, is $127.16; the Foreign Earned Income Exclusion never lowers it. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $127.16. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "900.00",
+      "net": "900.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "63.58",
+      "on": "831.15",
+      "tax": "127.16"
+    },
+    "unmatched": [],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  },
+  "a gift unasked and an organization asked": {
+    "as_of": "2026-10-13",
+    "asks": [
+      {
+        "ask": "Do they send this because of your ministry work?",
+        "payer": "Mom"
+      },
+      {
+        "ask": "Do they send this because of your ministry work?",
+        "payer": "Hope Fellowship"
+      }
+    ],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "0.00",
+        "balance": "0.00",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "0.00",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "0.00",
+        "withheld": "0.00"
+      }
+    },
+    "payers": [],
+    "person": "Daniel Reyes",
+    "personal_gifts": [
+      {
+        "date": "2026-06-01",
+        "dollars": "500.00",
+        "from": "Mom"
+      },
+      {
+        "date": "2026-07-01",
+        "dollars": "500.00",
+        "from": "Mom"
+      },
+      {
+        "date": "2026-08-03",
+        "dollars": "500.00",
+        "from": "Mom"
+      },
+      {
+        "date": "2026-08-05",
+        "dollars": "250.00",
+        "from": "Hope Fellowship"
+      }
+    ],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. Ask about Mom: Do they send this because of your ministry work? Ask about Hope Fellowship: Do they send this because of your ministry work? The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $0.00. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "0.00",
+      "net": "0.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "0.00",
+      "on": "0.00",
+      "tax": "0.00"
+    },
+    "unmatched": [],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  },
+  "a ministry deposit carrying a payer's name": {
+    "as_of": "2026-10-13",
+    "asks": [
+      {
+        "ask": "This deposit carries EquipNet's name but counts as the ministry's money. Was it their pay?",
+        "date": "2026-08-03",
+        "dollars": "400.00",
+        "payer": "EquipNet"
+      },
+      {
+        "ask": "This deposit carries EquipNet's name but counts as the ministry's money. Was it their pay?",
+        "date": "2026-08-17",
+        "dollars": "400.00",
+        "payer": "EquipNet"
+      }
+    ],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "0.00",
+        "balance": "0.00",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "0.00",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "0.00",
+        "withheld": "0.00"
+      }
+    },
+    "payers": [
+      {
+        "came_in_seen": "0.00",
+        "deposits": [],
+        "form": "1099-NEC",
+        "kind": "support platform",
+        "name": "EquipNet"
+      }
+    ],
+    "person": "Daniel Reyes",
+    "personal_gifts": [
+      {
+        "date": "2026-08-09",
+        "dollars": "100.00",
+        "from": "Aunt Maria"
+      }
+    ],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. EquipNet paid $0.00 that Tim saw arrive. When EquipNet's 1099-NEC comes, keep what it says, even if it differs: the packet checks it. 1 deposit of their own name no payer: ask who paid. 2 deposits carry a payer's name but count as the ministry's: ask. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $0.00. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "0.00",
+      "net": "0.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "0.00",
+      "on": "0.00",
+      "tax": "0.00"
+    },
+    "unmatched": [
+      {
+        "date": "2026-08-12",
+        "dollars": "300.00",
+        "words": "MOBILE DEPOSIT"
+      }
+    ],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  },
+  "a no and a yes": {
+    "as_of": "2026-10-13",
+    "asks": [],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "250.00",
+        "balance": "0.00",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "0.00",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "0.00",
+        "withheld": "0.00"
+      }
+    },
+    "payers": [
+      {
+        "came_in_seen": "250.00",
+        "deposits": [
+          {
+            "date": "2026-08-05",
+            "dollars": "250.00"
+          }
+        ],
+        "form": "",
+        "kind": "gift for their ministry work",
+        "name": "Hope Fellowship"
+      }
+    ],
+    "person": "Daniel Reyes",
+    "personal_gifts": [
+      {
+        "date": "2026-06-01",
+        "dollars": "500.00",
+        "from": "Mom"
+      },
+      {
+        "date": "2026-07-01",
+        "dollars": "500.00",
+        "from": "Mom"
+      },
+      {
+        "date": "2026-08-03",
+        "dollars": "500.00",
+        "from": "Mom"
+      }
+    ],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. Hope Fellowship paid $250.00 that Tim saw arrive. With no tax form, it counts as income on Schedule C. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $0.00. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "250.00",
+      "net": "250.00",
+      "with_no_form": "250.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "0.00",
+      "on": "230.88",
+      "tax": "0.00"
+    },
+    "unmatched": [],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  },
+  "an agency's W-2": {
+    "as_of": "2026-10-13",
+    "asks": [
+      {
+        "ask": "This deposit carries EquipNet's name but counts as the ministry's money. Was it their pay?",
+        "date": "2026-08-17",
+        "dollars": "400.00",
+        "payer": "EquipNet"
+      }
+    ],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "800.00",
+        "balance": "-75.00",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "0.00",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "0.00",
+        "withheld": "75.00"
+      }
+    },
+    "payers": [
+      {
+        "came_in_seen": "400.00",
+        "deposits": [
+          {
+            "date": "2026-08-03",
+            "dollars": "400.00"
+          }
+        ],
+        "form": "W-2",
+        "form_says": "800.00",
+        "kind": "agency",
+        "name": "EquipNet",
+        "withheld": "75.00"
+      }
+    ],
+    "person": "Daniel Reyes",
+    "personal_gifts": [],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. EquipNet paid $400.00 that Tim saw arrive. Its W-2 says wages of $800.00, with $75.00 federal income tax withheld. 1 deposit carries a payer's name but count as the ministry's: ask. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $0.00. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "0.00",
+      "net": "0.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "0.00",
+      "on": "0.00",
+      "tax": "0.00"
+    },
+    "unmatched": [],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  },
+  "platform, aunt, and a deposit with no payer": {
+    "as_of": "2026-10-13",
+    "asks": [
+      {
+        "ask": "This deposit carries EquipNet's name but counts as the ministry's money. Was it their pay?",
+        "date": "2026-08-17",
+        "dollars": "400.00",
+        "payer": "EquipNet"
+      }
+    ],
+    "days_abroad": {
+      "days_with_spending_abroad": 0,
+      "needs": 330,
+      "says": "The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months."
+    },
+    "federal_tax": {
+      "figures_from": "IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf); Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); Form 8995 (2025), Qualified Business Income Deduction Simplified Computation; the 20% is set by law and not indexed (https://www.irs.gov/pub/irs-pdf/f8995.pdf)",
+      "filing_status": "single",
+      "left_to_preparer": [
+        "state income tax",
+        "itemized deductions",
+        "credits, like the child tax credit, the earned income credit, and health insurance credits, which lower the tax",
+        "the minister's housing allowance, and Form 4361, the opt-out from self-employment tax",
+        "the bona fide residence test (Tim works out the physical presence test only)",
+        "the foreign tax credit and the foreign housing exclusion",
+        "a spouse's self-employment",
+        "retirement contributions"
+      ],
+      "part_year_through": "2026-10-13",
+      "without_exclusion": {
+        "adjusted_gross_income": "400.00",
+        "balance": "0.00",
+        "business_deduction": "0.00",
+        "estimates": [
+          {
+            "dollars": "0.00",
+            "due": "2027-04-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-06-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2027-09-15"
+          },
+          {
+            "dollars": "0.00",
+            "due": "2028-01-18"
+          }
+        ],
+        "estimates_paid": "0.00",
+        "income_tax": "0.00",
+        "self_employment_tax": "0.00",
+        "standard_deduction": "16100.00",
+        "taxable_income": "0.00",
+        "top_bracket": "",
+        "total_tax": "0.00",
+        "withheld": "0.00"
+      }
+    },
+    "payers": [
+      {
+        "came_in_seen": "400.00",
+        "deposits": [
+          {
+            "date": "2026-08-03",
+            "dollars": "400.00"
+          }
+        ],
+        "form": "1099-NEC",
+        "kind": "support platform",
+        "name": "EquipNet"
+      }
+    ],
+    "person": "Daniel Reyes",
+    "personal_gifts": [
+      {
+        "date": "2026-08-09",
+        "dollars": "100.00",
+        "from": "Aunt Maria"
+      }
+    ],
+    "says": "2026: Before any numbers, ask once whether money for their work reaches them anywhere Tim doesn't see (board members or family sending it straight to them, a platform paying another account); keep the answer with keep_tax_facts support_elsewhere, and each one who sends it with keep_payers. EquipNet paid $400.00 that Tim saw arrive. When EquipNet's 1099-NEC comes, keep what it says, even if it differs: the packet checks it. 1 deposit of their own name no payer: ask who paid. 1 deposit carries a payer's name but count as the ministry's: ask. The bank shows no spending abroad in 2026. If they lived abroad, ask for their travel dates: the exclusion needs 330 full days abroad in 12 months. Their filing status isn't said, so this is worked out as single: ask. Worked out on the year so far, through Oct 13: a part-year figure; the full year will differ. No federal income tax: nothing is taxable after the standard deduction. Total federal tax, all of it self-employment tax, is $0.00. With no travel dates said, it's worked out without the Foreign Earned Income Exclusion. No estimated payments are needed for 2027: under $1,000 would be owed.",
+    "schedule_c": {
+      "costs": "0.00",
+      "income": "400.00",
+      "net": "400.00"
+    },
+    "self_employment_tax": {
+      "figures_from": "Instructions for Schedule SE (Form 1040) (2026) (https://www.irs.gov/pub/irs-pdf/i1040sse.pdf); 2026 Schedule SE (Form 1040), Self-Employment Tax (https://www.irs.gov/pub/irs-pdf/f1040sse.pdf); IRS Revenue Procedure 2025-32 (https://www.irs.gov/pub/irs-drop/rp-25-32.pdf)",
+      "half_off_income": "0.00",
+      "on": "369.40",
+      "tax": "0.00"
+    },
+    "unmatched": [
+      {
+        "date": "2026-08-12",
+        "dollars": "300.00",
+        "words": "MOBILE DEPOSIT"
+      }
+    ],
+    "what_they_said": {
+      "estimates_paid": [],
+      "filing_status": "",
+      "support_elsewhere": "",
+      "trips": []
+    },
+    "year": "2026"
+  }
+}

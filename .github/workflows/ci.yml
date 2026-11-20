@@ -8,8 +8,26 @@ name: ci
 # the SDK at import (row 7.15).
 on:
   pull_request:
+  # No push run on main: a squash merge lands code its PR run already proved,
+  # and re-running it was 42% of the November Actions minutes (1,759 of 4,159
+  # by 11/18, against Pro's 3,000 a month). Main's ruleset does not require a
+  # PR to be up to date, so two PRs merged back to back are first tested
+  # together by the nightly run below; workflow_dispatch runs main on demand.
   push:
-    branches: [main, "phase-*"]
+    branches: ["phase-*"]
+  # Every night on main, with no change to trigger it: a test that reads the
+  # real clock goes red the morning after the calendar turns, not at the next
+  # PR (2026-11-10: main sat red from 11/1 to 11/10 and nobody saw it). It is
+  # also main's only post-merge run.
+  schedule:
+    - cron: "17 9 * * *" # 09:17 UTC, before the working day in the Americas
+  workflow_dispatch:
+
+# A newer push to the same PR cancels the run still going on the older one.
+# Scheduled and manual runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -27,7 +45,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.9.27"
+          version: "0.13.1"
 
       - name: Pin Python 3.12
         run: uv python install 3.12
@@ -70,6 +88,9 @@ jobs:
 
       - name: Independence lint (auditor imports nothing from core)
         run: uv run python -m auditor.evals.independence_lint
+
+      - name: Security charter (every rule in docs/security/charter.md has a test)
+        run: uv run python -m core.evals.security_charter
 
       - name: Shell lint (shellcheck over every tracked shell script)
         # The scripts decrypt secrets and launch every scheduled job. -x
@@ -130,7 +151,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.9.27"
+          version: "0.13.1"
 
       - name: Pin Python 3.12
         run: uv python install 3.12
@@ -185,7 +206,7 @@ jobs:
         if: env.HAS_SCENARIO_KEYS == 'true'
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.9.27"
+          version: "0.13.1"
 
       - name: Every scenario, signed in over HTTP
         if: env.HAS_SCENARIO_KEYS == 'true'
@@ -213,7 +234,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.9.27"
+          version: "0.13.1"
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -484,7 +505,7 @@ jobs:
       - name: Install uv for the sops-dependent tests
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.9.27"
+          version: "0.13.1"
           # No cache in the job that builds the image: a poisoned cache entry
           # would reach the box under test (zizmor cache-poisoning).
           enable-cache: false

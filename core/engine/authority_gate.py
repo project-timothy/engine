@@ -126,8 +126,10 @@ class CardDecision:
 class Witnessed:
     """A person's own yes or no on one card, witnessed by the box's door:
     the doorkeeper checked their Face ID or fingerprint against the passkey
-    on their phone (doorkeeper ``/witness/check``). ``evidence`` is the
-    signed answer, kept on the card so it can be checked again."""
+    on their phone (doorkeeper ``/witness/check``), or, for someone with no
+    passkey, their tap on the link it mailed only to them (evidence
+    ``kind`` "email", sealed by the box). ``evidence`` is the signed answer,
+    kept on the card so it can be checked again."""
 
     person: str
     card: str
@@ -136,8 +138,24 @@ class Witnessed:
     at: float
     evidence: dict = field(default_factory=dict)
 
+    @property
+    def kind(self) -> str:
+        """How the person showed it was them: "passkey" or "email"."""
+        return "email" if self.evidence.get("kind") == "email" else "passkey"
+
 
 VERB_OF = {"approved": "approve", "rejected": "reject"}
+
+BATCH = "cards:"
+"""A witness for several cards at once names them ``cards:5.6.7``: one Face ID
+signs the list the person read (chunk 7, one yes for several cards)."""
+
+
+def witnessed_cards(card: str) -> tuple[str, ...]:
+    """The card numbers a witness covers: its one card, or each on its list."""
+    if card.startswith(BATCH):
+        return tuple(n for n in card[len(BATCH) :].split(".") if n.isdigit())
+    return (card,)
 
 
 def _door_refusal(
@@ -151,7 +169,7 @@ def _door_refusal(
         )
     if witness.person != principal and policy.vouch.get(principal) != witness.person:
         return f"the witness is {witness.person}'s, not {principal}'s"
-    if witness.card != str(row["id"]):
+    if str(row["id"]) not in witnessed_cards(witness.card):
         return f"the witness is for card {witness.card}, not #{row['id']}"
     if witness.verb != VERB_OF.get(decision):
         return f"the witness says {witness.verb}, not {VERB_OF.get(decision, decision)}"
@@ -238,7 +256,11 @@ def _names_the_card(
     name = _words(who or payee)
     if not name or not words:
         return False
-    if who and _MINE & set(words) and card_request(rule, principal, params).submitter == principal:
+    if (
+        who
+        and _MINE & set(words)
+        and card_request(rule, principal, params, policy).submitter == principal
+    ):
         return True
     if _says(words, name):
         return True
@@ -324,7 +346,7 @@ def decide_card(
         )
         if refused:
             return CardDecision(refused)
-    request = card_request(rule, principal, row["params"])
+    request = card_request(rule, principal, row["params"], policy)
     vouchers = [v for v in str(row["params"].get("vouchers", "")).split(",") if v]
     if principal in vouchers:
         return CardDecision(f"{principal} vouched on this card, so does not also decide it")
@@ -416,8 +438,12 @@ def _presence_stamp(
     if voucher:
         stamp["vouched_by"] = voucher
     stamp["witness_at"] = datetime.fromtimestamp(witness.at, UTC).isoformat()
+    stamp["witness_kind"] = witness.kind  # Face ID, or the tap on their emailed link
     stamp["witness_resource"] = rule.resource  # what the auditor holds to [presence] door
-    stamp["witness"] = json.dumps({**witness.evidence, "summary": witness.summary})
+    evidence = {**witness.evidence, "summary": witness.summary}
+    if witness.card.startswith(BATCH):
+        evidence["batch"] = witness.card  # the signed list this card rode on
+    stamp["witness"] = json.dumps(evidence)
     return stamp
 
 
@@ -491,4 +517,5 @@ __all__ = [
     "load_policy",
     "route_of",
     "waiting",
+    "witnessed_cards",
 ]

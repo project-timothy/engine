@@ -44,13 +44,17 @@ class PromptBundle:
     """Everything an adapter needs for one provider call. ``messages`` may
     hold system turns anywhere; each adapter folds them into its provider's
     system slot. Attachments ride the FIRST user turn (the ask), which keeps
-    them in place when the retry appends the correction turns."""
+    them in place when the retry appends the correction turns. ``cache``
+    asks the provider to cache the system text, for a caller that sends the
+    same opening on every call (a conversation's brief and tool list); an
+    adapter whose provider cannot simply ignores it."""
 
     job_type: str
     model: str
     messages: tuple[Message, ...]
     attachments: tuple[Attachment, ...]
     timeout_s: int
+    cache: bool = False
 
     def system_text(self) -> str:
         return "\n\n".join(m.content for m in self.messages if m.role == "system")
@@ -64,8 +68,15 @@ class PromptBundle:
 
 @dataclass(frozen=True)
 class Usage:
+    """Tokens as the provider billed them. ``input_tokens`` are the ones
+    read at the full input price; tokens written to or read from the
+    provider's prompt cache are counted apart, because they are priced
+    apart."""
+
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_write_tokens: int = 0
+    cache_read_tokens: int = 0
 
 
 @dataclass(frozen=True)

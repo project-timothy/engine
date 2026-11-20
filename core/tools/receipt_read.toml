@@ -1,0 +1,48 @@
+# What the receipt page says when Tim reads a photo the moment it lands
+# (core/tools/receipt_read.py, Standalone Tim card R1). Code picks the line and
+# fills each {name} from what it checked; these are only the words. A test
+# fails on an em dash or a machinery word here.
+
+[words]
+# A photo sent with no amount: what it reads, for her tap.
+reads = "Got it. It reads {what}. Right?"
+right = "Yes, that's right"
+not_right = "No"
+# She said an amount, and the receipt prints the same one.
+same = "Got it: {what}, the same as you said. It's in with this month's receipts."
+# She said one amount and the receipt prints another: neither counts yet.
+which = "The receipt shows {shown}, and you said {said}. Which is right?"
+# After her tap.
+counted = "Thanks. It counts in this month's receipts."
+not_counted = "All right. How much was it? Tell Tim, and it counts in this month's receipts."
+gone = "That question has already closed. Questions close once answered, or after 15 minutes, to keep your books safe. If it didn't count yet, tell Tim how much it was, and it counts in this month's receipts."
+busy = "Your books are in the middle of an update. Tap it again in a minute; nothing was lost."
+
+# A receipt that shows no day it was paid, like a ticket that prints only the
+# day of travel (the owner's call of 2026-11-19, "ask on the ticket"): Tim asks
+# her the day.
+reads_no_day = "Got it. It reads {what}, with no day it was paid on it. Right?"
+counted_no_day = "Thanks. What day did you pay it? Tell Tim, and it goes in that day's month."
+same_no_day = "Got it: {what}, the same as you said. What day did you pay it? Tell Tim, and it goes in that day's month."
+no_day_mark = " (no day it was paid)"
+pile_no_day_one = "What day did you pay the one with no day on it? Tell Tim, and it goes in that day's month."
+pile_no_day = "What day did you pay the {n} with no day on them? Tell Tim, and each goes in its own month."
+
+# A pile, the owner's read of 2026-11-19: every photo Tim read, listed once
+# the pile is sent, and one yes counts them all. A "_one" line is the same
+# thing said of a single receipt; {n} is how many.
+pile_read_one = "Here's what I read. If it's right, tap Yes."
+pile_read = "Here's what I read on {n} of them. Set aside any that's wrong, then tap Yes."
+pile_right_one = "Yes, that's right"
+pile_right = "Yes, those are right"
+pile_set_aside = "Set aside"
+pile_put_back = "Put back"
+pile_counting = "Counting them..."
+pile_counted_one = "Thanks. It counts in this month's receipts."
+pile_counted = "Thanks. {n} of them count in this month's receipts."
+pile_aside_one = "The one you set aside waits: tell Tim how much it was."
+pile_aside = "The {n} you set aside wait: tell Tim how much each was."
+pile_missed_one = "One didn't count, because its question had closed: tell Tim how much it was."
+pile_missed = "{n} didn't count, because their questions had closed: tell Tim how much each was."
+pile_unread_one = "I couldn't read one of them. Tell Tim its day and amount, or send a clearer photo."
+pile_unread = "I couldn't read {n} of them. Tell Tim the day and amount of each, or send a clearer photo."

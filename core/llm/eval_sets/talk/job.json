@@ -1,0 +1,8 @@
+{
+  "job": "talk",
+  "output_model": "core.talk.loop:Turn",
+  "decimal_fields": [],
+  "prompt_source": "core/talk/loop.py _system over a made-up solo missionary's tools (core/talk/eval_set.py); each case's messages are the conversation up to her latest message",
+  "system_from": "core.talk.eval_set:system",
+  "user": ""
+}

@@ -12,10 +12,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[2]
 SHIPPED = {"demo", "_templates"}
 
 
+@pytest.mark.security("SEC-14")
 def test_only_the_demo_and_the_templates_live_under_tenants():
     others = [
         p.name

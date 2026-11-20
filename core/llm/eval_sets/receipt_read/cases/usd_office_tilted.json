@@ -1,0 +1,12 @@
+{
+  "name": "usd_office_tilted",
+  "note": "a tilted receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_office_tilted.png",
+  "text": "PAPER & INK SUPPLY\nColumbus OH\nDate: 2026-09-21\nPrinter paper 2x 18.98\nToner 64.50\nSubtotal 83.48\nSales tax 6.05\nTotal due $89.53",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "89.53",
+    "currency": "USD",
+    "invoice_date": "2026-09-21"
+  }
+}

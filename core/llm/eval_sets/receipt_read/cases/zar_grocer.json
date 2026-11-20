@@ -1,0 +1,12 @@
+{
+  "name": "zar_grocer",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "zar_grocer.png",
+  "text": "FRESHSTOP GROCER\nDurban, South Africa\n2026-10-11\nGroceries 412.60\nVAT incl 53.82\nTOTAL R 412.60",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "412.60",
+    "currency": "ZAR",
+    "invoice_date": "2026-10-11"
+  }
+}

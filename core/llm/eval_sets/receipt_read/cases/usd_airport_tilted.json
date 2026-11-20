@@ -1,0 +1,12 @@
+{
+  "name": "usd_airport_tilted",
+  "note": "a tilted receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_airport_tilted.png",
+  "text": "SKYWAY NEWS & CAFE\nConcourse B, ATL\nSep 3 2026 6:12 AM\nBagel 3.75\nWater 3.29\nTax 0.56\nTOTAL $7.60",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "7.60",
+    "currency": "USD",
+    "invoice_date": "2026-09-03"
+  }
+}

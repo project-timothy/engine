@@ -145,3 +145,34 @@ def test_disabled_and_bookless_ledgers_are_quiet(tmp_path):
     ctx = make_context(tmp_path / "empty", now=NOW)
     with ctx.ledger:
         assert check_gaps.check(ctx) == []
+
+
+def test_two_checkbooks_in_one_band_never_gap_across_the_book_start(tmp_path):
+    """Two owners, two books, one thousands band (2026-11-18): one book used
+    up to 1260, the other started at 1301. The run 1261-1300 is the first
+    book's blanks, not missing checks; a hole INSIDE either book still is."""
+    conn = make_ledger(tmp_path)
+    for n in (1258, 1259, 1260):
+        _paid(conn, f"Check {n}", "2026-07-01")
+    for n in (1301, 1302, 1304):
+        _paid(conn, f"Check {n}", "2026-07-10")
+    ctx = make_context(tmp_path)
+    with ctx.ledger:
+        assert sorted(f.subject for f in check_gaps.check(ctx)) == [
+            "1xxx 1261-1300",
+            "1xxx 1303",
+        ]
+    ctx = make_context(tmp_path, check_gaps_book_starts=[1301])
+    with ctx.ledger:
+        assert [f.subject for f in check_gaps.check(ctx)] == ["1xxx 1303"]
+
+
+def test_a_book_with_too_few_numbers_is_not_a_sequence(tmp_path):
+    conn = make_ledger(tmp_path)
+    for n in (1258, 1259, 1260):
+        _paid(conn, f"Check {n}", "2026-07-01")
+    for n in (1301, 1304):
+        _paid(conn, f"Check {n}", "2026-07-10")
+    ctx = make_context(tmp_path, check_gaps_book_starts=[1301])
+    with ctx.ledger:
+        assert check_gaps.check(ctx) == []

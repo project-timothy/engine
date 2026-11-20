@@ -1,0 +1,48 @@
+# What a person reads on Tim's own page (core/tools/talk_page.py,
+# Standalone Tim shot 1, card T1). Code picks which line and fills the
+# {names}; these are only the words. Tim's own replies, and his lines for
+# when he can't answer, are core/talk/talk.toml. A test fails on an em dash
+# or a machinery word here.
+
+[words]
+title = "Talk to Tim"
+next = "Next for you"
+start = "Say hi, or ask Tim what's waiting on you. Type it, or tap the microphone on your keyboard and say it."
+box = "What would you like to tell Tim?"
+send = "Send"
+sending = "Sending"
+working = "Working on it. This takes a few seconds."
+photo = "Add a receipt photo"
+# Several at once: a week's pile from her photos, or dozens (2026-11-19).
+photos = "Send several at once"
+you = "You"
+tim = "Tim"
+too_long = "That's a lot for one message. Try saying it in a few shorter ones."
+home_screen = "Put Tim on your home screen"
+home_screen_how = "On an iPhone: tap Share (the square with the arrow), then Add to Home Screen. On Android: tap the menu (three dots), then Add to Home screen. Then open Tim from there. You sign in once on the home screen, and it remembers you for 30 days. On a computer, bookmark this page instead."
+not_from_here = "That didn't come from Tim's page. Open Tim again and try once more."
+
+# A phone the box doesn't remember yet.
+sign_in_title = "Sign in to talk to Tim"
+sign_in = "Use Face ID, your fingerprint or your device's PIN, the same as when you set up Tim. On a computer, that's Touch ID, Windows Hello or your phone. This device remembers you for 30 days."
+sign_in_button = "Continue with Face ID or fingerprint"
+sign_in_ready = "Ready. Tap the button again."
+sign_in_again = "That didn't finish. Tap the button to try again."
+sign_in_trouble = "Please try again."
+no_face_id = "Can't sign in here yet? Open the newest welcome email from Tim on this device and tap its link, then come back here."
+new_link = "Get a new welcome link"
+
+# What waits on her own tap, under Tim's message (card V2).
+yes_title = "Waiting on your yes"
+yes = "Yes"
+not_now = "Not now"
+# After her tap the button becomes one line that stays (t-hark-patterns,
+# 2026-11-20): {what} is what the button named, {said} her answer, {when}
+# the day and time on her own clock.
+tapped_line = "{what}. You {said} {when}."
+tapped_yes = "said yes"
+tapped_no = "said not now"
+yes_page = "This yes is yours to give. Open it and use Face ID or your fingerprint."
+yes_button = "Open my yes"
+link_title = "Waiting on your tap"
+gone = "That button has closed. Buttons close once used, or after a short while, to keep your books safe. Ask Tim where things stand, and he'll put it back if it's still needed."

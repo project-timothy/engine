@@ -1,0 +1,15 @@
+{
+  "cases/determination_clean.json": "2a9fa0ed6602a9d2a00e12fa89e7ad08ead460597244999e002dcc4d19289581",
+  "cases/determination_faded.json": "2a43ce10bd640d0cbedee9d18d49cf50d7e3721eaab9b9a1cdd3ffc820201904",
+  "cases/determination_tilted.json": "0e8852f753ba551b0e6cea6ffe4af3cd48b80de79503e6552d9b35f87e36f939",
+  "cases/determination_two_pages.json": "a58dc8b816ae0b62c90f3b3e78c3ae8aea2f065df836814ce0332fba13014993",
+  "cases/ein_notice_business.json": "44a6ad84c94473568176e5ea1c0fc411aa526814b1c8b5ed659a04c11d6c0b30",
+  "cases/ein_notice_nonprofit.json": "b1493dc25f49a7ed161c1479c6d3e4f3a5870b3ea263ef78e76b5069d053d478",
+  "documents/determination_clean.png": "c50e9f948e9bed0c08bc37617de9d0471641317b917e708fae4edf0563a76a29",
+  "documents/determination_faded.png": "5ee18290c0a729e5a855601d59541a0438ba0ffc8b67be95053222cc9a3feea6",
+  "documents/determination_tilted.png": "75320bae47a9019395137bc791916b2b0c5fbaf7d296d8c646314923a9d766d9",
+  "documents/determination_two_pages.pdf": "a4c98e5817457580ff2d2dd5535e6083666452c00071541f7b01a2766e389d85",
+  "documents/ein_notice_business.png": "0070eec41fed74f0af14b80a04eea8d0e9a1e2ebc6faf964d29b63c7da5c6c67",
+  "documents/ein_notice_nonprofit.png": "857dfe7706d122926baedeb19aa404face755cd89ad68caae11506e3d9c6e045",
+  "job.json": "75b7d33d18fea7ee97515b75c46de137cd89485bf6bc8a937705f82bdbd3223e"
+}

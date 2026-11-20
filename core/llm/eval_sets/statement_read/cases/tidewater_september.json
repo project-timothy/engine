@@ -1,0 +1,44 @@
+{
+  "name": "tidewater_september",
+  "note": "a credit union's layout, withdrawals and deposits apart, days with no year: the lines, balances, and period read off the picture",
+  "document": "tidewater_september.png",
+  "text": "TIDEWATER HOLLOW CREDIT UNION\nShare Draft Account ...0932   Hope Springs Ministries Inc.\nPeriod 09/01/2026 through 09/30/2026\nPrevious balance                                    812.05\n\nDATE    DESCRIPTION             WITHDRAWALS   DEPOSITS     BALANCE\nSep 02  ACH DEP MILLBROOK CHAPEL                500.00    1,312.05\nSep 04  CORNER FRESH MARKET           64.38               1,247.67\nSep 11  ATM WITHDRAWAL 2140 MAIN     100.00               1,147.67\nSep 15  BLUEWAVE MOBILE               85.12               1,062.55\nSep 19  MOBILE DEPOSIT                           75.00    1,137.55\nSep 25  RIVERSIDE BOOKS               29.99               1,107.56\nSep 30  DIVIDEND                                  0.41    1,107.97\nNew balance                                         1,107.97",
+  "expect": {
+    "doc_type": "bank_statement",
+    "currency": "USD",
+    "period_start": "2026-09-01",
+    "period_end": "2026-09-30",
+    "opening_balance": "812.05",
+    "closing_balance": "1107.97",
+    "lines": [
+      {
+        "day": "2026-09-02",
+        "amount": "500.00"
+      },
+      {
+        "day": "2026-09-04",
+        "amount": "-64.38"
+      },
+      {
+        "day": "2026-09-11",
+        "amount": "-100.00"
+      },
+      {
+        "day": "2026-09-15",
+        "amount": "-85.12"
+      },
+      {
+        "day": "2026-09-19",
+        "amount": "75.00"
+      },
+      {
+        "day": "2026-09-25",
+        "amount": "-29.99"
+      },
+      {
+        "day": "2026-09-30",
+        "amount": "0.41"
+      }
+    ]
+  }
+}

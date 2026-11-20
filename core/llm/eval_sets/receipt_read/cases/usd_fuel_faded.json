@@ -1,0 +1,12 @@
+{
+  "name": "usd_fuel_faded",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_fuel_faded.png",
+  "text": "PRAIRIE GAS #22\nSalina, KS\nOct 14, 2026  07:41\nPUMP 4 UNLEADED\n11.208 GAL @ 3.199\nFUEL TOTAL $35.85\nTHANK YOU",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "35.85",
+    "currency": "USD",
+    "invoice_date": "2026-10-14"
+  }
+}

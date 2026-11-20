@@ -603,13 +603,70 @@ def test_a_document_tier_that_names_no_tier_fails_at_load():
 def test_the_document_job_types_are_the_agents_own():
     from core.agents.ap.extraction import INVOICE_EXTRACT_JOB
     from core.agents.expenses.inbox import INBOX_CLASSIFY_JOB
-    from core.agents.expenses.jobs import RECEIPT_EXTRACT_JOB
+    from core.agents.expenses.job_extract import RECEIPT_EXTRACT_JOB
     from core.agents.expenses.scan_split import SCAN_GROUP_JOB
     from core.llm.policy import DOCUMENT_JOB_TYPES
+    from core.tools.letter_read import JOB as LETTER_READ_JOB
+    from core.tools.receipt_read import JOB as RECEIPT_READ_JOB
+    from core.tools.statement_read import JOB as STATEMENT_READ_JOB
 
     assert DOCUMENT_JOB_TYPES == {
         INVOICE_EXTRACT_JOB,
         RECEIPT_EXTRACT_JOB,
         INBOX_CLASSIFY_JOB,
         SCAN_GROUP_JOB,
+        RECEIPT_READ_JOB,
+        LETTER_READ_JOB,
+        STATEMENT_READ_JOB,
     }
+
+
+def test_a_named_only_job_is_never_served_by_the_default_tier():
+    """The receipt page's reader (card R1) is on only where a ministry's
+    file names it: a `default` tier that serves every other job never
+    switches it on, so the eval gate (which checks named jobs) always sees
+    the tier it runs."""
+    from core.llm.policy import NAMED_ONLY, UnresolvedJobError, resolve
+
+    cfg = TenantConfig.model_validate(_settings())
+    settings = cfg.llm.model_copy(update={"jobs": {**cfg.llm.jobs, "default": "cheap"}})
+    for job in ("receipt_read", "letter_read", "statement_read"):  # cards R1, R2
+        assert job in NAMED_ONLY
+        with pytest.raises(UnresolvedJobError):
+            resolve(settings, job)
+        named = settings.model_copy(update={"jobs": {**settings.jobs, job: "cheap"}})
+        assert resolve(named, job).tier == "cheap"
+
+
+def test_tims_two_speeds_are_named_only_and_every_other_job_resolves_as_before():
+    """Tim's voice (card V3): `talk` and `talk_hard` switch on only where a
+    ministry's file names them, so a `default` line never turns his voice on
+    or picks his strong model. Every other job type answers exactly as it
+    did before the card: the default tier where the file doesn't name it."""
+    from core.llm.policy import NAMED_ONLY, UnresolvedJobError, resolve
+
+    cfg = TenantConfig.model_validate(_settings())
+    settings = cfg.llm
+    assert {"talk", "talk_hard"} <= NAMED_ONLY
+    # card R2 adds the letter and statement readers, each on only by its own line
+    assert NAMED_ONLY == {"receipt_read", "letter_read", "statement_read", "talk", "talk_hard"}
+    for job in ("talk", "talk_hard"):
+        with pytest.raises(UnresolvedJobError):
+            resolve(settings, job)
+    named = settings.model_copy(
+        update={"jobs": {**settings.jobs, "talk": "cheap", "talk_hard": "strong"}}
+    )
+    assert (resolve(named, "talk").tier, resolve(named, "talk_hard").tier) == ("cheap", "strong")
+    every_other = (
+        "invoice_extract",
+        "receipt_extract",
+        "inbox_classify",
+        "scan_group",
+        "draft_advisory",
+        "audit_triage",
+        "board_brief",
+        "a_job_added_later",
+    )
+    for job in every_other:
+        expected = settings.jobs.get(job, settings.jobs["default"])
+        assert resolve(settings, job).tier == expected, job

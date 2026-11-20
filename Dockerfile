@@ -22,7 +22,7 @@ FROM python:3.12-slim-bookworm@sha256:54c85f3c47607a77f32adec749d3c81d1348bf2583
 
 # uv, pinned to the version CI installs (astral-sh/setup-uv in ci.yml), copied
 # from its own published image rather than curled.
-COPY --from=ghcr.io/astral-sh/uv:0.9.27@sha256:143b40f4ab56a780f43377604702107b5a35f83a4453daf1e4be691358718a6a /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 /uv /usr/local/bin/uv
 
 # git: the ledger is a git repository and the 23:00 job pushes it.
 # curl: the dead-man pings (scripts/lib/hc-ping.sh) and the download below.

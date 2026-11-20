@@ -1,0 +1,13 @@
+{
+  "cases/lantern_august_two_pages.json": "2dedfc151eb96efd481c7a9deaa09fb0594566e297c07be93317b219f4293bf3",
+  "cases/lantern_june_does_not_add_up.json": "a0a421f95850d0c20c50c2ad3ddd14f0ee712f6d3fa941ff2cac4da6299eaacf",
+  "cases/lantern_october.json": "c0bcdda14f7b05719aeea945893a62bb8e0f0cc80b416c94f0e4b551c37559e8",
+  "cases/tidewater_july_tilted.json": "8fc5794e99463dcc506f65f3ec185b95e8c49b8e500f984377543a2d5879353e",
+  "cases/tidewater_september.json": "ce8f209fd10417903c790814182c9892d24eba3ab595cc3bd21ed8789a7b29e5",
+  "documents/lantern_august_two_pages.pdf": "41fa2f9ec9dc7ea1232388a0f305b4cd35dbd44e2439a0d38d21ba055bf155bb",
+  "documents/lantern_june_does_not_add_up.png": "9ebcc5c32cd930b736393bed282468dc19e79b9d970a5568fd976489b7c7aa0e",
+  "documents/lantern_october.png": "0464b82a2ef003c52d56759db6044df59a052fe3f2c26bd60930feefd61a1c57",
+  "documents/tidewater_july_tilted.png": "d16df85ef8d9581ae673c805972808cf607fd08c21c3c48dbe1f2ffd9a5a9dd0",
+  "documents/tidewater_september.png": "093d79c7429557fcd13c7226744eff2e2b5d85a5a89d4f632c6a38987d0c52a6",
+  "job.json": "f6250e7aba282a813c2d4dcf3b03efa22e90eee08c4c72e02c9c64a0d355451e"
+}

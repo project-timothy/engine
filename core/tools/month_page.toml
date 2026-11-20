@@ -1,0 +1,36 @@
+# The words a reviewer reads at the top of a month (core/tools/month_page.py;
+# docs/screens/README.md, R4; screens chunk 3, 2026-11-16). Every check is
+# worked out by code from the month and its own review card; a check that
+# fails is said failing, and one Tim could not make says why. No machinery,
+# no em dashes (tests/unit/test_month_page.py).
+#
+# {who} is the person's first name; {n} a count; {month} the month's name;
+# {day} the day it was approved.
+
+owed = "Owed back to {who}"
+and = "and"
+heading = "What I checked"
+look = "One thing worth a look"
+approve = "Approve {month}"
+# Where the missionary named someone to approve each month and approved one
+# herself instead, the approver reads it (board c48, 2026-11-17).
+without_you = "{who} approved {month} without you, on {day}."
+
+[count]
+receipt = ["receipt", "receipts"]
+drive = ["drive", "drives"]
+bank = ["bank line", "bank lines"]
+
+[receipts]
+yes = "Every line has its receipt"
+no = ["1 bank line has no receipt yet", "{n} bank lines have no receipt yet"]
+
+[rules]
+yes = "Everything fits the ministry's rules"
+no = "The ministry's rules say something about this month"
+none = "No ministry rules are in force yet, so there was nothing to check against"
+
+[bank]
+yes = "Every bank line is accounted for"
+no = ["1 bank line still waits on {who}", "{n} bank lines still wait on {who}"]
+none = "No bank statement for this month yet"

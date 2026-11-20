@@ -80,17 +80,65 @@ try = "Have I been paid back for August?"
 says = "Before you buy something, what your ministry's own rules say about it, with the handbook and page."
 try = "Can I buy a $1,400 projector for the school?"
 
+[tool.ask_for_ok]
+says = "Asks for the OK your ministry's rules say to get before you buy, from whoever the rule names, and tells you where it stands."
+try = "Can you ask for an OK on a $300 printer?"
+
+[tool.handbook_changes]
+says = "When your handbook changes, which of your rules no longer read word for word in it, and its pages to draft from."
+try = "What changed in our handbook?"
+
+[tool.draft_rule]
+says = "Drafts a new rule from your newest handbook, quoting it word for word; each draft waits for your yes, and the old rule counts until then."
+try = "Draft the new rules from our handbook."
+
+[tool.set_pay]
+says = "Drafts the board's yearly pay resolution for a missionary; it waits for the yes of a director with no family tie, and Tim never sends the money."
+try = "The board set Ruth's pay for 2027 at $24,000, paid on the 1st."
+
 [tool.month_report]
 says = "A month of receipts in dollars. A receipt paid in another currency shows what you paid and its dollar value on that day."
 try = "Show me my October receipts."
 
 [tool.year_report]
-says = "Where your year stands: each month's receipts and total, what's still waiting, and totals by category."
-try = "Where's my year?"
+says = "Where your year stands: each month's receipts and total, what's still waiting, and totals by category. Once your ministry sets a budget, what's spent and what's left of each one."
+try = "Where's my year? How much is left for scholarships?"
+
+[tool.books]
+says = "Your ministry's books for any span, any time: a month, a quarter, a year, or year to date. What came in and what went out by kind, month by month, what's owed back, what's still waiting, and where each budget stands. You see the people your role looks after."
+try = "How do the books look for last quarter?"
+
+[tool.set_budget]
+says = "Sets your ministry's budget for the year, one kind of spending at a time, in your own words."
+try = "Our scholarship budget this year is $12,000."
+
+[tool.close_year]
+says = "Closes the books for a year that's over, once the 1099 and 990 numbers are taken. After your yes, nothing dated in that year changes."
+try = "Close the 2026 books."
+
+[tool.board_pack]
+says = "Your ministry's statements the way a board reads them: what came in and what was spent by kind, what the ministry has and owes at the end, net assets, and the program and management split, for any month, quarter or year."
+try = "Show me the board's statements for 2026."
+
+[tool.cpa_export]
+says = "A year's books for your accountant, in plain files any accountant can open: every entry as text, the trial balance as a spreadsheet, and the numbers your 990 and 1099s start from. They balance and match Tim's books, checked when they're made."
+try = "Get the 2026 books ready for our CPA."
+
+[tool.set_program_share]
+says = "Sets what share of the ministry's spending is its program, the rest management, so the statements split every kind of spending by it."
+try = "95 percent of what we spend is program."
+
+[tool.paid_it_myself]
+says = "Records a ministry expense you paid from your own pocket, like a state filing fee. At a solo ministry your own yes approves it; at a church or an organization someone else says yes. Then the books show it as owed back to you until the bank pays you back."
+try = "I paid the state's $312.50 filing fee myself on November 12."
+
+[tool.reopen_year]
+says = "Reopens a closed year, after a warning that it may change the numbers last year's 1099s and 990 came from. At a solo ministry your own yes reopens it; at a church or an organization someone else who approves for the books says yes."
+try = "Reopen the 2026 books."
 
 [tool.decide_card]
-says = "Say yes or no to something waiting on you. Under your ministry's limit, just say so; over it, Tim asks you to confirm with Face ID."
-try = "Approve Ruth's September report."
+says = "Say yes or no to something waiting on you. Under your ministry's limit, just say so; over it, Tim asks you to confirm with Face ID, or emails you a link."
+try = "Approve September's report."
 
 [tool.add_receipt]
 says = "Add a receipt: say what you paid, then snap the photo from the link Tim sends."
@@ -133,7 +181,7 @@ says = "Send a month to your reviewer for their yes, all of it at once, when it'
 try = "Send September for review."
 
 [tool.bank_statement]
-says = "Send the statements your bank's website exports: the ministry's account counts in full, and from your own account Tim keeps only the lines you pick."
+says = "Send the statements your bank's website exports: the ministry's account counts in full, and from your own account Tim keeps only the lines you pick. PayPal's export, or a giving app's, brings in each gift with its donor named."
 try = "Here are my bank statements."
 
 [tool.keep_own_lines]
@@ -145,10 +193,57 @@ says = "Send your list of scholarships and school fees, and each one counts in i
 try = "Here's my scholarship list."
 
 [tool.explain_bank_line]
-says = "Say what a bank line was for when you have no receipt for it."
+says = "Say what a bank line was for when you have no receipt for it, or how many rupees an ATM gave."
 try = "The guest house was the team's hotel in Kathmandu."
+
+[tool.split_line]
+says = "Take part of a bank line, cash you spent, or a receipt out as something else, in your own words. The rest stays where it was."
+try = "1,300 rupees of that was mine."
+
+[tool.count_cash]
+says = "Tell Tim how much cash you have in hand. He checks it against the books and asks about anything missing."
+try = "I've got 9,000 rupees left."
+
+[tool.explain_cash]
+says = "Say where cash with no receipt went: ministry spending like tea and taxis, or your own use."
+try = "1,500 rupees were tea and taxis for the team."
+
+[tool.pick_card_receipt]
+says = "Say which of two close receipts a bank line paid, when Tim asks."
+try = "It was the 4,300 one."
 
 # Honest gaps, said plainly. Remove a line when it ships.
 [[not_yet]]
+says = "Tell Tim a date to remember, like your visa or passport renewal. Whoever set up your Tim adds those for now."
+
+[[not_yet]]
 says = "Read one receipt's photo the moment you take it. Today your own Claude reads a pile you send in a catch-up; for a single receipt, you say how much and Tim keeps your words."
 
+
+[tool.donor_letters]
+says = "Your donors for a year: who gave, each gift and its day, each donor's total, and the letters each one is owed: a written acknowledgment of each gift of $250 or more and a year-end giving statement, or a thank-you for a grant from a donor-advised fund."
+try = "Who gave to us in 2026, and what letters do they need?"
+
+[tool.letter_details]
+says = "Keeps what your donor letters need that the books don't hold: the ministry's EIN and mailing address, who signs and their title, and a donor's mailing address. You say each once."
+try = "Our EIN is 12-3456789, and Linda Park signs as Treasurer."
+
+[tool.keep_payers]
+says = "Keeps who pays you: a support platform like EquipNet, a sending church, an agency, or a personal gift; in January what each one's tax form says, a W-2's wages and tax withheld too; and whether a gift comes because of your ministry work."
+try = "EquipNet pays me; it's a support platform."
+
+[tool.keep_tax_facts]
+says = "Keeps what only you know for your taxes: single or married filing jointly, your spouse's wages and tax withheld, last year's total tax, each estimated payment you made, and who else may read your tax packet."
+try = "I'm married filing jointly; my wife's W-2 says $41,200 in wages and $3,100 withheld."
+
+[tool.why]
+says = "Says again what Tim explained the first time something new came up: what's happening, why, and the rule."
+try = "Why does that take Face ID?"
+
+[tool.keep_travel]
+says = "Keeps each trip you took: the day you left the United States, the day you came back, and the country. Your days abroad are counted from these."
+try = "I left for Nepal on January 8 and came home on June 2."
+
+[tool.tax_packet]
+says = "Your tax packet for a year: what each payer paid you that Tim saw arrive, checked against what its tax form says, with personal gifts kept off it; your self-employment tax; your full days abroad, counted from the travel dates you told Tim and checked against your bank; and next year's four estimate dates."
+try = "Show me my 2026 tax packet."

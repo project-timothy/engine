@@ -15,9 +15,15 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 
+def utc_now() -> datetime:
+    """The current instant in UTC: the one wall-clock read the routing lane and
+    the route commands share, so a test freezes them together."""
+    return datetime.now(UTC)
+
+
 def local_now(tz: str, *, at: datetime | None = None) -> datetime:
     """The current (or supplied) instant viewed on the tenant's wall clock."""
-    instant = at if at is not None else datetime.now(UTC)
+    instant = at if at is not None else utc_now()
     if instant.tzinfo is None:
         instant = instant.replace(tzinfo=UTC)
     return instant.astimezone(ZoneInfo(tz))

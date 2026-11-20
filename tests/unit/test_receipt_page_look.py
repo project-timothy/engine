@@ -46,6 +46,14 @@ def test_the_pile_page_says_how_to_find_a_folder_in_icloud():
     assert "search for the folder" in page("n", many=True)
 
 
+def test_the_pile_page_says_to_switch_the_iphone_picker_to_list_view():
+    # The owner's tip of 2026-10-16 (t-picker-list-view): in the iPhone file
+    # picker a CSV file is hard to find unless the view is List.
+    html = page("n", many=True)
+    assert "On an iPhone, switch the picker's view to List" in html
+    assert "view to List" not in page("n")  # one photo from the camera picks no file
+
+
 def test_a_link_the_box_no_longer_knows_says_it_may_have_restarted():
     assert "restarted" in _GONE["unknown"] and "new one" in _GONE["unknown"]
     assert "isn't a link Tim made" not in _GONE["unknown"]

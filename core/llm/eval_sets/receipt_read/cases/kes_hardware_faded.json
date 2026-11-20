@@ -1,0 +1,12 @@
+{
+  "name": "kes_hardware_faded",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "kes_hardware_faded.png",
+  "text": "MWANGI HARDWARE LTD\nEldoret, Kenya\nDate 2026-09-29\nCement 2 bags 1,640.00\nNails 2kg 380.00\nVAT incl.\nTOTAL KES 2,020.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "2020.00",
+    "currency": "KES",
+    "invoice_date": "2026-09-29"
+  }
+}

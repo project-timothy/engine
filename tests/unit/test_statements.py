@@ -129,3 +129,54 @@ def test_the_school_list_reads_each_student_with_its_currency():
     assert st.is_school_list(SCHOOL_CSV) and not st.is_school_list(OWN_CSV)
     with pytest.raises(st.NotAStatement):
         st.parse_school("Name,Amount\nx,1\n")
+
+
+# ---- refusing what it cannot read (review 2026-11-10) ----------------------------
+# Each of these was read wrong or dropped without a word. A statement Tim cannot
+# read whole is refused whole, with the reason in the person's terms.
+
+
+def _refused(text: str) -> str:
+    with pytest.raises(st.NotAStatement) as caught:
+        st.parse(text)
+    return caught.value.say
+
+
+def test_a_day_first_date_is_refused_never_read_month_first():
+    # 25/08 was dropped and 03/08 read as March 8.
+    say = _refused(
+        "Date,Description,Amount\n03/08/2026,TAXI,-6.80\n25/08/2026,GUEST HOUSE,-120.00\n"
+    )
+    assert "25/08/2026" in say and "day" in say
+
+
+def test_a_comma_for_the_decimal_point_is_refused_never_read_a_hundred_times_over():
+    say = _refused('Date,Description,Amount\n2026-08-07,TAXI,"-6,80"\n')
+    assert "6,80" in say
+
+
+def test_a_minus_after_the_amount_is_refused_never_dropped():
+    say = _refused("Date,Description,Amount\n2026-08-07,TAXI,6.80-\n2026-08-09,PAY,86.40\n")
+    assert "6.80-" in say
+
+
+def test_one_amount_column_with_nothing_going_out_is_refused():
+    # A card export lists charges as positive; read as-is, every charge was money in.
+    say = _refused(
+        "Date,Description,Amount\n2026-08-07,TAXI KATHMANDU,6.80\n2026-08-09,GUEST HOUSE,120.00\n"
+    )
+    assert "money out" in say
+
+
+def test_debit_and_credit_columns_need_no_signs():
+    lines = st.parse(
+        "Date,Description,Debit,Credit\n2026-08-07,TAXI,6.80,\n2026-08-09,PAY,,86.40\n"
+    )
+    assert [ln.cents for ln in lines] == [-680, 8640]
+
+
+def test_a_row_with_no_day_is_still_a_footer():
+    lines = st.parse(
+        'Date,Description,Amount\n2026-08-07,TAXI,-6.80\n,Ending balance,"3,374.74"\nTotal,,n/a\n'
+    )
+    assert [ln.cents for ln in lines] == [-680]

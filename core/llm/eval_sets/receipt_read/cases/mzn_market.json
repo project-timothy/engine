@@ -1,0 +1,12 @@
+{
+  "name": "mzn_market",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "mzn_market.png",
+  "text": "MERCADO CENTRAL\nMaputo, Mocambique\nData 2026-11-10\nFiltros de agua x3 450,00\nBaldes x2 300,00\nTOTAL 750,00 MT",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "750.00",
+    "currency": "MZN",
+    "invoice_date": "2026-11-10"
+  }
+}

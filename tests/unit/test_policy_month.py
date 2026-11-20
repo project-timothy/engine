@@ -134,3 +134,17 @@ def test_no_rules_no_rules_say(solo):  # noqa: F811
     _month(solo)
     [person] = _reviewer(solo).call("month_report", {"month": "2026-10"})["people"]
     assert "rules_say" not in person
+
+
+def test_rules_that_stop_loading_keep_the_word_from_deciding(solo):  # noqa: F811
+    # Review, 2026-11-10: a rulebook that failed to load read as "no rule asks
+    # for Face ID", so a ministry whose rule required it lost it silently.
+    _rules(solo)
+    _approve_rules(solo)
+    _rules(solo, RULES.replace('kinds = ["Meals"]', 'kinds = ["No Such Kind"]'))
+    _dinner(solo)
+    _month(solo)
+    [card] = _cards(solo)
+    assert "could not be checked" in card["policy"]
+    assert "Face ID or the emailed link" in card["policy"]
+    assert card["policy_face_id"] == "true"

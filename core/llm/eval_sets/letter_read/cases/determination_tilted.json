@@ -1,0 +1,12 @@
+{
+  "name": "determination_tilted",
+  "note": "a tilted IRS letter: whether it is to a nonprofit, and its name and number, read off the picture",
+  "document": "determination_tilted.png",
+  "text": "Internal Revenue Service      Department of the Treasury\nP.O. Box 2508, Cincinnati OH 45201\nDate: August 3, 2023\nEmployer Identification Number: 61-2345678\n\nQuiet Harbor Mission\nPO Box 311\nAsheville, NC 28801\n\nDear Applicant:\nWe're pleased to tell you we determined you're exempt\nfrom federal income tax under Internal Revenue Code\n(IRC) Section 501(c)(3). Donors can deduct\ncontributions they make to you under IRC Section 170.\nLetter 947 (Rev. 2-2020)",
+  "expect": {
+    "doc_type": "irs_letter",
+    "organization": "nonprofit",
+    "legal_name": "Quiet Harbor Mission",
+    "ein": "61-2345678"
+  }
+}

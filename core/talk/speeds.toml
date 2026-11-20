@@ -1,0 +1,23 @@
+# When Tim steps up from his everyday model (job type `talk`) to the strong
+# one (`talk_hard`), by rule: core/talk/speeds.py reads this file, and the
+# owner can read and tune it. Taken from the Haiku trial of 2026-11-17: its
+# wrong answers were tax questions (beats Y07 and Y11).
+#
+# A word matches whole, any case: "tax" matches "Tax" and "tax," but never
+# "taxi". A phrase matches with any spacing between its words. Nobody reads
+# these but the code; they are never shown to a person.
+
+[taxes]
+words = [
+  "tax", "taxes", "taxed", "taxable", "irs", "1099", "1099s", "1040", "w-2", "w2", "w-2s",
+  "bracket", "brackets", "deduct", "deduction", "deductions", "deductible", "write off",
+  "write-off", "housing allowance", "parsonage", "exclusion", "foreign earned income",
+  "estimated payment", "estimated payments", "estimated tax", "quarterly payment",
+  "quarterly payments", "state tax", "self-employment", "self employment", "seca", "fica",
+  "social security", "withholding", "schedule c", "schedule se", "itemize", "standard deduction",
+]
+# A turn that calls one of these runs the rest of the way on the strong model.
+tools = ["tax_packet", "keep_payers", "keep_tax_facts", "keep_travel"]
+
+[statements]
+tools = ["bank_statement", "explain_bank_line", "keep_own_lines", "split_line"]

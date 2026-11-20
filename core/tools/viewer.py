@@ -43,6 +43,13 @@ def display_name(person: str) -> str:
     )
 
 
+def first_name(name: str) -> str:
+    """A name said the way Tim greets someone: "Daniel Reyes" reads "Daniel",
+    and a couple's both: "Tom and Jen Baker" reads "Tom and Jen"."""
+    words = name.split(" ")
+    return " ".join(words[:-1]) if " and " in name else words[0]
+
+
 @dataclass(frozen=True)
 class Viewer:
     policy: Policy
@@ -52,6 +59,25 @@ class Viewer:
         """Whether this person may view ``resource`` in ``unit``."""
         request = Request(self.person, "view", resource, scope=unit)
         return evaluate(self.policy, request).allowed
+
+
+def filers(policy: Policy) -> list[str]:
+    """The people who file their own expense reports: whose months there are."""
+    return [
+        p
+        for p in policy.people
+        if evaluate(policy, Request(p, "submit", "expense.report", scope=p)).allowed
+    ]
+
+
+def sees_every_month(viewer: Viewer, sees=None) -> bool:
+    """Whether the person looks over every month in the ministry: every
+    filer's reports reach them (who may set its budget, close its year, and
+    is mailed its board pack). ``sees`` is the check to use for each unit,
+    the viewer's own by default (the tools pass theirs, which logs reach)."""
+    check = sees or viewer.sees
+    units = [unit_of(p) for p in filers(viewer.policy)]
+    return bool(units) and all(check("expense.report", u) for u in units)
 
 
 def viewer_for(slug: str, person: str, *, tenants_root: str | Path | None = None) -> Viewer:
@@ -70,4 +96,12 @@ def viewer_for(slug: str, person: str, *, tenants_root: str | Path | None = None
     return Viewer(policy, person)
 
 
-__all__ = ["Viewer", "ViewerError", "display_name", "unit_of", "viewer_for"]
+__all__ = [
+    "Viewer",
+    "ViewerError",
+    "display_name",
+    "filers",
+    "sees_every_month",
+    "unit_of",
+    "viewer_for",
+]

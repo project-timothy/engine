@@ -1,0 +1,12 @@
+{
+  "name": "gbp_taxi_hand",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "gbp_taxi_hand.png",
+  "text": "Heathrow Cars\nLHR to Oxford\n£85.00 paid\n1 Oct 2026\ndriver J. Patel",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "85.00",
+    "currency": "GBP",
+    "invoice_date": "2026-10-01"
+  }
+}

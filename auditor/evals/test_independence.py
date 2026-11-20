@@ -8,9 +8,12 @@ that would breach the boundary.
 
 from __future__ import annotations
 
+import pytest
+
 from auditor.evals.independence_lint import auditor_root, scan
 
 
+@pytest.mark.security("SEC-15")
 def test_real_auditor_tree_is_clean():
     assert scan(auditor_root()) == []
 
@@ -36,6 +39,7 @@ def test_catches_lazy_import_inside_function(tmp_path):
     assert _plant(tmp_path, "def f():\n    from core.engine import runner\n")
 
 
+@pytest.mark.security("SEC-15")
 def test_catches_importlib_escape_hatch(tmp_path):
     assert _plant(tmp_path, 'import importlib\nm = importlib.import_module("core.ledger")\n')
 

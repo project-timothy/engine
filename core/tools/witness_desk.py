@@ -14,6 +14,11 @@ open (``next``) and hears each yes the moment it lands, with the signed
 evidence; it writes the decision and says how it went (``settle``), which
 the person's Approve page shows. The doorkeeper keeps the yes until then.
 
+A person with no passkey still gives their own yes (the owner's decision of
+2026-10-30): the engine asks with ``email=yes``, and the doorkeeper mails the
+link to the address the ministry gave them and says only that it went
+(``Asked.emailed``). The engine never holds that link, so the AI never can.
+
 Anything the engine cannot read as a yes is no yes. Standard library only
 (invariant 9).
 """
@@ -35,7 +40,7 @@ from .mcp_http import service_secret, service_url
 
 class DeskRefused(Exception):
     """No link could be made: ``reason`` is the doorkeeper's word for why
-    (``not_invited``, ``no_passkey``, ``invalid_request``) or
+    (``not_invited``, ``no_passkey``, ``too_many``, ``invalid_request``) or
     ``unreachable``."""
 
     def __init__(self, reason: str) -> None:
@@ -46,7 +51,8 @@ class DeskRefused(Exception):
 @dataclass(frozen=True)
 class Asked:
     witness: str  # the engine keeps this, to collect with
-    link: str  # the person opens this, on their phone
+    link: str  # the person opens this, on their phone; "" when it was emailed
+    emailed: bool = False  # the link went only to the person's own email
 
 
 @dataclass(frozen=True)
@@ -101,13 +107,16 @@ class WitnessDesk:
         self, person: str, card: str, verb: str, summary: str, for_person: str | None = None
     ) -> Asked:
         """A one-time link for ``person`` to say ``verb`` on ``card``; with
-        ``for_person``, they confirm that person's answer (the vouch)."""
-        form = {"person": person, "card": card, "verb": verb, "summary": summary}
+        ``for_person``, they confirm that person's answer (the vouch). With
+        no passkey, the link goes to their email instead (``Asked.emailed``)."""
+        form = {"person": person, "card": card, "verb": verb, "summary": summary, "email": "yes"}
         if for_person:
             form["for"] = for_person
         status, reply = self._post("/witness/ask", form)
         if status == 200 and isinstance(reply, dict):
             witness, link = reply.get("witness"), reply.get("link")
+            if isinstance(witness, str) and witness and reply.get("emailed") is True:
+                return Asked(witness, "", emailed=True)
             if isinstance(witness, str) and witness and isinstance(link, str) and link:
                 return Asked(witness, link)
         if status == 400 and isinstance(reply, dict) and isinstance(reply.get("error"), str):
@@ -155,6 +164,46 @@ class WitnessDesk:
             return None
         reviewer, person, month = (str(v) for v in found)
         return reviewer, person, month
+
+    # ---- a person's own setup (core/tools/setup_page.py, chunk 10)
+
+    def _said(self, path: str, form: dict[str, str], key: str) -> object:
+        status, reply = self._post(path, form)
+        return reply.get(key) if status == 200 and isinstance(reply, dict) else None
+
+    def setup_person(self, token: str) -> str | None:
+        """The person a setup token belongs to: the doorkeeper minted it
+        after their Face ID, for looking and for "not now"."""
+        person = self._said("/setup/who", {"token": token}, "person")
+        return person if isinstance(person, str) and person else None
+
+    def spend_setup(self, grant: str) -> tuple[str, str] | None:
+        """(person, step) behind a grant a fresh Face ID minted for one yes,
+        once."""
+        status, reply = self._post("/setup/grant", {"grant": grant})
+        if status != 200 or not isinstance(reply, dict):
+            return None
+        person, step = reply.get("person"), reply.get("step")
+        if isinstance(person, str) and person and isinstance(step, str) and step:
+            return person, step
+        return None
+
+    def session_person(self, token: str) -> str | None:
+        """Whose remembered browser this is, from the cookie a sign-in at
+        the doorkeeper left on the box's origin (the talk page, card T1).
+        Such a browser reads and talks; it never says yes to a card."""
+        if not token:
+            return None
+        person = self._said("/session/who", {"token": token}, "person")
+        return person if isinstance(person, str) and person else None
+
+    def hello(self, person: str) -> bool:
+        """Send the daily email's hello to the address the ministry gave."""
+        return self._said("/setup/hello", {"person": person}, "sent") is True
+
+    def heard(self, person: str) -> bool:
+        """Whether the person has opened the hello's link."""
+        return self._said("/setup/heard", {"person": person}, "heard") is True
 
 
 def _tapped(reply: dict) -> Tapped | None:

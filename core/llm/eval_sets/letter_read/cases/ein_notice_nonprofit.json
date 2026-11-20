@@ -1,0 +1,12 @@
+{
+  "name": "ein_notice_nonprofit",
+  "note": "a plain IRS letter: whether it is to a nonprofit, and its name and number, read off the picture",
+  "document": "ein_notice_nonprofit.png",
+  "text": "Internal Revenue Service      Department of the Treasury\nP.O. Box 2508, Cincinnati OH 45201\nDate of this notice: 06-02-2025\nEmployer Identification Number: 47-5550123\nForm: SS-4   Type of organization: Nonprofit corporation\n\nJuniper Well Outreach, Inc.\n88 Mill Street\nDayton, OH 45402\n\nWE ASSIGNED YOU AN EMPLOYER IDENTIFICATION NUMBER\nThank you for applying for an Employer Identification\nNumber (EIN). We assigned you EIN 47-5550123. If you\nplan to apply for tax-exempt status, file Form 1023.\nNotice CP 575",
+  "expect": {
+    "doc_type": "irs_letter",
+    "organization": "nonprofit",
+    "legal_name": "Juniper Well Outreach, Inc.",
+    "ein": "47-5550123"
+  }
+}

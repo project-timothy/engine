@@ -41,7 +41,7 @@ OBLIGATIONS = """
 id = "permit"
 title = "Work permit renewal"
 who = "Jane"
-due = 2026-11-20
+due = 2026-11-23
 
 [[obligation]]
 id = "report"

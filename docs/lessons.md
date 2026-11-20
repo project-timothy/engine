@@ -135,9 +135,10 @@ whose return value it did not read. And a record with no reader is silence
 too: the dropped ask is reported on the surface its owner reads, one item per
 ask however often it repeats, ageing out when the asking stops — an empty
 queue is exactly what a swallowed ask looks like from every other angle.
-A lane whose unanswered asks NEST (each night's set contains the last) declares the older cards it replaces and the runner closes them `superseded`, by containment and never recency, so the queue holds one question, not N. Evals: `core/agents/close/evals/test_lock.py`,
+A lane whose unanswered asks NEST (each night's set contains the last) declares the older cards it replaces and the runner closes them `superseded`, by containment and never recency, so the queue holds one question, not N. A lane whose ask is bound to a window (a weekly send, looked up and acted on only in its own week) has a second kind of dead card: one still pending when its window ends can never execute, so approving it moves nothing and every window adds one more to the list. That is lapse, not recency, and it is the window's own rule: the next window's card declares the lapsed ones, and an answered card or the current window's is never touched. Before declaring a lane's cards a pile the owner should clear, read how the lane looks its card up. Evals: `core/agents/close/evals/test_lock.py`,
 `tests/unit/test_runner_approval_swallow.py`, `auditor/evals/test_approvals.py`,
-`tests/unit/test_runner_approval_supersede.py`, `core/agents/expenses/evals/test_inbox_skip_supersede.py`.
+`tests/unit/test_runner_approval_supersede.py`, `core/agents/expenses/evals/test_inbox_skip_supersede.py`,
+`core/agents/brief/evals/test_weekly_brief.py`.
 
 ## Pin both halves of a pair
 

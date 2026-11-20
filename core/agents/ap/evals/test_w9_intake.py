@@ -16,7 +16,6 @@ stable content-keyed card is CORRECT under the #143 dedup (contrast issue
 
 from __future__ import annotations
 
-import datetime
 import json
 import re
 import shutil
@@ -24,6 +23,7 @@ from pathlib import Path
 
 from core.agents.ap import w9
 from core.agents.ap.w9 import _looks_like_w9_name, _looks_like_w9_text, _vendor_slug
+from core.engine.clock import local_today
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
 
@@ -71,6 +71,14 @@ def _run_intake(tmp_path, landing, w9_folder, **extra_params):
     }
     params.update(extra_params)
     return run("demo", "ap", "intake", params=params, ledger_dir=tmp_path / "data")
+
+
+def _tax_year() -> str:
+    """The year the lane files under: the demo tenant's own clock, never the
+    host's (2026-11-10: in the first hours of January 1 UTC the two differ)."""
+    from core.engine.config import load_tenant
+
+    return local_today(load_tenant("demo").identity.timezone)[:4]
 
 
 def _world(tmp_path):
@@ -167,7 +175,7 @@ def test_approved_card_files_the_form_and_emits_the_registry_diff(tmp_path):
     _approve(tmp_path, card["id"], classification="s-corp")
     _run_intake(tmp_path, landing, w9_folder)
 
-    year = datetime.date.today().year
+    year = _tax_year()
     dest = w9_folder / f"Alpha_Parts_W9_{year}.pdf"
     assert dest.read_bytes() == b"%PDF form bytes"
     assert source.exists(), "the landing original is the audit artifact, never moved"
@@ -195,7 +203,7 @@ def test_owner_corrects_the_vendor_at_approval(tmp_path):
     _approve(tmp_path, card["id"], vendor="Beta Freight", classification="individual")
     _run_intake(tmp_path, landing, w9_folder)
 
-    year = datetime.date.today().year
+    year = _tax_year()
     assert (w9_folder / f"Beta_Freight_W9_{year}.pdf").is_file()
     payload = _events(tmp_path, w9.W9_FILED_EVENT)[0]["payload"]
     assert payload["vendor"] == "Beta Freight"
@@ -257,7 +265,7 @@ def test_three_distinct_forms_for_one_vendor_file_as_three_files(tmp_path):
     copy overwrote: a third distinct form clobbered `_2` silently. Now the
     filing rule loops and nothing is ever overwritten."""
     landing, w9_folder = _world(tmp_path)
-    year = datetime.date.today().year
+    year = _tax_year()
     bodies = [b"%PDF form one", b"%PDF form two", b"%PDF form three"]
     for i, body in enumerate(bodies, start=1):
         _file_and_approve(tmp_path, landing, w9_folder, f"Alpha Parts W-9 v{i}.pdf", body)
@@ -281,7 +289,7 @@ def test_evicted_destination_defers_instead_of_filing_a_duplicate(tmp_path, monk
     from core.agents.ap import jobs as ap_jobs
 
     landing, w9_folder = _world(tmp_path)
-    year = datetime.date.today().year
+    year = _tax_year()
     dest = w9_folder / f"Alpha_Parts_W9_{year}.pdf"
     dest.write_bytes(b"placeholder stand-in")
     real = ap_jobs._file_bytes

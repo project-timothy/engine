@@ -1,0 +1,12 @@
+{
+  "name": "ugx_fuel",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "ugx_fuel.png",
+  "text": "CITY OIL KAMPALA\nKampala, Uganda\n2026-10-17\nDiesel 20.5 L\n@ 4,950\nTOTAL UGX 101,475",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "101475.00",
+    "currency": "UGX",
+    "invoice_date": "2026-10-17"
+  }
+}

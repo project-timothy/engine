@@ -27,7 +27,7 @@ from urllib.parse import parse_qs
 
 import pytest
 
-from core.agents.expenses.jobs import REVIEW_CARD
+from core.agents.expenses.records import REVIEW_CARD
 from core.authority import AuthorityError, parse_policy
 from core.engine.authority_gate import Witnessed, decide_card
 from core.tools.witness_desk import DeskRefused, Tapped, WitnessDesk
@@ -110,6 +110,7 @@ def test_a_door_the_engine_cannot_read_is_refused(table):
 # ---- 2. present = at a terminal, or witnessed by the door -------------------------
 
 
+@pytest.mark.security("SEC-09")
 def test_a_person_with_no_terminal_and_no_witness_is_refused_as_before():
     out = _decide(POLICY + DOOR)
     assert out.refusal and "terminal" in out.refusal
@@ -124,6 +125,7 @@ def test_a_witnessed_yes_on_an_opened_resource_decides():
     assert json.loads(out.stamp["witness"]) == {**EVIDENCE, "summary": _witness().summary}
 
 
+@pytest.mark.security("SEC-09")
 def test_a_tenant_that_did_not_open_the_door_refuses_a_witness():
     out = _decide(POLICY, witness=_witness())
     assert "[presence] door" in out.refusal
@@ -137,6 +139,7 @@ def test_a_tenant_that_did_not_open_the_door_refuses_a_witness():
         ({"verb": "reject"}, "approve"),
     ],
 )
+@pytest.mark.security("SEC-09")
 def test_a_witness_of_anything_else_is_refused(over, said):
     out = _decide(POLICY + DOOR, witness=_witness(**over))
     assert out.refusal and said in out.refusal
@@ -285,6 +288,7 @@ def test_a_vouched_yes_is_the_persons_and_the_voucher_tapped(doorkeeper):
         _tapped_reply(**{"for": ""}),
     ],
 )
+@pytest.mark.security("SEC-09")
 def test_anything_the_engine_cannot_read_as_a_yes_is_no_yes(doorkeeper, reply):
     _Doorkeeper.replies["/witness/next"] = (200, {"yeses": [reply, _tapped_reply(yes=8)]})
     assert [t.yes for t in _desk(doorkeeper).next(set(), 0)] == [8]
@@ -322,6 +326,7 @@ def test_the_engine_says_how_it_went(doorkeeper):
     assert _desk(doorkeeper).settle(7, "approved", "x") is False
 
 
+@pytest.mark.security("SEC-09")
 def test_a_wrong_secret_hears_nothing(doorkeeper, tmp_path):
     wrong = tmp_path / "wrong.secret"
     wrong.write_text("w" * 48)
@@ -332,6 +337,7 @@ def test_a_wrong_secret_hears_nothing(doorkeeper, tmp_path):
 @pytest.mark.parametrize(
     "url", ["http://tim.example.org", "ftp://127.0.0.1", "https://tim.example.org/?x=1"]
 )
+@pytest.mark.security("SEC-18")
 def test_the_doorkeeper_is_https_or_loopback(doorkeeper, url):
     with pytest.raises(ValueError):
         _desk(doorkeeper, url=url)
@@ -379,16 +385,19 @@ def test_carols_tap_decides_for_don_and_the_card_says_so():
     assert json.loads(out.stamp["witness"])["signature"] == "s"
 
 
+@pytest.mark.security("SEC-10")
 def test_only_the_named_person_may_vouch():
     out = _decide(VOUCH, "don-pruitt", witness=_witness(person="ruth-hollis"))
     assert "ruth-hollis" in out.refusal
 
 
+@pytest.mark.security("SEC-10")
 def test_someone_with_no_one_named_cannot_be_vouched_for():
     out = _decide(VOUCH, "carol-jennings", witness=_witness(person="don-pruitt"))
     assert out.refusal
 
 
+@pytest.mark.security("SEC-10")
 def test_nobody_vouches_on_their_own_card():
     text = VOUCH.replace('don-pruitt = "carol-jennings"', 'don-pruitt = "ruth-hollis"')
     out = _decide(text, "don-pruitt", witness=_witness(person="ruth-hollis"))
@@ -402,6 +411,7 @@ def _two_step(**params) -> dict:
     return {**CARD, "params": {**CARD["params"], **TWO, **params}}
 
 
+@pytest.mark.security("SEC-10")
 def test_a_voucher_who_already_voted_cannot_also_vouch():
     voted = json.dumps([[0, "carol-jennings", "carol-jennings"]])
     out = decide_card(
@@ -418,6 +428,7 @@ def test_a_voucher_who_already_voted_cannot_also_vouch():
     assert "already" in out.refusal
 
 
+@pytest.mark.security("SEC-10")
 def test_a_voucher_cannot_then_vote_on_the_same_card_as_themselves():
     policy = parse_policy(tomllib.loads(VOUCH))
     args = {

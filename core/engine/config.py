@@ -549,6 +549,20 @@ class InstitutionSettings(BaseModel):
     mileage_rate: Decimal | None = Field(default=None, ge=0)
 
 
+class SetupSettings(BaseModel):
+    """What a person's setup offers beyond the baseline (core/onboarding/
+    person.py; chunk 10). Everyone is offered the baseline their ministry
+    can use: the daily email to the address the ministry gave, and the
+    receipt page on their home screen. ``offer`` names the steps a ministry
+    adds, each one the person may take or leave: ``mileage``, their phone's
+    tracker app sending drives to the box (miles and times only);
+    ``calendar``, the dates Tim watches in their own calendar (a feed it
+    subscribes to; Tim never reads the calendar); ``ai_connector``, Tim
+    added to their own Claude or ChatGPT (chunk 11)."""
+
+    offer: list[Literal["mileage", "calendar", "ai_connector"]] = Field(default_factory=list)
+
+
 class ArSettings(BaseModel):
     """Accounts receivable: the remittance-advice lane (issue #282).
 
@@ -703,10 +717,15 @@ to 7.12); the policy refuses to build it (row 7.15 decides whether an SDK
 class LlmPricing(BaseModel):
     """List price per million tokens. Decimals, never floats: a TOML float
     such as ``0.25`` is read through its text, so ``0.25`` stays ``0.25``.
-    Required on every tier so ``usd`` is never unknown on a policy call."""
+    Required on every tier so ``usd`` is never unknown on a policy call. The
+    two cache prices are for a provider that bills a cached prompt opening
+    apart (writes to its cache, reads from it); a tier that leaves them out
+    is charged the input price for those tokens."""
 
     input_usd_per_mtok: Decimal = Field(ge=0)
     output_usd_per_mtok: Decimal = Field(ge=0)
+    cache_write_usd_per_mtok: Decimal | None = Field(default=None, ge=0)
+    cache_read_usd_per_mtok: Decimal | None = Field(default=None, ge=0)
 
 
 class LlmTier(BaseModel):
@@ -740,6 +759,12 @@ class LlmBudget(BaseModel):
     (an ``llm.budget`` anomaly on the run, a typed error the job catches)."""
 
     monthly_usd: Decimal | None = Field(default=None, ge=0)
+    # Tim's soft line (Standalone Tim, card V3): past this share of the cap
+    # his voice stops stepping up to the strong model and says, once a day,
+    # that he is near the month's limit (core/talk/speeds.py). Tim's alone,
+    # so it stays out of the dump the nightly jobs fold into their run keys
+    # (``key.config("llm")``): adding it moves no job's key.
+    soft_percent: int = Field(default=80, ge=0, le=100, exclude=True)
 
 
 class LlmSettings(BaseModel):
@@ -806,6 +831,7 @@ class TenantConfig(BaseModel):
     mail: MailSettings = Field(default_factory=MailSettings)
     ar: ArSettings = Field(default_factory=ArSettings)
     institution: InstitutionSettings = Field(default_factory=InstitutionSettings)
+    setup: SetupSettings = Field(default_factory=SetupSettings)
     close: CloseSettings = Field(default_factory=CloseSettings)
     w9: W9Settings = Field(default_factory=W9Settings)
     deadlines: DeadlinesSettings = Field(default_factory=DeadlinesSettings)

@@ -7,17 +7,24 @@ tenant every job returns at once and records nothing.
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 
 from ...authority import UNDESCRIBED, CardRule, Request, card_request, evaluate
 from ...authority.routing import LEVELS, Delegation, check_delegation, level_due
+from ...engine import clock
 from ...engine.authority_gate import load_delegations, waiting
 from ...engine.clock import local_today
 from ...engine.contracts import EventSpec, JobContext, JobHandler, JobOutput
 from ...engine.registry import load_card_authority
 from ...engine.runkey import RunKey
-from ..expenses.jobs import DRIVE_EVENT, PURPOSE_EVENT, drive_id
-from ..expenses.jobs import REVIEW_CARD as MONTH_CARD  # a person's month, waiting for its yes
+from ...tools.viewer import Viewer, sees_every_month
+from ..deadlines import form990
+from ..deadlines.jobs import DONE_EVENT, obligations_path, open_occurrences
+from ..deadlines.schema import ObligationsError, load_obligations
+from ..expenses import statements
+from ..expenses.records import DRIVE_EVENT, PURPOSE_EVENT, drive_id
+from ..expenses.records import REVIEW_CARD as MONTH_CARD  # a person's month, waiting for its yes
+from ..policy.jobs import clock_in_force, pay_in_force
 
 REMINDER_EVENT = "route.reminder"
 DELEGATED_EVENT = "route.delegated"
@@ -89,7 +96,7 @@ def _tick_run(ctx: JobContext) -> JobOutput:
         return JobOutput(status="ok", summary="routing: no authority.toml, nothing routes")
     policy = ctx.authority.policy
     today = _today(ctx)
-    now = datetime.now(UTC).isoformat()
+    now = clock.utc_now().isoformat()
     sent = _sent(ctx)
     events: list[EventSpec] = []
     for item in waiting(policy, ctx.ledger, ctx.tenant_slug, today=today, now=now):
@@ -233,6 +240,19 @@ def _notices_key(ctx: JobContext) -> str:
         key.value("noticed", sorted(_noticed(ctx)))
         key.value("today", _today(ctx).isoformat())
         key.value("unspoken", sorted(_unspoken_this_week(ctx, _today(ctx))))
+        cash = _cash_due(ctx, _today(ctx))
+        if cash:  # only where someone holds cash: everyone else's key is unchanged
+            key.value("cash", sorted(cash))
+        key.config("deadlines")  # where the obligations file is
+        filings = _filing_due(ctx, _today(ctx))
+        if filings:  # only in a 990's last month: everyone else's key is unchanged
+            key.value("filings", sorted(filings))
+        packs = _packs_due(ctx)
+        if packs:  # only once a month closes: everyone else's key is unchanged
+            key.value("packs", sorted(packs))
+        pays = _pay_due(ctx, _today(ctx))
+        if pays:  # only where the board set pay: everyone else's key is unchanged
+            key.value("pays", sorted(pays))
     return key.digest()
 
 
@@ -254,6 +274,117 @@ def _unspoken_this_week(ctx: JobContext, today: date) -> set[str]:
     }
 
 
+FILING_NOTICE_DAYS = 30
+"""A 990 is in the morning email from 30 days out: mid-April for May 15."""
+
+
+def _filing_due(ctx: JobContext, today: date) -> set[tuple[str, str]]:
+    """Whoever runs the ministry's money, told once that its 990 is due
+    within a month (t-990n), as (notice id, the due month). Not once it is
+    marked done."""
+    path = obligations_path(ctx)
+    if ctx.authority is None or not path.is_file():
+        return set()
+    try:
+        obligations = [ob for ob in load_obligations(path) if ob.id == form990.OBLIGATION_ID]
+    except ObligationsError:
+        return set()  # the deadlines job names a broken file; a notice never guesses
+    if not obligations:
+        return set()
+    done = {
+        (str(e["payload"].get("id")), str(e["payload"].get("due")))
+        for e in ctx.ledger.read_event_log()
+        if e.get("event_type") == DONE_EVENT
+    }
+    policy = ctx.authority.policy
+    money = [
+        p
+        for p, who in policy.people.items()
+        if who.kind == "person" and policy.holds_any_scope(p, "release", "payment")
+    ]
+    out = set()
+    for ob in obligations:
+        for due in open_occurrences(ob, today=today, leads=[FILING_NOTICE_DAYS], done=done):
+            if 0 <= (due - today).days <= FILING_NOTICE_DAYS:
+                out |= {(f"filing:{ob.id}:{due.isoformat()}:{p}", f"{due:%Y-%m}") for p in money}
+    return out
+
+
+def _pay_due(ctx: JobContext, today: date) -> set[tuple[str, str, str]]:
+    """Whoever pays the ministry's bills, told on a missionary's pay day that
+    their pay is due (c34), once a month, as (notice id, whose pay by their
+    id, the month). Tim never sends the money; the email names no amount."""
+    if ctx.authority is None or ctx.authority.rules is None:
+        return set()
+    policy, month = ctx.authority.policy, f"{today:%Y-%m}"
+    money = [
+        p
+        for p, who in policy.people.items()
+        if who.kind == "person" and policy.holds_any_scope(p, "release", "payment")
+    ]
+    out = set()
+    for person in policy.people:
+        pay = pay_in_force(ctx.ledger.conn, ctx.tenant_slug, ctx.authority.rules, person, month)
+        if pay is None or today.day < pay.day:
+            continue
+        out |= {(f"pay:{person}:{month}:{p}", person, month) for p in money}
+    return out
+
+
+def _cash_due(ctx: JobContext, today: date) -> set[str]:
+    """Who should count their cash today, as notice ids (t-cash-count,
+    t-advance-clock): on the 1st, anyone holding cash; any day, anyone whose
+    oldest cash is 45 days old with no count since it was drawn, once for
+    that cash."""
+    log = ctx.ledger.read_event_log()
+    day = today.isoformat()
+    _drawn, held = statements.cash(log, through=day)
+    if not held:
+        return set()
+    counted: dict[str, str] = {}
+    for c in statements.counts(log):
+        counted[_slug(str(c["person"]))] = max(counted.get(_slug(str(c["person"])), ""), c["day"])
+    out = set()
+    for person, _currency in held:
+        who = _slug(person)
+        if today.day == 1:
+            out.add(f"cash:{today:%Y-%m}:{who}")
+    authority = ctx.authority
+    rules = authority.rules if authority is not None and not authority.rules_error else None
+    policy = authority.policy if authority is not None else None
+    for (person, _currency), (drawn, _left) in statements.cash_age(log, day).items():
+        who = _slug(person)
+        nudge = clock_in_force(ctx.ledger.conn, ctx.tenant_slug, rules, policy, who).nudge
+        if statements.days_old(drawn, day) >= nudge and counted.get(who, "") < drawn:
+            out.add(f"cashage:{drawn}:{who}")
+    return out
+
+
+def _packs_due(ctx: JobContext) -> set[tuple[str, str, str]]:
+    """Who is mailed a month's board pack (t-pack-by-email, the owner
+    2026-11-12), as (notice id, person, month): once the newest month with
+    month cards has closed, each person's newest card for it approved, everyone
+    who looks over every month, once. Only the newest month, so a box that
+    turns this on never mails a backlog."""
+    if ctx.authority is None:
+        return set()
+    newest: dict[tuple[str, str], dict] = {}  # (month, person) -> their newest card
+    for row in ctx.ledger.list_approvals(ctx.tenant_slug):
+        if row["action_type"] == MONTH_CARD and row["params"].get("month"):
+            newest[(str(row["params"]["month"]), str(row["params"].get("person", "")))] = row
+    if not newest:
+        return set()
+    month = max(m for m, _p in newest)
+    if any(row["status"] != "approved" for (m, _p), row in newest.items() if m == month):
+        return set()
+    policy = ctx.authority.policy
+    return {
+        (f"pack:{month}:{p}", p, month)
+        for p, who in policy.people.items()
+        if who.kind == "person" and sees_every_month(Viewer(policy, p))
+    }
+
+
 def _notices_run(ctx: JobContext) -> JobOutput:
     """The emails the box sends, decided here and worded by the doorkeeper
     (2026-10-13): a reviewer hears once that a person's month is ready,
@@ -261,16 +392,26 @@ def _notices_run(ctx: JobContext) -> JobOutput:
     and stands in for that day's "waiting" (the owner, 2026-10-14); anyone a
     card waits on hears at most once a day that a yes is waiting,
     and on Fridays someone whose drives this week nobody has spoken for is
-    asked, once, to tell Tim which were for the ministry.
-    A notice names people and a month, never a figure or what a card is."""
+    asked, once, to tell Tim which were for the ministry. Someone holding
+    ATM cash is asked to count it on the 1st, and once when their oldest
+    cash turns 45 days with no count since (2026-10-15). Whoever runs the
+    ministry's money hears once, a month ahead, that its 990 is due (t-990n).
+    Once a month closes, whoever looks over every month is mailed its board
+    pack, once (t-pack-by-email). A notice names people and a month, never a
+    figure or what a card is: a
+    leader's "waiting" names whose things wait for them (chunk 12, the
+    morning brief by role), and ``more`` says something else waits too, one
+    of their own or about no one."""
     if ctx.authority is None:
         return JobOutput(status="ok", summary="routing: no authority.toml, no notices")
     policy = ctx.authority.policy
     today = _today(ctx)
     noticed = _noticed(ctx)
-    now = datetime.now(UTC).isoformat()
+    now = clock.utc_now().isoformat()
     notices: list[dict] = []
     waits: dict[str, set[int]] = {}  # person -> the cards waiting on them
+    whose: dict[str, set[str]] = {}  # person -> the people those cards are about
+    more: set[str] = set()  # people with a card waiting about no one else
     told: dict[str, set[int]] = {}  # person -> month cards whose email goes today
     for item in waiting(policy, ctx.ledger, ctx.tenant_slug, today=today, now=now):
         rules = load_card_authority(_agent_of(ctx, item["card"]))
@@ -278,16 +419,18 @@ def _notices_run(ctx: JobContext) -> JobOutput:
         deciders = [
             p
             for p in item["waiting_on"]
-            if evaluate(policy, card_request(rule, p, item["params"])).allowed
+            if evaluate(policy, card_request(rule, p, item["params"], policy)).allowed
         ]
+        about = _slug(str(item["params"].get("person", "")))
         for p in deciders:
             waits.setdefault(p, set()).add(int(item["card"]))
+            if about and about != p and about in policy.people:
+                whose.setdefault(p, set()).add(about)
+            else:
+                more.add(p)
         if item["action_type"] != MONTH_CARD:
             continue
-        about, month = (
-            _slug(str(item["params"].get("person", ""))),
-            str(item["params"].get("month", "")),
-        )
+        month = str(item["params"].get("month", ""))
         for p, who in policy.people.items():
             if who.kind != "person" or p == about:
                 continue
@@ -312,6 +455,36 @@ def _notices_run(ctx: JobContext) -> JobOutput:
                         "month": "",
                     }
                 )
+    for notice_id in sorted(_cash_due(ctx, today)):
+        p = notice_id.rsplit(":", 1)[1]
+        if p in policy.people and policy.people[p].kind == "person":
+            notices.append(
+                {"id": notice_id, "to": p, "kind": "cash_count", "about": "", "month": ""}
+            )
+    for notice_id, month in sorted(_filing_due(ctx, today)):
+        notices.append(
+            {
+                "id": notice_id,
+                "to": notice_id.rsplit(":", 1)[1],
+                "kind": "filing_990",
+                "about": "",
+                "month": month,
+            }
+        )
+    notices.extend(
+        {"id": notice_id, "to": p, "kind": "board_pack", "about": "", "month": month}
+        for notice_id, p, month in sorted(_packs_due(ctx))
+    )
+    notices.extend(
+        {
+            "id": notice_id,
+            "to": notice_id.rsplit(":", 1)[1],
+            "kind": "pay_due",
+            "about": person,
+            "month": month,
+        }
+        for notice_id, person, month in sorted(_pay_due(ctx, today))
+    )
     for p in sorted(waits):
         if waits[p] <= told.get(p, set()):
             continue  # the month's own email, with its link, says it today
@@ -322,6 +495,8 @@ def _notices_run(ctx: JobContext) -> JobOutput:
                 "kind": "waiting",
                 "about": "",
                 "month": "",
+                "people": sorted(whose.get(p, set())),
+                "more": p in more,
             }
         )
     events = [
@@ -348,7 +523,11 @@ def _agent_of(ctx: JobContext, card: int) -> str:
 def notices_since(events: list[dict], day: str) -> list[dict]:
     """The notices recorded on or after ``day``, for ``engine notices``."""
     return [
-        {k: e["payload"][k] for k in ("id", "to", "kind", "about", "month")}
+        {
+            k: e["payload"][k]
+            for k in ("id", "to", "kind", "about", "month", "people", "more")
+            if k in e["payload"]
+        }
         for e in events
         if e.get("event_type") == NOTICE_EVENT and str(e["payload"].get("day", "")) >= day
     ]

@@ -1,0 +1,15 @@
+# What Tim says when a payer sends some of each: part pay for the person's
+# ministry work, part a personal gift (core/tools/tax.py, keep_payers; board
+# item t-payer-split, the owner, 2026-11-16). Code works out every figure
+# and fills the {names}; these are only the words. A test fails on an em
+# dash or a machinery word here.
+
+[words]
+kept = "Done: of each {each} from {name}, {work} ({share}) counts as pay for their ministry work, on Schedule C of their tax packet, and {gift} ({rest}) stays a personal gift, kept off their taxes. Every deposit from {name} splits the same way."
+kept_no_payment = "Done: of each payment from {name}, {share} counts as pay for their ministry work, on Schedule C of their tax packet, and {rest} stays a personal gift, kept off their taxes. Every deposit from {name} splits the same way."
+how_much = "How much of each payment from {name} is for their ministry work? Say dollars, like $150 of each $500, or a percentage, like 30%."
+none_of_it = "If none of it is for their ministry work, it all stays a personal gift: say no."
+all_of_it = "If all of it is for their ministry work, it all counts as their pay: say yes."
+too_much = "That's more than each payment of {each}. Say the part of it that's for their ministry work."
+each_payment = "Say the payment in dollars, like $500."
+no_payment_seen = "Tim hasn't seen a deposit from {name} yet. Say it as a percentage, like 30%, or say the dollars of each payment, like $50 of each $200."

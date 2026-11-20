@@ -48,6 +48,7 @@ class FakeDesk:
         self.asked: list[dict] = []
         self.refuse = ""
         self.no_passkey: set[str] = set()
+        self.emailed: set[str] = set()  # no passkey: their link goes to their email (2026-10-30)
         self.stands: dict[str, str] = {}  # witness id -> waiting | witnessed | settled | unknown
         self.tapped: dict[int, tuple[str, Tapped]] = {}  # yes -> (witness id, the yes)
         self.settled: list[tuple[int, str, str]] = []
@@ -72,6 +73,8 @@ class FakeDesk:
             }
         )
         self.stands[witness] = "waiting"
+        if person in self.emailed:
+            return Asked(witness, "", emailed=True)
         return Asked(witness, f"https://tim.example.org/yes#link-{n}")
 
     def check(self, witness: str) -> str:
@@ -186,6 +189,57 @@ def _finish(church, desk: FakeDesk, held: frozenset[int] = frozenset()) -> set[i
     return _finisher(church, desk).run_once(held)
 
 
+# ---- whose yes each waiting card is (the persona year on Tim's voice, Haiku, 2026-11-18)
+#
+# A09: Eli asked whether his ministry lets him approve his own report. Tim read
+# the spending rules, found none in force, and sent him to his board member,
+# though his ministry lets him approve his own. Each waiting card now says.
+
+
+def test_each_waiting_card_says_whether_its_yes_is_yours(door):
+    church = door["church"]  # noqa: F811
+    ruths = int(_ruths(church)["id"])
+    ruth = _tools(church, "ruth-hollis", door["desk"], door["asks"])
+    [carols] = [r for r in _carol(door).call("waiting_cards", {})["rows"] if r["card"] == ruths]
+    [hers] = [r for r in ruth.call("waiting_cards", {})["rows"] if r["card"] == ruths]
+    assert carols["yours"] is True  # Carol approves Ruth's month
+    assert hers["yours"] is False  # nobody at a church approves their own
+    # Who may approve, in the books' words, for Tim to say as given (take 5, A09:
+    # "unless your board rules say otherwise, check that first").
+    assert carols["who_approves"] == "Yours to approve: your own yes decides it."
+    assert hers["who_approves"] == "Someone else approves this one, not you."
+
+
+def test_who_approves_is_said_in_the_books_words():
+    from core.tools.decide import who_approves
+
+    assert who_approves(True) == "Yours to approve: your own yes decides it."
+    assert who_approves(False) == "Someone else approves this one, not you."
+    assert "unless" not in who_approves(True) and "check" not in who_approves(True)
+
+
+def test_the_months_review_says_whether_its_yes_is_yours(door):
+    from core.tools.months import _review_yours
+
+    church = door["church"]  # noqa: F811
+    card = _ruths(church)
+    with Ledger.open(church["ledger_root"]) as ledger:  # a review card names its month
+        ledger.conn.execute(
+            "UPDATE approval_queue SET params_json = ? WHERE id = ?",
+            (json.dumps({**card["params"], "month": "2026-09"}), card["id"]),
+        )
+        ledger.conn.commit()
+    ruth = _tools(church, "ruth-hollis", door["desk"], door["asks"])
+    assert _review_yours(_carol(door), "2026-09") == {"Ruth Hollis": True}
+    assert _review_yours(ruth, "2026-09") == {"Ruth Hollis": False}
+    assert _review_yours(_carol(door), "2026-10") == {}
+
+
+def test_with_the_door_shut_a_waiting_card_says_nothing_of_whose_yes(church):  # noqa: F811
+    rows = _tools(church, "carol-jennings", FakeDesk()).call("waiting_cards", {})["rows"]
+    assert rows and all("yours" not in r for r in rows)
+
+
 # ---- where the tool is offered ----------------------------------------------------
 
 
@@ -197,7 +251,8 @@ def test_a_tenant_that_did_not_open_the_door_is_not_offered_it(church):  # noqa:
 def test_with_the_door_open_the_tool_is_offered_and_says_it_writes(door):
     (spec,) = [s for s in _carol(door).specs() if s.name == "decide_card"]
     assert spec.annotations["readOnlyHint"] is False
-    assert spec.schema["required"] == ["card", "decision", "said"]
+    assert spec.schema["required"] == ["decision", "said"]  # card, or cards (chunk 7)
+    assert {"card", "cards"} <= set(spec.schema["properties"])
     assert "the tap finishes it" in spec.description  # no second call, no "done"
     assert "call again right away" not in spec.description
 

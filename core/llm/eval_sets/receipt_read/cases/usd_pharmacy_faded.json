@@ -1,0 +1,12 @@
+{
+  "name": "usd_pharmacy_faded",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_pharmacy_faded.png",
+  "text": "MAIN ST PHARMACY\nLebanon TN\n2026-08-30\nCough syrup 9.99\nBandages 4.49\nSubtotal 14.48\nTax 1.37\nTOTAL 15.85 USD",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "15.85",
+    "currency": "USD",
+    "invoice_date": "2026-08-30"
+  }
+}

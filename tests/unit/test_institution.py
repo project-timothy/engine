@@ -18,7 +18,7 @@ import pytest
 from core.adapters.pretend_institution import PretendInstitution
 from core.contracts.institution import Claim, ClaimSink, InstitutionDown
 from core.engine.config import InstitutionSettings
-from core.institution import HELD, IRS_MILEAGE, InstitutionError, claim_sink, mileage_rate, submit
+from core.institution import HELD, InstitutionError, claim_sink, mileage_rate, submit
 
 CLAIM = Claim(
     receipt="sha-1",
@@ -47,10 +47,10 @@ def test_the_irs_rate_applies_unless_the_institution_sets_its_own():
     assert rate == Decimal("0.70") and source == "AGWM"
 
 
-def test_the_irs_table_is_dated_and_a_day_before_it_is_refused():
-    assert all(isinstance(day, date) for day, _ in IRS_MILEAGE)
-    assert [day for day, _ in IRS_MILEAGE] == sorted(day for day, _ in IRS_MILEAGE)
-    with pytest.raises(InstitutionError, match="no IRS rate"):
+def test_the_irs_rate_comes_from_the_tax_table_and_a_year_without_one_is_refused():
+    # c34 PR 6: the year's table holds the rate (core/tax/tables), by the half.
+    assert mileage_rate(InstitutionSettings(), date(2026, 7, 1))[0] == Decimal("0.76")
+    with pytest.raises(InstitutionError, match="IRS mileage rate for 2020"):
         mileage_rate(InstitutionSettings(), date(2020, 1, 1))
 
 

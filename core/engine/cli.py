@@ -177,6 +177,7 @@ GATE_PARAMS = frozenset(
         "decided_via",
         "witness",
         "witness_at",
+        "witness_kind",
         "witness_resource",
         "vouched_by",
         "vouchers",
@@ -221,10 +222,11 @@ def _cmd_route(args: argparse.Namespace, root: Path) -> int:  # noqa: C901  # on
     are a person's acts at a terminal."""
     import json
     from dataclasses import replace
-    from datetime import UTC, date, datetime
+    from datetime import date
 
     from ..authority.routing import authority_for, due_date
     from ..ledger import Ledger
+    from . import clock
     from .authority_gate import load_delegations, load_policy, route_of, waiting
     from .kit import KitError
     from .runner import run
@@ -243,7 +245,7 @@ def _cmd_route(args: argparse.Namespace, root: Path) -> int:  # noqa: C901  # on
         return 2
     policy = authority.policy
     who = policy.people.get(args.as_principal)
-    now = datetime.now(UTC)
+    now = clock.utc_now()
     today = now.date()
     if args.queue_command == "waiting":
         with Ledger.open(root) as ledger:
@@ -341,11 +343,68 @@ def _cmd_tracker(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_receipt_link(args: argparse.Namespace) -> int:
+    """A person's standing home-screen receipt link (core/tools/receipts.py,
+    chunk 10): a new one, shown once, or ``--revoke`` to retire theirs."""
+    from ..tools.receipts import HOME_PATH, add_home_link, drop_home_link
+    from .config import tenant_dir
+
+    folder = tenant_dir(args.tenant)
+    if args.revoke:
+        n = drop_home_link(folder, args.person)
+        print(f"{args.person}: {n} receipt link{'' if n == 1 else 's'} retired")
+        return 0
+    key = add_home_link(folder, args.person)
+    where = f"https://{args.domain}" if args.domain else "https://<the box>"
+    print(f"Receipt page for {args.person} (shown once; their older one stops working):")
+    print(f"  {where}{HOME_PATH}{key}")
+    return 0
+
+
+def _cmd_people(args: argparse.Namespace) -> int:
+    """New people from one list, one line each (core/onboarding/roster.py,
+    chunk 11): ``Ivy Chen = missionary in Thailand, ivy@example.org,
+    looked after by Ann Lee``. ``-`` reads the list from stdin."""
+    from ..onboarding import OnboardingError
+    from ..onboarding.roster import add_people, said_back
+
+    if args.list == "-":
+        said = sys.stdin.read()
+    else:
+        try:
+            said = Path(args.list).read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+    try:
+        added = add_people(args.tenant, said, check=args.check)
+    except OnboardingError as exc:
+        print(f"Nobody was added. {exc}", file=sys.stderr)
+        return 1
+    for line in said_back(added, check=args.check):
+        print(line)
+    return 0
+
+
+def _cmd_calendar_link(args: argparse.Namespace) -> int:
+    """Retire a person's calendar feed link (core/tools/calendar_feed.py,
+    chunk 11): a lost phone, or someone who left. A new one comes from
+    their own setup's calendar step."""
+    from ..tools.calendar_feed import drop_calendar_link
+    from .config import tenant_dir
+
+    n = drop_calendar_link(tenant_dir(args.tenant), args.person)
+    print(f"{args.person}: {n} calendar link{'' if n == 1 else 's'} retired")
+    return 0
+
+
 def _cmd_notices(args: argparse.Namespace) -> int:
     """The notices the routing lane recorded in the last week, one JSON line
-    each, for ``doorkeeper send-notices`` (which sends each once)."""
+    each, for ``doorkeeper send-notices`` (which sends each once). With
+    ``--packs``, each month's board pack a notice names is written there
+    first, as the PDF the doorkeeper attaches."""
     import json
-    from datetime import date, timedelta
+    from datetime import UTC, date, datetime, timedelta
 
     from ..agents.routing.jobs import notices_since
     from ..ledger import Ledger
@@ -353,8 +412,18 @@ def _cmd_notices(args: argparse.Namespace) -> int:
 
     since = (date.today() - timedelta(days=args.days)).isoformat()
     with Ledger.open(resolve_ledger_root(args.tenant, args.ledger_dir)) as ledger:
-        for notice in notices_since(ledger.read_event_log(), since):
-            print(json.dumps(notice, sort_keys=True))
+        notices = notices_since(ledger.read_event_log(), since)
+    if args.packs:
+        _write_packs(args, notices)
+    # A missionary who finished (or stopped at) her own setup questions, to
+    # whoever sent her the link (core/onboarding/interview.py, board c49).
+    from ..onboarding import interview
+
+    book = interview.InterviewBook(resolve_ledger_root(interview.INTERVIEWS, args.ledger_dir))
+    started = datetime.combine(date.fromisoformat(since), datetime.min.time(), UTC)
+    notices = [*notices, *interview.notices(book, started.timestamp())]
+    for notice in notices:
+        print(json.dumps(notice, sort_keys=True))
     return 0
 
 
@@ -943,24 +1012,105 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _obligations_file(tenant: str, cfg: Any, given: str | None = None) -> Path:
+    """The tenant's obligations file: the one named, else the tenant's own."""
+    from .config import tenant_dir
+
+    if given:
+        return Path(given)
+    if cfg.deadlines.file:
+        return Path(cfg.deadlines.file)
+    return tenant_dir(tenant) / "obligations.toml"
+
+
+def _cmd_talk(args: argparse.Namespace) -> int:
+    """Talk to Tim in the terminal, as one person (core/talk): the same
+    read tools ``engine mcp --as`` serves, held by Tim's own voice."""
+    from ..talk import reply
+    from ..tools.catalog import Tools
+    from ..tools.viewer import ViewerError, viewer_for
+    from .clock import local_today
+    from .config import load_tenant
+    from .runner import resolve_ledger_root
+
+    cfg = load_tenant(args.tenant)
+    try:
+        viewer = viewer_for(args.tenant, args.as_person)
+    except ViewerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    ledger_root = resolve_ledger_root(args.tenant, args.ledger_dir)
+    tools = Tools(
+        args.tenant,
+        ledger_root=ledger_root,
+        obligations_file=_obligations_file(args.tenant, cfg),
+        today=local_today(cfg.identity.timezone),
+        lead_days=tuple(cfg.deadlines.lead_days),
+        viewer=viewer,
+        ministry=cfg.identity.legal_name,
+    )
+
+    def one(said: str) -> bool:
+        answer = reply(tools, said, tenant=args.tenant, ledger_root=ledger_root)
+        print(answer.say)
+        return answer.status == "ok"
+
+    if args.say is not None:
+        return 0 if one(args.say) else 1
+    print(f"Talking to Tim as {args.as_person}. An empty line ends it.", file=sys.stderr)
+    for line in sys.stdin:
+        if not line.strip():
+            break
+        one(line.strip())
+    return 0
+
+
+def _cmd_spend(args: argparse.Namespace) -> int:
+    """What a ministry's models cost this month, by job type, with the cap
+    and Tim's soft line (card V3): one plain line, or JSON for the board."""
+    import json
+
+    from ..talk.meter import Meter, spend, spend_line
+    from .config import load_tenant
+    from .runner import resolve_ledger_root
+
+    cfg = load_tenant(args.tenant)
+    meter = Meter(resolve_ledger_root(args.tenant, args.ledger_dir))
+    report = spend(cfg.llm, meter, args.tenant)
+    print(json.dumps(report, indent=2) if args.json else spend_line(report))
+    return 0
+
+
 def _cmd_mcp(args: argparse.Namespace) -> int:
     """Serve the read-only tools over MCP on stdio (Ask Tim, step 1), or with
     ``--onboarding`` the tenantless onboarding conversation (#448)."""
     from ..tools.catalog import Tools
     from ..tools.mcp_stdio import McpServer
     from .clock import local_today
-    from .config import load_tenant, tenant_dir
+    from .config import load_tenant
     from .runner import resolve_ledger_root
 
     if args.onboarding:
         from ..onboarding.mcp import OnboardingTools
 
+        if args.pack:
+            from ..pack import PackError, check, load_pack
+
+            try:
+                problems = check(load_pack(args.pack))
+            except PackError as exc:
+                problems = [str(exc)]
+            if problems:
+                for problem in problems:
+                    print(f"error: {problem}", file=sys.stderr)
+                return 2
         onboarding = OnboardingTools(
             answers_dir=Path(args.answers_dir or "."),
             root=args.root,
             data_root=args.data_root,
             ledger_dir=args.ledger_dir,
             run_audit=not args.no_audit,
+            pack=args.pack,
         )
         print("engine mcp: serving the onboarding conversation on stdio", file=sys.stderr)
         return McpServer(
@@ -979,13 +1129,7 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
         except ViewerError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
-    ob = Path(args.obligations_file) if args.obligations_file else None
-    if ob is None:
-        ob = (
-            Path(cfg.deadlines.file)
-            if cfg.deadlines.file
-            else tenant_dir(args.tenant) / "obligations.toml"
-        )
+    ob = _obligations_file(args.tenant, cfg, args.obligations_file)
     if args.today is not None:
         # A replay reads a past day's books as of that day (2026-10-12). The
         # HTTP door is what people use, so it always keeps the real clock.
@@ -1030,6 +1174,7 @@ def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
     from ..tools.receipts import ReceiptDesk
     from ..tools.witness_desk import WitnessDesk
     from .clock import local_today
+    from .private_file import state_folder
     from .runner import resolve_ledger_root
 
     if not args.resource:
@@ -1063,6 +1208,7 @@ def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
     elif args.tokens:
         verifier, who = TokenFile(args.tokens), "invitation tokens"
     ledger_root = resolve_ledger_root(args.tenant, args.ledger_dir)
+    kept = state_folder(ledger_root, args.tenant)
     server = make_server(
         args.tenant,
         tenants_root=None,
@@ -1078,7 +1224,10 @@ def _serve_mcp_http(args: argparse.Namespace, cfg: Any, ob: Path) -> int:
         desk=desk,
         # On the box (a sign-in service vouches for people), a person who
         # files expenses can hand Tim a receipt from their phone's camera.
-        receipts=ReceiptDesk() if desk is not None else None,
+        # Kept beside the books (core.engine.private_file), so a room that naps
+        # and wakes (shot 4, card H3) honors the link or button in her hand.
+        receipts=ReceiptDesk(state=kept / "receipt-links.json") if desk is not None else None,
+        month_key=kept / "month-page.key" if desk is not None else None,
         # And their phone's tracker app reports drives: miles and times only.
         tracker=Tracker() if desk is not None else None,
     )
@@ -1132,7 +1281,8 @@ def _cmd_capabilities(args: argparse.Namespace) -> int:
 
     from ..capabilities import build, markdown
 
-    page = build(args.shape)
+    rules, asks = _rules_offered(args.tenant) if args.tenant else (True, True)
+    page = build(args.shape, rules=rules, asks=asks)
     if args.format == "json":
         print(json.dumps(page, indent=1))
     else:
@@ -1140,14 +1290,309 @@ def _cmd_capabilities(args: argparse.Namespace) -> int:
     return 0
 
 
+def _rules_offered(tenant: str) -> tuple[bool, bool]:
+    """Whether the ministry's door offers the rules tools (it wrote rules
+    down), and the ask for an OK (a rule asks for one first)."""
+    from .authority_gate import load_policy
+
+    policy = load_policy(tenant)
+    if policy is None or policy.rules is None or policy.rules_error:
+        return False, False
+    return True, policy.rules.asks_first
+
+
+def _cmd_board_pack(args: argparse.Namespace) -> int:
+    """``engine board-pack``: the statements for a span as a page and a PDF
+    (chunk c29), read through the same tool Tim answers with, as one person
+    under the ministry's own rules. Writes two files; changes no books."""
+    from ..tools.board_pack_page import html, pdf
+    from .config import load_tenant
+
+    tools = _tools_as(args)
+    if tools is None:
+        return 2
+    cfg = load_tenant(args.tenant)
+    pack = _pack_of(tools, args.as_person, args.period)
+    if pack is None:
+        return 2
+    name = cfg.identity.legal_name or args.tenant
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    stem = f"{args.tenant}-board-pack-{pack['from']}-to-{pack['through']}"
+    (out / f"{stem}.html").write_text(html(pack, name), encoding="utf-8")
+    (out / f"{stem}.pdf").write_bytes(pdf(pack, name))
+    print(pack["says"])
+    print(f"wrote {out / stem}.html and .pdf")
+    return 0 if pack["matches_the_books"] and pack["balanced"] else 1
+
+
+def _cmd_donor_letters(args: argparse.Namespace) -> int:
+    """``engine donor-letters``: a year's donor letters as pages and PDFs
+    (chunk c32), read through the same tool Tim answers with, as one person
+    under the ministry's own rules: each donor's year-end giving statement,
+    an acknowledgment of each gift of $250 or more, and a thank-you for each
+    grant from a donor-advised fund. Writes files; changes no books; sends
+    nothing."""
+    import re
+    from decimal import Decimal
+
+    from ..agents.expenses import donors
+    from ..tools import paper
+
+    tools = _tools_as(args)
+    if tools is None:
+        return 2
+    if "donor_letters" not in {s.name for s in tools.specs()}:
+        print(f"error: {args.as_person} doesn't look over every month", file=sys.stderr)
+        return 2
+    got = tools.call("donor_letters", {"year": args.year})
+    if "donors" not in got:
+        print(f"error: {got.get('say', 'no donors')}", file=sys.stderr)
+        return 2
+    if got["needs"]:
+        print(f"error: the letters still need {', '.join(got['needs'])}", file=sys.stderr)
+        return 2
+    head = donors.Letterhead(**got["letterhead"])
+    today, year = got["as_of"], got["year"]
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    def write(stem: str, title: str, blocks: list) -> None:
+        name = re.sub(r"[^a-z0-9]+", "-", stem.casefold()).strip("-")
+        base = out / f"{args.tenant}-{year}-{name}"
+        base.with_suffix(".html").write_text(paper.html(title, blocks), encoding="utf-8")
+        base.with_suffix(".pdf").write_bytes(paper.pdf(blocks))
+
+    for d in got["donors"]:
+        person = donors.Donor(
+            d["name"],
+            [
+                donors.Gift(g["date"], int(Decimal(g["dollars"]) * 100), d["name"], False)
+                for g in d["gifts"]
+            ],
+        )
+        where = d.get("address", "")
+        write(
+            f"statement {d['name']}",
+            f"{year} giving statement",
+            donors.statement(person, head, year, today, where),
+        )
+        for g in person.acknowledged:
+            write(
+                f"acknowledgment {g.day} {d['name']}",
+                "Gift acknowledgment",
+                donors.acknowledgment(g, head, today, where),
+            )
+    for f in got["fund_grants"]:
+        g = donors.Gift(f["date"], int(Decimal(f["dollars"]) * 100), f["from"], True)
+        write(
+            f"thank you {g.day} {g.donor}",
+            "Thank you",
+            donors.thank_you(g, head, today, f.get("address", "")),
+        )
+    print(got["says"])
+    print(f"wrote the letters to {out}")
+    return 0
+
+
+def _cmd_tax_packet(args: argparse.Namespace) -> int:
+    """``engine tax-packet``: a missionary's tax packet for a year as a page
+    and a PDF (chunk c33), read through the same ``tax_packet`` tool Tim
+    answers with, as one person under the ministry's own rules: the person
+    themself, or someone they shared it with naming them with --person (c38).
+    Writes files; changes no books; sends nothing."""
+    import re
+
+    from ..agents.expenses import packet
+    from ..tools import paper
+
+    tools = _tools_as(args)
+    if tools is None:
+        return 2
+    if "tax_packet" not in {s.name for s in tools.specs()}:
+        print(f"error: {args.as_person} has no tax packet to see", file=sys.stderr)
+        return 2
+    asked = {"year": args.year} | ({"person": args.person} if args.person else {})
+    got = tools.call("tax_packet", asked)
+    if "payers" not in got:
+        print(f"error: {got.get('say', 'no packet')}", file=sys.stderr)
+        return 2
+    blocks = packet.page(got)
+    name = re.sub(r"[^a-z0-9]+", "-", got["person"].casefold()).strip("-")
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    base = out / f"{args.tenant}-{got['year']}-tax-packet-{name}"
+    base.with_suffix(".html").write_text(paper.html(blocks[0][1], blocks), encoding="utf-8")
+    base.with_suffix(".pdf").write_bytes(paper.pdf(blocks))
+    print(got["says"])
+    print(f"wrote {base}.html and .pdf")
+    return 0
+
+
+def _pack_of(tools, person: str, period: str) -> dict | None:
+    """The board pack for ``period`` as ``person`` sees it, or None, said on
+    stderr, when they may not see the books or the span has no statements."""
+    if "board_pack" not in {s.name for s in tools.specs()}:
+        print(f"error: {person} may not see the books", file=sys.stderr)
+        return None
+    pack = tools.call("board_pack", {"period": period})
+    if "activities" not in pack:
+        print(f"error: {pack.get('say', 'no statements for that span')}", file=sys.stderr)
+        return None
+    return pack
+
+
+def _write_packs(args: argparse.Namespace, notices: list[dict]) -> None:
+    """Each month's board pack a notice names, as ``board-pack-YYYY-MM.pdf``
+    in ``--packs``, for the doorkeeper to attach (t-pack-by-email). Written
+    once, as the first person it goes to (everyone mailed it sees every
+    month, so it reads the same for each), and only when the statements
+    agree with the books and balance: no file, no email, so the doorkeeper
+    tries again the next day."""
+    from ..tools.board_pack_page import pdf
+    from .config import load_tenant
+
+    out = Path(args.packs)
+    for notice in notices:
+        if notice.get("kind") != "board_pack":
+            continue
+        target = out / f"board-pack-{notice['month']}.pdf"
+        if target.exists():
+            continue
+        tools = _tools_as(argparse.Namespace(**{**vars(args), "as_person": notice["to"]}))
+        pack = _pack_of(tools, notice["to"], notice["month"]) if tools is not None else None
+        if pack is None or not (pack["matches_the_books"] and pack["balanced"]):
+            continue
+        cfg = load_tenant(args.tenant)
+        out.mkdir(parents=True, exist_ok=True)
+        part = target.with_suffix(".part")
+        part.write_bytes(pdf(pack, cfg.identity.legal_name or args.tenant))
+        part.replace(target)
+
+
+def _cmd_cpa_export(args: argparse.Namespace) -> int:
+    """``engine cpa-export``: a year's books for an accountant (chunk c30),
+    read through the same tool Tim answers with. Writes three files: the
+    Beancount-format journal, the trial balance, and the filings' numbers."""
+    import json
+
+    tools = _tools_as(args)
+    if tools is None:
+        return 2
+    if "cpa_export" not in {s.name for s in tools.specs()}:
+        print(f"error: {args.as_person} doesn't look over every month", file=sys.stderr)
+        return 2
+    done = tools.call("cpa_export", {"year": args.year, "pay_kind": args.pay_kind})
+    if "beancount" not in done:
+        print(f"error: {done.get('say', 'no books for that year')}", file=sys.stderr)
+        return 2
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    stem = f"{args.tenant}-books-{args.year}"
+    (out / f"{stem}.beancount").write_text(done["beancount"], encoding="utf-8")
+    (out / f"{stem}-trial-balance.csv").write_text(done["trial_balance_csv"], encoding="utf-8")
+    (out / f"{stem}-filings.json").write_text(
+        json.dumps(done["filings"], indent=2) + "\n", encoding="utf-8"
+    )
+    print(done["says"])
+    print(f"wrote {out / stem}.beancount, -trial-balance.csv and -filings.json")
+    return 0 if done["round_trips"] and done["balanced"] and done["matches_the_books"] else 1
+
+
+def _tools_as(args: argparse.Namespace):
+    """The door's read tools as one person under the ministry's own rules,
+    for a command that writes files from a tool's answer (board-pack,
+    cpa-export); None, said, when the person isn't on the ministry's list."""
+    from ..tools.catalog import Tools
+    from ..tools.viewer import ViewerError, viewer_for
+    from .clock import local_today
+    from .config import load_tenant
+    from .runner import resolve_ledger_root
+
+    cfg = load_tenant(args.tenant)
+    try:
+        viewer = viewer_for(args.tenant, args.as_person)
+    except ViewerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+    return Tools(
+        args.tenant,
+        ledger_root=resolve_ledger_root(args.tenant, args.ledger_dir),
+        viewer=viewer,
+        today=local_today(cfg.identity.timezone),
+    )
+
+
+def _cmd_room(args: argparse.Namespace) -> int:
+    """Pack a room to move, or restore one (core/engine/room.py); prints its counts."""
+    import json
+
+    from . import room
+
+    try:
+        if args.room_cmd == "pack":
+            done = room.pack(args.folder, args.out)
+        else:
+            done = room.restore(args.packed, args.into)
+    except room.PackError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({"files": len(done["files"]), "tables": done["tables"]}, sort_keys=True))
+    return 0
+
+
 def _cmd_faq(args: argparse.Namespace) -> int:
     """``engine faq``: the questions people ask about Tim, with Tim's answers."""
     import json
 
-    from ..capabilities.faq import load_faq, markdown
+    from ..capabilities.faq import faq_for, load_faq, markdown
 
     entries = load_faq()
+    if args.tenant:
+        # What that ministry's door offers, from the same page `engine
+        # capabilities --tenant` builds (a guide for one ministry, 2026-10-15).
+        from ..capabilities import build
+        from ..talk import voice_on
+        from .config import load_tenant
+
+        rules, asks = _rules_offered(args.tenant)
+        shape = args.shape or load_tenant(args.tenant).identity.shape or None
+        page = build(shape, rules=rules, asks=asks)
+        voice = voice_on(load_tenant(args.tenant).llm)  # card T2: his own page first
+        entries = faq_for((t["name"] for t in [*page["ask"], *page["tell"]]), voice=voice)
     print(json.dumps(entries, indent=1) if args.format == "json" else markdown(entries), end="")
+    return 0
+
+
+def _cmd_interview(args: argparse.Namespace) -> int:
+    """``engine interview new|list``: a missionary's own setup questions
+    (core/onboarding/interview.py, board c49). ``new`` prints her link once;
+    ``list`` says where each stands and, once she said yes, where her
+    ministry file is."""
+    import time
+
+    from ..onboarding.interview import INTERVIEWS, InterviewBook
+    from .runner import resolve_ledger_root
+
+    book = InterviewBook(resolve_ledger_root(INTERVIEWS, args.ledger_dir))
+    if args.interview_cmd == "new":
+        base = args.base.rstrip("/")
+        if not base.startswith("https://") and not base.startswith("http://127.0.0.1"):
+            print("--base is the box's https address", file=sys.stderr)
+            return 2
+        try:
+            token = book.mint(
+                name=args.name, email=args.email, by=args.by, days=args.days, now=time.time()
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"{base}/start#{token}")
+        return 0
+    for row in book.rows():
+        until = time.strftime("%Y-%m-%d", time.gmtime(row["expires"]))
+        where = row["file"] or ", ".join(row["support"]) or f"open until {until}"
+        print(f"{row['status']:8} {row['name']} <{row['email']}> {row['legal_name']}  {where}")
     return 0
 
 
@@ -1171,6 +1616,29 @@ def _cmd_rules(args: argparse.Namespace) -> int:
         for rule in layer.rules:
             print(f"  {rule.id}: {rule.says}")
             print(f'    {rule.cite()}: "{rule.source.quote}"')
+    return 0
+
+
+def _cmd_pack(args: argparse.Namespace) -> int:
+    """``engine pack check <folder>``: whether an agency pack can set up a
+    ministry (core/pack). Every problem is printed; exit 1 while any remain."""
+    from ..pack import PackError, check, load_pack
+
+    try:
+        pack = load_pack(args.folder)
+    except PackError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    problems = check(pack)
+    for problem in problems:
+        print(f"  {problem}")
+    if problems:
+        print(f"{pack.name}: {len(problems)} to fix before it sets up a ministry")
+        return 1
+    print(
+        f"{pack.name}: ready. {len(pack.roles)} roles, {len(pack.numbers)} numbers, "
+        "each cited and read in its copy where one is kept."
+    )
     return 0
 
 
@@ -1465,11 +1933,37 @@ def build_parser() -> argparse.ArgumentParser:
     tracker_p.add_argument("person", help="their id under [people] in authority.toml")
     tracker_p.add_argument("--domain", default="", help="the box's domain, for the server URL")
 
+    receipt_p = sub.add_parser(
+        "receipt-link", help="a person's standing receipt link for their home screen"
+    )
+    receipt_p.add_argument("tenant")
+    receipt_p.add_argument("person", help="their id under [people] in authority.toml")
+    receipt_p.add_argument("--domain", default="", help="the box's domain, for the link")
+    receipt_p.add_argument("--revoke", action="store_true", help="retire their link instead")
+
+    people_p = sub.add_parser("people", help="the ministry's people")
+    people_sub = people_p.add_subparsers(dest="people_command", required=True)
+    people_add = people_sub.add_parser(
+        "add", help="new people from one list: 'Name = role, address, looked after by Name'"
+    )
+    people_add.add_argument("tenant")
+    people_add.add_argument("list", help="a file with one person per line, or - for stdin")
+    people_add.add_argument("--check", action="store_true", help="say who would come on; no writes")
+    calendar_p = sub.add_parser(
+        "calendar-link", help="retire a person's calendar feed link (a new one comes from setup)"
+    )
+    calendar_p.add_argument("tenant")
+    calendar_p.add_argument("person", help="their id under [people] in authority.toml")
+    calendar_p.add_argument("--revoke", action="store_true", required=True)
+
     notices_p = sub.add_parser(
         "notices", help="the emails the box should send, as JSON lines for the doorkeeper"
     )
     notices_p.add_argument("tenant")
     notices_p.add_argument("--days", type=int, default=7)
+    notices_p.add_argument(
+        "--packs", default=None, help="write each board pack a notice names here, as a PDF"
+    )
     notices_p.add_argument("--ledger-dir", default=None)
 
     queue_p = sub.add_parser("queue", help="review the approval queue")
@@ -1571,7 +2065,9 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="REF",
         help="the check number (or instrument ref) this payment was made with; "
         "recorded on the row so the engine can record the payment in the "
-        "accounting system (W2) and match it when it clears",
+        "accounting system (W2) and match it when it clears; a bill paid with "
+        "several checks names each with its amount, '9170 $10,000.00 + 9171 "
+        "$3,253.00' (a send date may follow each: 'on 11/24')",
     )
     status_p.add_argument(
         "--date",
@@ -1697,6 +2193,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="an extra delegated scope to consent in the same sign-in (repeatable), "
         "e.g. Calendars.ReadWrite for deadlines/calendar; [mail].scopes is unchanged",
     )
+    talk_p = sub.add_parser(
+        "talk",
+        help="talk to Tim in the terminal as one person: his own voice over the read tools",
+    )
+    talk_p.add_argument("tenant")
+    talk_p.add_argument(
+        "--as", dest="as_person", required=True, help="the person (an id in authority.toml)"
+    )
+    talk_p.add_argument("--say", default=None, help="say one thing and print Tim's reply")
+    talk_p.add_argument("--ledger-dir", default=None)
+    spend_p = sub.add_parser(
+        "spend",
+        help="what the ministry's models cost this month, by job type, with the cap "
+        "and Tim's soft line",
+    )
+    spend_p.add_argument("tenant")
+    spend_p.add_argument("--json", action="store_true", help="the report as JSON")
+    spend_p.add_argument("--ledger-dir", default=None)
+
     mcp_p = sub.add_parser(
         "mcp",
         help="serve the read-only tools over MCP on stdio (for a chat client); "
@@ -1767,6 +2282,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--data-root", default=None, help="with --onboarding: where the tenant's folders go"
     )
     mcp_p.add_argument(
+        "--pack",
+        default=None,
+        help="with --onboarding: set every ministry up from this agency pack (core/pack)",
+    )
+    mcp_p.add_argument(
         "--no-audit",
         action="store_true",
         help="with --onboarding: skip the first auditor run on apply",
@@ -1789,9 +2309,83 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="only the setup questions this shape is asked (e.g. nonprofit-solo)",
     )
+    caps_p.add_argument(
+        "--tenant",
+        default=None,
+        help="what this ministry's door offers (no handbook rules = no rules tools)",
+    )
 
     faq_p = sub.add_parser("faq", help="the questions people ask about Tim, with Tim's answers")
     faq_p.add_argument("--format", choices=("md", "json"), default="md")
+    faq_p.add_argument("--tenant", default=None, help="only the answers for what its door offers")
+    faq_p.add_argument("--shape", default=None, help="the tenant's shape (with --tenant)")
+
+    room_p = sub.add_parser("room", help="a house's room, packed to move and restored (card H3)")
+    room_sub = room_p.add_subparsers(dest="room_cmd", required=True)
+    rp = room_sub.add_parser("pack", help="fold a room's folders into one file with a manifest")
+    rp.add_argument("folder", type=Path, help="the room's folder (holds church/ and box/)")
+    rp.add_argument("--out", type=Path, required=True)
+    rr = room_sub.add_parser("restore", help="unpack a room only where every count matches")
+    rr.add_argument("packed", type=Path)
+    rr.add_argument(
+        "--into", type=Path, required=True, help="the new room's folder; must not exist"
+    )
+
+    iv_p = sub.add_parser(
+        "interview", help="a missionary's own setup questions: make her link, see who answered"
+    )
+    iv_sub = iv_p.add_subparsers(dest="interview_cmd", required=True)
+    iv_new = iv_sub.add_parser("new", help="a one-time link for one missionary")
+    iv_new.add_argument("--name", required=True, help="her name, as she goes by it")
+    iv_new.add_argument("--email", required=True, help="her own address")
+    iv_new.add_argument("--by", required=True, help="your name: she reads who sent it")
+    iv_new.add_argument("--base", required=True, help="this box's address, https://...")
+    iv_new.add_argument("--days", type=int, default=14, help="how long the link works")
+    iv_new.add_argument("--ledger-dir", default=None)
+    iv_list = iv_sub.add_parser("list", help="every link made here, and where each stands")
+    iv_list.add_argument("--ledger-dir", default=None)
+
+    bp_p = sub.add_parser(
+        "board-pack", help="a ministry's statements for a span, as a page and a PDF"
+    )
+    bp_p.add_argument("tenant")
+    bp_p.add_argument("--as", dest="as_person", required=True, help="whose eyes (their role)")
+    bp_p.add_argument("--period", default="", help="2026, 2026-Q3, October 2026; YTD if left out")
+    bp_p.add_argument("--out", required=True, help="the folder the page and the PDF go in")
+    bp_p.add_argument("--ledger-dir", default=None)
+
+    dl_p = sub.add_parser(
+        "donor-letters", help="a year's donor letters and giving statements, as pages and PDFs"
+    )
+    dl_p.add_argument("tenant")
+    dl_p.add_argument("--as", dest="as_person", required=True, help="whose eyes (their role)")
+    dl_p.add_argument("--year", default="", help="2026; this year if left out")
+    dl_p.add_argument("--out", required=True, help="the folder the letters go in")
+    dl_p.add_argument("--ledger-dir", default=None)
+
+    tp_p = sub.add_parser(
+        "tax-packet", help="a missionary's tax packet for a year, as a page and a PDF"
+    )
+    tp_p.add_argument("tenant")
+    tp_p.add_argument("--as", dest="as_person", required=True, help="whose eyes (their role)")
+    tp_p.add_argument("--person", default="", help="the missionary, for whoever looks over")
+    tp_p.add_argument("--year", default="", help="2026; this year if left out")
+    tp_p.add_argument("--out", required=True, help="the folder the page and the PDF go in")
+    tp_p.add_argument("--ledger-dir", default=None)
+
+    cpa_p = sub.add_parser(
+        "cpa-export", help="a year's books for an accountant: Beancount text, trial balance"
+    )
+    cpa_p.add_argument("tenant")
+    cpa_p.add_argument("--as", dest="as_person", required=True, help="whose eyes (their role)")
+    cpa_p.add_argument("--year", required=True)
+    cpa_p.add_argument("--pay-kind", default="", help="the ministry's kind for pay")
+    cpa_p.add_argument("--out", required=True, help="the folder the files go in")
+    cpa_p.add_argument("--ledger-dir", default=None)
+
+    pack_p = sub.add_parser("pack", help="agency packs: check one before it sets up a ministry")
+    pack_p.add_argument("action", choices=["check"])
+    pack_p.add_argument("folder", help="the pack's folder (pack.toml, authority.toml, rules/)")
 
     rules_p = sub.add_parser(
         "rules", help="the ministry's policy rules, layer by layer, each with its source"
@@ -1990,7 +2584,10 @@ _COMMANDS = {
     "run": _cmd_run,
     "queue": _cmd_queue,
     "notices": _cmd_notices,
+    "people": _cmd_people,
     "tracker": _cmd_tracker,
+    "receipt-link": _cmd_receipt_link,
+    "calendar-link": _cmd_calendar_link,
     "shadow-diff": _cmd_shadow_diff,
     "sweep": _cmd_sweep,
     "status": _cmd_status,
@@ -1999,10 +2596,19 @@ _COMMANDS = {
     "dismiss": _cmd_dismiss,
     "identify": _cmd_identify,
     "mcp": _cmd_mcp,
+    "talk": _cmd_talk,
+    "spend": _cmd_spend,
     "door-token": _cmd_door_token,
     "capabilities": _cmd_capabilities,
     "faq": _cmd_faq,
+    "room": _cmd_room,
+    "interview": _cmd_interview,
+    "board-pack": _cmd_board_pack,
+    "donor-letters": _cmd_donor_letters,
+    "tax-packet": _cmd_tax_packet,
+    "cpa-export": _cmd_cpa_export,
     "rules": _cmd_rules,
+    "pack": _cmd_pack,
     "doctor": _cmd_doctor,
     "voice-check": _cmd_voice_check,
     "onboard": _cmd_onboard,

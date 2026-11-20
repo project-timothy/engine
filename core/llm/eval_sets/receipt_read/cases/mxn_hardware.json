@@ -1,0 +1,12 @@
+{
+  "name": "mxn_hardware",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "mxn_hardware.png",
+  "text": "FERRETERIA LA ESPERANZA\nOaxaca, Mexico\nFecha 2026-09-12\nPintura 2 cubetas 1,180.00\nBrochas 96.00\nTOTAL MXN 1,276.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "1276.00",
+    "currency": "MXN",
+    "invoice_date": "2026-09-12"
+  }
+}

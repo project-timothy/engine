@@ -10,10 +10,11 @@ reviews the month and decides nothing."""
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
-from core.agents.expenses.jobs import REVIEW_CARD
+from core.agents.expenses.records import REVIEW_CARD
 from core.engine.runner import resolve_ledger_root
 from core.ledger import Ledger
 from core.onboarding import apply, next_question, plan, record
@@ -23,6 +24,14 @@ from core.tools.viewer import viewer_for
 from tests.unit.test_door_decide import FakeDesk
 
 PAY_CARD = "ap.payment_recommendation"
+
+
+def no_plan(solo) -> None:
+    """The ministry as it was before setup wrote an accountable plan
+    (chunk 3): no rules written down at all."""
+    folder = Path(solo["root"]) / "living-water" / "rules"
+    for name in ("accountable-plan.toml", "accountable-plan.txt"):
+        (folder / name).unlink()
 
 
 @pytest.fixture

@@ -1,0 +1,119 @@
+# The words of the missionary's own setup questions (core/onboarding/
+# interview.py; engine docs/screens/README.md, screens 4 to 9; board c49,
+# 2026-11-17). Tim speaks; no machinery, no em dashes
+# (tests/unit/test_interview.py). {name} is her first name, {by} the first
+# name of whoever sent her the link, {who} the name of her reviewer.
+
+title = "Setting up Tim"
+continue = "Continue"
+timed_out = "This link has run out. Ask the person who sent it for a new one."
+
+[support]
+title = "How support reaches you"
+ask = "How does support reach you?"
+help = "Pick every one that fits. Most people have more than one."
+church = "I'm setting up a church or an organization"
+none = "Pick at least one."
+
+[[support.option]]
+id = "own_nonprofit"
+label = "Into my ministry's account"
+note = "I have my own nonprofit"
+
+[[support.option]]
+id = "straight"
+label = "Straight to me"
+note = "Churches and friends give to me personally"
+
+[[support.option]]
+id = "platform"
+label = "Through a support platform"
+note = "It collects the gifts and pays me"
+
+[[support.option]]
+id = "agency"
+label = "From a church or agency that sent me"
+note = "They keep an account for me"
+
+[letter]
+title = "Your IRS letter"
+ask = "Take a picture of your IRS letter."
+help = "The one that says your nonprofit is tax-exempt. I'll keep it with your books."
+photo = "Take the picture"
+name = "Your nonprofit's name, exactly as the letter prints it"
+cant_find = "Can't find your letter? Type the name the way your bank statement prints it."
+no_name = "What's the name on the letter? Type it the way the letter prints it."
+too_big = "That picture is too big for me. Try taking it again, a little farther away."
+not_a_photo = "That doesn't look like a picture. Try taking it again."
+# Where the box reads the letter (card R2): what it reads, for her tap.
+# {name} is the name it reads, {ein} the number.
+read_ask = "Is this your ministry?"
+reads = "Your letter reads {name}, Employer Identification Number {ein}. Is that right?"
+right = "Yes, that's right"
+not_right = "No, I'll type it"
+type_it = "All right. Type the name the way the letter prints it. I kept your picture."
+
+[where]
+title = "Where you live and work"
+ask = "Where do you live and work?"
+town = "Town and country"
+example = "Like Nakuru, Kenya"
+so = "So I'll"
+days = "Keep your days on {city} time"
+money = "Read a receipt in any currency, at that day's rate"
+abroad = "Count your days outside the U.S., for your taxes"
+
+[reviewer]
+title = "Who looks over your spending"
+ask = "Who looks over your spending?"
+help = "Every ministry needs a second set of eyes. Most people pick someone on their board."
+name = "Their name"
+email = "Their email"
+promise = "I'll write to them myself and explain. It's about one tap a month."
+approves = "Should they also approve each month, or just look it over?"
+look = "Just look it over"
+approve = "Approve each month"
+approve_note = "You can still approve a month yourself when they can't, and they'll see that you did."
+nobody = "I don't have anyone yet"
+no_name = "What's their name?"
+no_email = "What's their email? I write to them there."
+
+[driving]
+title = "Driving"
+ask = "Do you drive for the ministry?"
+help = "Your own car or motorbike, on ministry errands."
+yes = "Yes, I drive"
+no = "No"
+later = "Good to know. I'll set up your mileage with you after your books are ready. Nothing to do now."
+
+[heard]
+title = "Here's what I heard"
+ask = "Here's what I heard."
+ministry = "Your ministry"
+ministry_ein = "{name}, Employer Identification Number {ein}"
+you = "You"
+you_in = "{name}, in {town}"
+reviewer = "Looks over your spending"
+reviewer_approves = "{who}, who also approves each month"
+nobody = "Nobody yet"
+driving = "Driving"
+drives = "Yes, so I'll keep your mileage"
+no_drives = "No"
+assume = "I'll assume these. Tell me if I'm wrong."
+year = "Your year runs {start} to {end}"
+mileage = "Mileage is paid back at the IRS rate"
+line = "Up to {line}, your word is enough. Over that, I'll ask for Face ID."
+cash = "Nobody holds more than {cash} of the ministry's cash at a time without me telling {who}"
+cash_nobody = "Nobody holds more than {cash} of the ministry's cash at a time"
+right = "Yes, that's right"
+change = "Change something"
+pick = "What should I change?"
+
+[not_yet]
+title = "Almost there"
+says = "When support comes straight to you, with no nonprofit of your own, I can't set up your books by myself yet. I've kept what you told me, and {by} will be in touch."
+church = "A church or an organization is set up with {by}. I've told {by} you'd like to start, and {by} will be in touch."
+
+[done]
+title = "That's everything"
+says = "Thank you, {name}. {by} sets up your books next, and I'll email you a link when they're ready."

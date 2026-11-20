@@ -1,0 +1,12 @@
+{
+  "name": "usd_hand_cash",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_hand_cash.png",
+  "text": "Received from Grace Church\nthe sum of $45.00\nfor 3 hours of van driving\nNov 5, 2026\nsigned  T. Moore",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "45.00",
+    "currency": "USD",
+    "invoice_date": "2026-11-05"
+  }
+}

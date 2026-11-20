@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import tomllib
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from functools import cache
 from pathlib import Path
@@ -30,9 +32,14 @@ from ..engine.config import load_tenant
 from ..engine.doctor import DoctorReport, run_doctor
 from ..engine.init import InitResult, init_tenant, render
 from ..engine.kit import SHAPES, family_of, load_kit
+from ..pack import PACK_FILE, Pack, load_pack
+from ..policy import RULES_DIR
+from . import accountable
 from .zones import ZoneAnswerError, resolve_zone
 
 QUESTIONS_FILE = Path(__file__).resolve().parent / "questions.toml"
+SAID: dict[str, str] = tomllib.loads(QUESTIONS_FILE.read_text(encoding="utf-8")).get("said", {})
+"""What setup says when it asks an answer again in its own words."""
 
 SELF_ROLE = {"commercial-solo": "owner", "nonprofit-solo": "missionary"}
 """The role the person answering holds in a solo shape (they run it)."""
@@ -57,6 +64,9 @@ class Question:
     optional: bool = False
     default: str | None = None
     defaults: dict = field(default_factory=dict)
+    needs: str = ""
+    """Another question whose answer this one follows: asked only when that
+    one was answered (a month approver only when someone was named)."""
 
     def applies_to(self, shape: str | None) -> bool:
         if shape is None:
@@ -88,6 +98,7 @@ def load_questions() -> tuple[Question, ...]:
             optional=bool(q.get("optional", False)),
             default=q.get("default"),
             defaults=dict(q.get("defaults", {})),
+            needs=str(q.get("needs", "")),
         )
         for q in data["question"]
     )
@@ -121,12 +132,46 @@ def _shape(answers: dict) -> str | None:
     return shape if shape in SHAPES else None
 
 
+PACK_SAYS = frozenset(
+    {"second_person_above", "two_approvals_above", "yes_by_word_up_to", "mileage_rate"}
+)
+"""The questions a pack answers itself: its numbers, each cited (core/pack).
+A sending agency sets its own mileage rate in its handbook."""
+
+
+@cache
+def _load_pack(directory: str) -> Pack:
+    return load_pack(directory)
+
+
+def _pack(answers: dict) -> Pack | None:
+    """The agency pack this ministry is set up from, if the host named one
+    (``engine mcp --onboarding --pack``); a person never names it."""
+    where = answers.get("pack")
+    return _load_pack(str(where)) if where else None
+
+
+def _roles(answers: dict, shape: str) -> tuple[str, ...]:
+    pack = _pack(answers)
+    return pack.roles if pack is not None else people_roles(shape)
+
+
+def _policy(answers: dict, shape: str):
+    pack = _pack(answers)
+    return parse_policy(pack.authority) if pack is not None else _shape_policy(shape)
+
+
 def next_question(answers: dict) -> dict | None:
     """The next unanswered question for this shape, ready for an agent to ask:
     id, ask, help, kind, choices, default, optional. None when done."""
     shape = _shape(answers)
+    pack = _pack(answers)
     for q in load_questions():
         if q.id in answers or not q.applies_to(shape):
+            continue
+        if q.needs and not answers.get(q.needs):
+            continue
+        if pack is not None and q.id in PACK_SAYS:
             continue
         if shape is None and q.id != "who":
             continue
@@ -136,7 +181,7 @@ def next_question(answers: dict) -> dict | None:
         if q.kind == "choice":
             out["choices"] = [c["label"] for c in q.choices]
         if q.kind in ("role", "people") and shape:
-            out["choices"] = list(people_roles(shape))
+            out["choices"] = list(_roles(answers, shape))
         default = q.default_for(shape)
         if default is not None:
             out["default"] = default
@@ -156,6 +201,44 @@ def _amount(qid: str, value: object) -> str:
     if amount < 0:
         raise OnboardingError(f"{qid}: an amount cannot be negative")
     return str(int(amount)) if amount == amount.to_integral_value() else str(amount.normalize())
+
+
+_IRS_SAID = ("", "irs", "irs rate", "the irs rate", "irs mileage rate", "the irs mileage rate")
+
+
+def _mileage(qid: str, value: object, today: date) -> str:
+    """The ministry's rate per mile in dollars ("0.65"), or "" for the IRS
+    rate for the year (the default, the owner 2026-11-16). A plain number of 1
+    or more is cents ("65", "65 cents", "70.5"); with a dollar sign, or under
+    1, it is dollars ("$0.65", "0.7"). Above today's IRS rate is refused."""
+    text = str(value).strip().casefold().rstrip(".")
+    if text in _IRS_SAID:
+        return ""
+    dollars_said = "$" in text
+    number = re.sub(r"\s*(cents?|¢|a mile|per mile)\s*", " ", text.replace("$", "")).strip()
+    try:
+        said = Decimal(number)
+    except InvalidOperation as exc:
+        raise OnboardingError(
+            f"{qid}: {value!r} is not a rate; say IRS rate, or cents a mile, like 65"
+        ) from exc
+    if said <= 0:
+        raise OnboardingError(f"{qid}: a rate is more than 0 cents a mile")
+    rate = said if dollars_said or said < 1 else said / 100
+    from ..institution import InstitutionError, irs_mileage_rate
+
+    try:
+        irs = irs_mileage_rate(today)
+    except InstitutionError as exc:
+        raise OnboardingError(f"{qid}: {exc}") from exc
+    if rate > irs:
+        raise OnboardingError(
+            f"{qid}: {(rate * 100).normalize():f} cents a mile is above the IRS rate of "
+            f"{(irs * 100).normalize():f} cents today; "
+            "anything above it counts as pay. Say IRS rate, or a rate at or below it."
+        )
+    shown = f"{rate.normalize():f}"
+    return shown if len(shown.partition(".")[2]) >= 2 else f"{rate:.2f}"
 
 
 MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
@@ -252,8 +335,7 @@ def _place_zone(words: str) -> str:
         return ""
 
 
-def _people(qid: str, value: object, shape: str) -> list[dict]:
-    roles = people_roles(shape)
+def _people(qid: str, value: object, roles: tuple[str, ...]) -> list[dict]:
     if isinstance(value, list) and all(isinstance(v, dict) for v in value):
         entries = [
             (str(v.get("name", "")), str(v.get("role", "")), str(v.get("email", ""))) for v in value
@@ -284,6 +366,30 @@ def _people(qid: str, value: object, shape: str) -> list[dict]:
             person["zone"] = zone
         people.append(person)
     return people
+
+
+def _folded(name: str) -> str:
+    """A name the way setup compares names: its words, whatever their case."""
+    return " ".join(name.split()).casefold()
+
+
+def _yourself(qid: str, entry: dict, answers: dict, shape: str) -> bool:
+    """Whether a people line is the person setting up (t-setup-self-twice):
+    their name, and no address apart from theirs to say it's someone else
+    with their name. Such a line with another role is asked again."""
+    if not answers.get("your_name"):
+        return False
+    you, your_email = _you(answers)
+    if _folded(entry["name"]) != _folded(you):
+        return False
+    email = entry.get("email", "")
+    if email and your_email and email.casefold() != your_email.casefold():
+        return False  # two people who share a name, said plainly
+    yours = SELF_ROLE.get(shape) or str(answers.get("your_role", ""))
+    if yours and entry["role"] != yours:
+        said = SAID["yourself_twice"].format(name=entry["name"], yours=yours)
+        raise OnboardingError(f"{qid}: {said}")
+    return True
 
 
 def _named(answers: dict, shape: str) -> dict[str, tuple[str, str]]:
@@ -319,7 +425,7 @@ def _looks_after(qid: str, value: object, answers: dict, shape: str) -> list[dic
             )
         left, right = line.split("=", 1)
         name, role = known(left)
-        if role and _files_expenses(_shape_policy(shape), role):
+        if role and _files_expenses(_policy(answers, shape), role):
             raise OnboardingError(
                 f"{qid}: {name} files their own reports, so they can't look after anyone else's"
             )
@@ -330,7 +436,23 @@ def _looks_after(qid: str, value: object, answers: dict, shape: str) -> list[dic
     return out
 
 
-def record(answers: dict, qid: str, value: object) -> dict:
+def _fits_pack(answers: dict, qid: str, value: str) -> None:
+    pack = _pack(answers)
+    if qid == "who" and pack is not None and value != pack.shape:
+        raise OnboardingError(
+            f"who: this ministry is set up from {pack.name}'s pack, a ministry organization"
+        )
+
+
+_PARSERS = {
+    "month": lambda qid, said, _today: _month(qid, said),
+    "amount": lambda qid, said, _today: _amount(qid, said),
+    "mileage": _mileage,
+}
+"""The kinds whose answer is one value read from the words."""
+
+
+def record(answers: dict, qid: str, value: object, *, today: date | None = None) -> dict:
     """``answers`` with ``qid`` answered; refuses an answer the question
     cannot take. The first answer must be ``who``."""
     q = _question(qid)
@@ -345,6 +467,7 @@ def record(answers: dict, qid: str, value: object) -> dict:
         for choice in q.choices:
             said_as = (choice["label"], str(choice["value"]), *choice.get("was", ()))
             if wanted in (s.casefold() for s in said_as):  # "was": a label it had before
+                _fits_pack(answers, qid, str(choice["value"]))
                 return {**answers, qid: choice["value"]}
         raise OnboardingError(
             f"{qid}: {value!r} is not one of {', '.join(c['label'] for c in q.choices)}"
@@ -356,23 +479,24 @@ def record(answers: dict, qid: str, value: object) -> dict:
             return {**answers, qid: ""}
         name, email = name_and_email(qid, str(text))
         return {**answers, qid: {"name": name, "email": email} if email else name}
-    if q.kind == "month":
-        return {**answers, qid: _month(qid, text)}
+    if (parse := _PARSERS.get(q.kind)) is not None:
+        return {**answers, qid: parse(qid, text or "", today or date.today())}
     if q.kind == "timezone":
         try:
             return {**answers, qid: resolve_zone(str(text or q.default_for(shape) or ""))}
         except ZoneAnswerError as exc:
             raise OnboardingError(f"{qid}: {exc}") from exc
-    if q.kind == "amount":
-        return {**answers, qid: _amount(qid, text)}
     if q.kind == "list":
         return {**answers, qid: _items(text) if text else []}
     if shape is None:  # every question below this line depends on the shape
         raise OnboardingError(f"{qid}: answer who the books are for first")
     if q.kind == "role":
-        return {**answers, qid: _role(qid, str(text), people_roles(shape))}
+        return {**answers, qid: _role(qid, str(text), _roles(answers, shape))}
     if q.kind == "people":
-        return {**answers, qid: _people(qid, text, shape) if text else []}
+        people = _people(qid, text, _roles(answers, shape)) if text else []
+        for entry in people:
+            _yourself(qid, entry, answers, shape)  # asks again when it can't tell
+        return {**answers, qid: people}
     if q.kind == "looks_after":
         return {**answers, qid: _looks_after(qid, text, answers, shape) if text else []}
     raise OnboardingError(f"{qid}: unknown kind {q.kind!r}")
@@ -408,7 +532,7 @@ class Plan:
     people: tuple[tuple[str, str, str], ...]  # (id, name, role)
     self_approval_limit: str | None
     two_approvals_above: str | None
-    yes_by_word_up_to: str
+    yes_by_word_up_to: str | None
     banned: tuple[str, ...]
     spelling: str
     emails: dict[str, str] = field(default_factory=dict)  # person id -> address, if given
@@ -416,6 +540,12 @@ class Plan:
     looks_after: dict[str, tuple[str, ...]] = field(
         default_factory=dict
     )  # id -> their charges' ids
+    cash_on_hand: str | None = None  # the accountable plan's ceiling, where the shape has one
+    mileage_rate: str | None = None  # the ministry's own rate per mile; None = the IRS rate
+    pack: str = ""  # the agency pack it is set up from (core/pack), if any
+    reviewer_approves: bool = False
+    """A solo ministry's reviewer also approves each month; the missionary
+    can still approve her own, and they are told (board c48, 2026-11-17)."""
 
 
 def _person_id(name: str, taken: set[str]) -> str:
@@ -434,6 +564,7 @@ def plan(answers: dict, slug: str) -> Plan:
     if owed:
         raise OnboardingError(f"still to answer: {', '.join(owed)}")
     shape = str(answers["who"])
+    pack = str(answers.get("pack") or "")
 
     def get(qid: str) -> object:
         if qid in answers:
@@ -461,6 +592,13 @@ def plan(answers: dict, slug: str) -> Plan:
     ministry_zone = str(get("timezone"))
     zones = {pid: ministry_zone for pid, _n, _r in people}
     for entry in answers.get("people", []) or []:
+        if _yourself("people", entry, answers, shape):  # the person setting up, once
+            you_id = people[0][0]
+            if entry.get("email") and you_id not in emails:
+                emails[you_id] = entry["email"]
+            if entry.get("zone"):
+                zones[you_id] = entry["zone"]
+            continue
         pid = _person_id(entry["name"], taken)
         people.append((pid, entry["name"], entry["role"]))
         if entry.get("email"):
@@ -492,14 +630,24 @@ def plan(answers: dict, slug: str) -> Plan:
         fiscal_start=int(str(get("fiscal_start"))),
         entity=entity,
         people=tuple(people),
-        self_approval_limit=str(get("second_person_above")) if size == "small" else None,
-        two_approvals_above=str(get("two_approvals_above")) if size != "solo" else None,
-        yes_by_word_up_to=str(get("yes_by_word_up_to")),
+        self_approval_limit=str(get("second_person_above"))
+        if shape == "commercial-small"
+        else None,
+        two_approvals_above=str(get("two_approvals_above"))
+        if size != "solo" and not pack
+        else None,
+        yes_by_word_up_to=None if pack else str(get("yes_by_word_up_to")),
         banned=tuple(_items(answers.get("banned_words", []) or [])),
         spelling=str(get("spelling")),
         emails=emails,
         zones=zones,
         looks_after=looks_after,
+        cash_on_hand=str(get("cash_on_hand")) if shape in accountable.ADOPTED_BY else None,
+        mileage_rate=str(answers.get("mileage_rate") or "") or None,
+        pack=pack,
+        reviewer_approves=shape == "nonprofit-solo"
+        and bool(r_name)
+        and get("reviewer_approves") == "approve",
     )
 
 
@@ -522,12 +670,70 @@ def _set_line(path: Path, key: str, value: str) -> None:
     path.write_text(new, encoding="utf-8")
 
 
+MONTH_GRANT = "approve:expense.report#month"
+
+
+def _month_approver(authority: Path) -> None:
+    """The reviewer approves each month and nothing else; the missionary
+    keeps her own yes, and each time she uses it the card says so, for the
+    reviewer to see (board c48, the owner's decision of 2026-11-17)."""
+    text = authority.read_text(encoding="utf-8")
+    old = '[roles.reviewer]\ngrants = ["view:*", "review:*"]'
+    if text.count(old) != 1:
+        raise OnboardingError("authority.toml: expected the reviewer's grants line once")
+    new = f'[roles.reviewer]\ngrants = ["view:*", "review:*", "{MONTH_GRANT}"]'
+    authority.write_text(text.replace(old, new), encoding="utf-8")
+    _set_line(authority, "report_self_approvals", '"always"')
+
+
 TEMPLATE_PEOPLE = ("Pat Owner", "Sam Staffer", "Vic Vendor")
 """The placeholder people ``engine init`` renders for an owner to replace."""
 
 
 def _files_expenses(policy, role: str) -> bool:
     return any(g.action in ("submit", "*") for g in policy.roles[role].grants)
+
+
+def persons_listed(text: str, filers: list[tuple[str, str]]) -> str:
+    """tenant.toml's text with its persons list made ``filers`` ((name,
+    role) each): an owner books as owner, everyone else as a reimbursed
+    person."""
+    rows = "".join(
+        f"    {{name = {json.dumps(name)}, role = "
+        f"{json.dumps('owner' if role == 'owner' else 'employee')}}},\n"
+        for name, role in filers
+    )
+    text, count = re.subn(r"(?ms)^persons = \[\n.*?^\]$", f"persons = [\n{rows}]", text)
+    if count != 1:
+        raise OnboardingError("tenant.toml: expected one persons list")
+    return text
+
+
+def filer_folders(slug: str, directory: Path, names: list[str]) -> Path | None:
+    """A drop folder for each person who files reports; the drop tree, or
+    None where the tenant keeps none."""
+    cfg = load_tenant(slug, tenants_root=directory.parent)
+    drop = Path(cfg.expenses.drop_dir)
+    if not (cfg.expenses.drop_dir and drop.is_dir()):
+        return None
+    for name in names:
+        (drop / name).mkdir(exist_ok=True)
+    return drop
+
+
+def person_table(
+    pid: str, name: str, role: str, scopes: list[str], email: str = "", zone: str = ""
+) -> str:
+    """One person's table in authority.toml, as setup writes it. The name is
+    the person's own words, so a card that names them by name matches them
+    (#603) and "nobody approves their own" never has to fall back."""
+    return (
+        f"\n[people.{pid}]\nname = {json.dumps(name)}\n"
+        f"roles = [{json.dumps(role)}]\n"
+        f"scopes = {json.dumps(scopes)}\n"
+        + (f"email = {json.dumps(email)}\n" if email else "")
+        + (f"zone = {json.dumps(zone)}\n" if zone else "")
+    )
 
 
 def _people_in_books(directory: Path, p: Plan, policy) -> None:
@@ -538,28 +744,102 @@ def _people_in_books(directory: Path, p: Plan, policy) -> None:
     owners (none in a nonprofit). Walkthrough 1 found Pat Owner, Sam Staffer
     and Vic Vendor filing a missionary's expenses."""
     filers = [(name, role) for _pid, name, role in p.people if _files_expenses(policy, role)]
-    booked = [(name, "owner" if role == "owner" else "employee") for name, role in filers]
-    rows = "".join(
-        f"    {{name = {json.dumps(name)}, role = {json.dumps(kind)}}},\n" for name, kind in booked
-    )
     tenant = directory / "tenant.toml"
-    text = tenant.read_text(encoding="utf-8")
-    text, count = re.subn(r"(?ms)^persons = \[\n.*?^\]$", f"persons = [\n{rows}]", text)
-    if count != 1:
-        raise OnboardingError("tenant.toml: expected one persons list")
-    tenant.write_text(text, encoding="utf-8")
+    tenant.write_text(persons_listed(tenant.read_text(encoding="utf-8"), filers), encoding="utf-8")
     _set_line(tenant, "inbox_person", json.dumps(filers[0][0] if filers else ""))
     owners = [name for _pid, name, role in p.people if role == "owner"]
     _set_line(tenant, "owner_names", json.dumps(owners))
-    cfg = load_tenant(p.slug, tenants_root=directory.parent)
-    drop = Path(cfg.expenses.drop_dir)
-    if cfg.expenses.drop_dir and drop.is_dir():
-        for name, _role in filers:
-            (drop / name).mkdir(exist_ok=True)
+    drop = filer_folders(p.slug, directory, [name for name, _role in filers])
+    if drop is not None:
         for name in TEMPLATE_PEOPLE:
             folder = drop / name
             if folder.is_dir() and not any(folder.iterdir()):
                 folder.rmdir()
+
+
+def _adopter(p: Plan, policy) -> str | None:
+    """The role here that adopts the plan: the shape's own (a solo worker's
+    reviewer, a church's board) when someone holds it, else the first role
+    someone holds that reviews or confirms and files no expenses (renamed,
+    say, to a director). None when nobody here can adopt it."""
+    held = list(dict.fromkeys(role for _pid, _name, role in p.people))
+    named = accountable.ADOPTED_BY[p.shape]
+    if named in held:
+        return named
+    for role in held:
+        grants = {g.action for g in policy.roles[role].grants} if role in policy.roles else set()
+        if grants & {"review", "confirm"} and not _files_expenses(policy, role):
+            return role
+    return None
+
+
+def _accountable_plan(directory: Path, p: Plan, policy) -> None:
+    """The plan Tim writes for the board to adopt (chunk 3): it covers
+    everyone who files expenses, and only when someone else is here to
+    adopt it (a solo worker's reviewer, a church's board)."""
+    if p.shape not in accountable.ADOPTED_BY or p.cash_on_hand is None:
+        return
+    adopter = _adopter(p, policy)
+    if adopter is None:
+        return
+    # the ministry's own roles, not the shape's defaults (#583: a plan naming
+    # roles nobody here holds never loads)
+    agents = {r for a in policy.agents.values() for r in a.roles}
+    covers = [
+        r for r in policy.roles if r not in agents and r != adopter and _files_expenses(policy, r)
+    ]
+    written = accountable.write(
+        p.legal_name, cash=Decimal(p.cash_on_hand), covers=covers, adopted_by=adopter
+    )
+    accountable.place(directory, written)
+
+
+def form_990_due(fiscal_start: int, today: date) -> date:
+    """The next Form 990 due date on or after ``today``: the 15th day of the
+    fifth month after the fiscal year ends."""
+    month = (fiscal_start - 1 + 4) % 12 + 1  # year ends the month before it starts; +5
+    due = date(today.year, month, 15)
+    return due if due >= today else date(today.year + 1, month, 15)
+
+
+def _form_990(path: Path, fiscal_start: int, today: date) -> None:
+    """A charity that files a Form 990 starts with the filing on its
+    calendar (the alpha dress rehearsal, 2026-10-15: asked what was due, Tim
+    had nothing, though setup had heard the answer)."""
+    entry = (
+        "\n[[obligation]]\n"
+        'id = "form-990"\n'
+        'title = "File the ministry\'s Form 990 with the IRS"\n'
+        'kind = "tax"\n'
+        f"due = {form_990_due(fiscal_start, today).isoformat()}\n"
+        'every = "1y"\n'
+        'notes = "Due the 15th day of the fifth month after the year ends. A Form 8868 '
+        'gives six more months. A small charity may file the 990-N or 990-EZ instead."\n'
+    )
+    path.write_text(path.read_text(encoding="utf-8") + entry, encoding="utf-8")
+
+
+def _lay_down(directory: Path, pack: Pack) -> None:
+    """A pack's files as the new ministry's own: its authority file (setup
+    adds the people), its rules and the copies they cite, the pack itself
+    (so its numbers' words stay beside it), and its categories."""
+    (directory / "authority.toml").write_text(
+        f"# Set up from {pack.name}'s pack (core/pack). Every number here is cited, with\n"
+        f"# the words it came from, in {PACK_FILE} beside this file.\n" + pack.authority_text,
+        encoding="utf-8",
+    )
+    rules = pack.directory / RULES_DIR
+    if rules.is_dir():
+        shutil.copytree(rules, directory / RULES_DIR, dirs_exist_ok=True)
+    shutil.copyfile(pack.directory / PACK_FILE, directory / PACK_FILE)
+    config = directory / "tenant.toml"
+    text = config.read_text(encoding="utf-8")
+    marker = "[expenses.category_accounts]\n"
+    listed = tomllib.loads(text)["expenses"]["category_accounts"]
+    added = "".join(
+        f"{json.dumps(c)} = {json.dumps(c)}\n" for c in pack.categories if c not in listed
+    )
+    config.write_text(text.replace(marker, marker + added, 1), encoding="utf-8")
 
 
 def apply(
@@ -569,6 +849,7 @@ def apply(
     data_root: str | Path | None = None,
     ledger_dir: str | Path | None = None,
     run_audit: bool = True,
+    today: date | None = None,
 ) -> OnboardResult:
     """Render the tenant and write the answers into it, then prove it loads
     and run doctor. Refuses before writing anything if the tenant exists."""
@@ -585,15 +866,29 @@ def apply(
         run_audit=run_audit,
     )
     directory = result.tenant_dir
+    if p.pack:
+        _lay_down(directory, _load_pack(p.pack))
     if p.entity:
         _set_line(directory / "tenant.toml", "entity", json.dumps(p.entity))
+    if p.mileage_rate is not None:
+        config = directory / "tenant.toml"
+        config.write_text(
+            config.read_text(encoding="utf-8")
+            + f'\n[institution]\nmileage_rate = "{p.mileage_rate}"\n',
+            encoding="utf-8",
+        )
+    if p.entity == "public-charity":
+        _form_990(directory / "obligations.toml", p.fiscal_start, today or date.today())
     authority = directory / "authority.toml"
     if p.self_approval_limit is not None:
         _set_line(authority, "self_approval_limit", p.self_approval_limit)
         _set_line(authority, "distinct_payer_above", p.self_approval_limit)
     if p.two_approvals_above is not None:
         _set_line(authority, "second_approver_above", p.two_approvals_above)
-    _set_line(authority, "yes_by_word_up_to", p.yes_by_word_up_to)
+    if p.yes_by_word_up_to is not None:
+        _set_line(authority, "yes_by_word_up_to", p.yes_by_word_up_to)
+    if p.reviewer_approves:
+        _month_approver(authority)
     # Each person's own id is their unit, so an @own grant covers their own
     # submissions; whoever looks after others (a regional director) holds
     # their units too, and the agent widens a scope later when the tenant
@@ -601,17 +896,21 @@ def apply(
     # invitation, and so does their own zone, so the invitation (and Tim,
     # later) tells them times in it.
     tables = "".join(
-        f"\n[people.{pid}]\n# {json.dumps(name)[1:-1]}\n"
-        f"roles = [{json.dumps(role)}]\n"
-        f"scopes = {json.dumps(list(dict.fromkeys((pid, *p.looks_after.get(pid, ())))))}\n"
-        + (f"email = {json.dumps(p.emails[pid])}\n" if pid in p.emails else "")
-        + (f"zone = {json.dumps(p.zones[pid])}\n" if pid in p.zones else "")
+        person_table(
+            pid,
+            name,
+            role,
+            list(dict.fromkeys((pid, *p.looks_after.get(pid, ())))),
+            p.emails.get(pid, ""),
+            p.zones.get(pid, ""),
+        )
         for pid, name, role in p.people
     )
     authority.write_text(authority.read_text(encoding="utf-8") + tables, encoding="utf-8")
     _people_in_books(
         directory, p, parse_policy(tomllib.loads(authority.read_text(encoding="utf-8")))
     )
+    _accountable_plan(directory, p, parse_policy(tomllib.loads(authority.read_text("utf-8"))))
     voice = directory / "kit" / "voice.toml"
     _set_line(voice, "spelling", json.dumps(p.spelling))
     if p.banned:

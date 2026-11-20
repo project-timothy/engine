@@ -69,7 +69,8 @@ def test_wheres_my_year(solo):  # noqa: F811
     door.call("send_month_for_review", {"month": "2026-07"})
     [me] = door.call("year_report", {"year": "2026"})["people"]
     months = {m["month"]: m for m in me["months"]}
-    assert months["2026-07"]["total"] == "31.25" and months["2026-07"]["waiting"] == 0
+    assert months["2026-07"]["owed_back"] == "31.25" and months["2026-07"]["waiting"] == 0
+    assert months["2026-07"]["spent"] == "31.25"  # all of it out of their own pocket
     assert months["2026-07"]["review"] == "Waiting for approval"
     assert months["2026-06"]["waiting"] == 1
     assert me["not_yet_in_a_month"] == 1
@@ -88,3 +89,26 @@ def test_a_foreign_months_rates_are_fetched_on_the_way_to_the_reviewer(solo, fee
     assert door.call("send_month_for_review", {"month": "2026-07"})["status"] == "sent"
     [card] = _cards(solo, "2026-07")
     assert card["total_cents"] == "1000"
+
+
+def test_a_reviewers_yes_to_the_readings_is_recorded_as_the_reviewers(solo):  # noqa: F811
+    # Review 2026-11-10: Linda agreeing to Daniel's readings went into the
+    # books as Daniel's own word.
+    from tests.unit.test_ministry_lines import _door
+
+    door = _pile(solo, 1)
+    _read(door, "2026-07-03", "12.50")
+    linda = _door(solo, "linda-park")
+    said = linda.call(
+        "agree_to_readings", {"month": "2026-07", "said": "looks right", "person": "Daniel Reyes"}
+    )
+    assert said["status"] == "agreed" and said["receipts"] == 1, said
+    who = {
+        r["by"]
+        for r in linda._rows(
+            "SELECT json_extract(payload_json, '$.by') AS by FROM events "
+            "WHERE tenant = ? AND json_extract(payload_json, '$.said') = 'looks right'",
+            (linda.tenant,),
+        )
+    }
+    assert who == {"linda-park"}

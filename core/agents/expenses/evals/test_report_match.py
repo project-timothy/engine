@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from core.agents.expenses import jobs as exp_jobs
+from core.agents.expenses import job_match, job_report
 from core.engine.config import load_tenant
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
@@ -86,7 +86,7 @@ class FakeQbo:
 @pytest.fixture()
 def fake_qbo(monkeypatch):
     fake = FakeQbo()
-    monkeypatch.setattr(exp_jobs, "_qbo_write_client", lambda ctx: fake)
+    monkeypatch.setattr(job_match, "_qbo_write_client", lambda ctx: fake)
     return fake
 
 
@@ -421,7 +421,7 @@ def test_readback_failure_keeps_the_purchase_id_and_a_later_run_verifies(
     assert same_day.status == "noop"  # nothing changed since: a replay, not a retry
 
     fake_qbo.readback_raises = None
-    monkeypatch.setattr(exp_jobs, "_verify_day", lambda ctx: "2099-01-01")
+    monkeypatch.setattr(job_match, "_verify_day", lambda ctx: "2099-01-01")
     result = _run("match", tmp_path)
 
     assert result.status == "ok"
@@ -450,7 +450,7 @@ def test_readback_mismatch_keeps_the_purchase_id_and_stays_open(tmp_path, fake_q
     assert report["qbo_purchase_id"] == "P1"
 
     fake_qbo.readback_override = None
-    monkeypatch.setattr(exp_jobs, "_verify_day", lambda ctx: "2099-01-01")
+    monkeypatch.setattr(job_match, "_verify_day", lambda ctx: "2099-01-01")
     _run("match", tmp_path)
 
     assert len(fake_qbo.created) == 1
@@ -734,16 +734,16 @@ def test_match_key_changes_when_category_mapping_changes(tmp_path):
             params={},
             ledger=ledger,
         )
-        before = exp_jobs._match_key(
+        before = job_match._match_key(
             SimpleNamespace(**base, tenant=_tenant({"Meals": "Meals Out"}))
         )
-        after = exp_jobs._match_key(
+        after = job_match._match_key(
             SimpleNamespace(
                 **base,
                 tenant=_tenant({"Meals": "Meals Out", "Supplies": "Project Expense - Widgets"}),
             )
         )
-        same = exp_jobs._match_key(SimpleNamespace(**base, tenant=_tenant({"Meals": "Meals Out"})))
+        same = job_match._match_key(SimpleNamespace(**base, tenant=_tenant({"Meals": "Meals Out"})))
     assert before != after
     assert before == same
 
@@ -757,7 +757,7 @@ def test_2026_08_20_next_months_survey_is_not_a_replay_of_last_months(tmp_path, 
     survey verbatim. The RESOLVED month rides the key."""
     _seed_receipts(tmp_path, ("meal.pdf", b"m", "40.00", "Meals", "2026-08-01"))
 
-    monkeypatch.setattr(exp_jobs, "_tenant_month", lambda ctx: "2026-08")
+    monkeypatch.setattr(job_report, "_tenant_month", lambda ctx: "2026-08")
     params = {
         "drop_dir": str(tmp_path / "drop"),
         "filing_dir": str(tmp_path / "filing"),
@@ -767,7 +767,7 @@ def test_2026_08_20_next_months_survey_is_not_a_replay_of_last_months(tmp_path, 
     assert august.status == "needs_approval"
     assert "2026-08" in august.summary
 
-    monkeypatch.setattr(exp_jobs, "_tenant_month", lambda ctx: "2026-09")
+    monkeypatch.setattr(job_report, "_tenant_month", lambda ctx: "2026-09")
     september = run(
         "demo", "expenses", "report", params=dict(params), ledger_dir=tmp_path / "ledger"
     )
@@ -791,7 +791,7 @@ def test_2026_08_20_report_rows_are_committed_before_receipts_move(tmp_path, mon
     _run("report", tmp_path, person=PERSON)
     _approve(tmp_path, "expenses.report_review")
 
-    real_move = exp_jobs.shutil.move
+    real_move = job_report.shutil.move
     calls = {"n": 0}
 
     def exploding_move(src, dst):
@@ -800,7 +800,7 @@ def test_2026_08_20_report_rows_are_committed_before_receipts_move(tmp_path, mon
             raise OSError("disk vanished mid-move")
         return real_move(src, dst)
 
-    monkeypatch.setattr(exp_jobs.shutil, "move", exploding_move)
+    monkeypatch.setattr(job_report.shutil, "move", exploding_move)
     crashed = _run("report", tmp_path, person=PERSON)
     assert crashed.status == "error"
 

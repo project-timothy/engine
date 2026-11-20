@@ -55,7 +55,7 @@ def test_their_words_say_what_it_was_for_and_it_is_priced_at_the_days_rate(solo)
     assert out["status"] == "set"
     [drive] = _drives(solo)
     assert drive["for"] == "that was visiting the church in Pokhara"
-    assert drive["dollars"] == "10.15"  # 14.0 miles at the IRS 72.5 cents for 2026
+    assert drive["dollars"] == "10.64"  # 14.0 miles at the IRS 76 cents from 2026-07-01
     assert drive["rate_from"] == "IRS" and drive["waiting_on"] is None
 
 

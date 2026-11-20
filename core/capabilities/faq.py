@@ -31,21 +31,42 @@ def _entries() -> tuple[dict, ...]:
             "try": str(e.get("try", "")),
             "covers": [str(name) for name in e.get("covers", [])],
             "live": str(e["live"]),
+            "rules": bool(e.get("rules", False)),
+            "voice": str(e.get("voice", "")),
         }
         for e in data.get("entry", [])
     )
 
 
-def load_faq() -> list[dict]:
-    """Every entry, in page order."""
-    return [dict(e) for e in _entries()]
+VOICES = ("", "on", "off")
+"""An entry's ``voice``: "" holds everywhere; "on" only where Tim's own
+voice is on (the ministry's file names a tier for ``talk``), "off" only
+where it isn't. One id may have one of each (card T2, 2026-11-17: where his
+voice is on, Tim's own page comes first and the AI is an "also")."""
 
 
-def faq_for(offered: Iterable[str]) -> list[dict]:
+def load_faq(*, voice: bool = False) -> list[dict]:
+    """Every entry for a ministry whose voice is ``voice``, in page order.
+    The ``voice`` field stays out, so a voice-off answer is the one it was."""
+    drop = "off" if voice else "on"
+    return [{k: v for k, v in e.items() if k != "voice"} for e in _entries() if e["voice"] != drop]
+
+
+RULES_TOOL = "ask_the_rules"
+"""The door offers it only where the ministry has handbook rules."""
+
+
+def faq_for(offered: Iterable[str], *, voice: bool = False) -> list[dict]:
     """The entries for a person with these tools: the ones for everyone,
-    then each one that explains a tool they have, in page order."""
+    then each one that explains a tool they have, in page order. An entry
+    about handbook rules only where the door offers them; an entry about
+    Tim's own voice by whether it's on."""
     have = set(offered)
-    return [e for e in load_faq() if not e["covers"] or have & set(e["covers"])]
+    return [
+        e
+        for e in load_faq(voice=voice)
+        if (not e["covers"] or have & set(e["covers"])) and (not e["rules"] or RULES_TOOL in have)
+    ]
 
 
 def markdown(entries: list[dict]) -> str:
@@ -63,4 +84,4 @@ def markdown(entries: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["FAQ_FILE", "faq_for", "load_faq", "markdown"]
+__all__ = ["FAQ_FILE", "RULES_TOOL", "VOICES", "faq_for", "load_faq", "markdown"]

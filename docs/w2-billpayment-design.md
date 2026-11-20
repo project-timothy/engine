@@ -254,3 +254,38 @@ Off by default (an empty list), so no tenant inherits it by upgrading, and
 The tier runs after the reference backfill, so recorded money explains the
 line first. Evals: `core/agents/ap/evals/test_reconcile_bill_pay.py`.
 Decision: `docs/decisions/2026-09-17-bill-pay-checks-settle-on-channel.md`.
+
+
+## One bill, several checks (2026-11-18, issue #688)
+
+A bank's bill pay can cap one check ($10,000 at the bank of the
+first tenant), so a larger bill goes out as two checks against ONE row and
+ONE bill. Before W2 those settled through two partial BillPayments made at
+the bank-feed match (#115 sums them). With W2 on, the job grouped by the
+whole reference and would have written ONE $13,253 BillPayment numbered
+from the free text: neither bank line could match it, and the statement
+tier could not settle it.
+
+- **The reference is the record.** The owner names each check with its
+  amount: `9170 $10,000.00 + 9171 $1,251.00`, a send date optional after
+  each (`on 11/24`). `core/agents/ap/split_checks.py` reads it: two or more
+  check numbers (four digits or more, amounts removed first) make a split;
+  it is usable only when every check has exactly one amount and they sum to
+  the row to the cent. No schema change: the reference already holds it.
+- **Write side.** Each check is its own group: DocNumber = that check, one
+  Line for its own amount linked to the one bill, its own date and engine
+  key (`qbo-payment:<check>:<tenant>`). The row's `qbo_payment_id` holds
+  every piece's id, comma-joined (`store.add_qbo_payment_id`), and
+  `engine_authored_qbo_ids` splits it, so rule 3 still filters every piece.
+  A piece whose done record's id is on the row is not offered again. An
+  unreadable split, a row with no bill, or a piece number another row also
+  wears is skipped whole with the reason.
+- **Statement side.** A line naming one piece of an open split row, exact
+  amount, send date inside the usual window, is `split_piece`: an
+  `ap.reconcile.split_piece_cleared` event (an answer, so a longer export
+  never re-reads it) and, once every check the row names has cleared, the
+  settle: Paid, the last clearing date, the reference kept, one
+  `ap.reconcile.paid` per piece naming that piece's own BillPayment (the
+  auditor verifies each), one `ap.invoice.paid` for the row. A piece that
+  disagrees parks review; it is never unknown money.
+- Evals: `core/agents/ap/evals/test_split_checks.py`.

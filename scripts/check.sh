@@ -48,6 +48,7 @@ gate "ruff check" uv run ruff check .
 gate "ruff format" uv run ruff format --check .
 gate "bleed-through lint" env -u ENGINE_LINT_TOKENS uv run python -m core.evals.bleedthrough_lint
 gate "independence lint" uv run python -m auditor.evals.independence_lint
+gate "security charter" uv run python -m core.evals.security_charter
 gate "shellcheck" sh -c "git ls-files -z '*.sh' | xargs -0 shellcheck -x --severity=style"
 gate "zizmor" uvx --from zizmor==1.30.1 zizmor --offline .github/workflows
 gate "vulture" uv run vulture core auditor tenants vulture_whitelist.py --min-confidence 80

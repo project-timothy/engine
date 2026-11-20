@@ -1,0 +1,14 @@
+{
+  "note": "She opens the conversation. In the first live trial Tim said his books weren't connected; he should start where her books say to start.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hey Tim"
+    }
+  ],
+  "expect": {
+    "call": {
+      "tool": "start_here"
+    }
+  }
+}

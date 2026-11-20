@@ -1,0 +1,11 @@
+{
+  "name": "mzn_hotel_two_pages",
+  "note": "a two pages receipt: the total, its currency, and its day read off the picture",
+  "document": "mzn_hotel_two_pages.pdf",
+  "text": "HOTEL POLANA SOL\nMaputo, Mocambique\nFactura  Data: 2026-09-09\nQuarto 3 noites 13.500,00\nPequeno almoco 1.800,00\n(continua)\n\f\nHOTEL POLANA SOL  pag. 2\nLavandaria 650,00\nIVA 16% 2.552,00\nTOTAL A PAGAR 18.502,00 MZN",
+  "expect": {
+    "amount": "18502.00",
+    "currency": "MZN",
+    "invoice_date": "2026-09-09"
+  }
+}

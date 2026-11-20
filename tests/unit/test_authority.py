@@ -196,32 +196,38 @@ def test_a_limited_grant_with_no_amount_is_denied(policy):
 
 
 @pytest.mark.parametrize("action,resource", [("release", "payment"), ("send", "message")])
+@pytest.mark.security("SEC-01")
 def test_money_and_external_sends_happen_only_through_a_card(policy, action, resource):
     assert not evaluate(policy, Request("pat", action, resource)).allowed
     assert evaluate(policy, Request("pat", action, resource, via_card=True)).allowed
 
 
+@pytest.mark.security("SEC-02")
 def test_an_agent_never_releases_money_whatever_it_is_granted(policy):
     decision = evaluate(policy, Request("mailroom", "release", "payment", via_card=True))
     assert not decision.allowed and "human" in decision.reason
 
 
+@pytest.mark.security("SEC-04")
 def test_an_agent_that_reads_outside_documents_never_proposes_authority(policy):
     assert evaluate(policy, Request("admin", "propose", "authority")).allowed
     decision = evaluate(policy, Request("mailroom", "propose", "authority"))
     assert not decision.allowed and "outside" in decision.reason
 
 
+@pytest.mark.security("SEC-03")
 def test_an_agent_never_confirms_authority(policy):
     decision = evaluate(policy, Request("mailroom", "confirm", "authority", proposer="admin"))
     assert not decision.allowed
 
 
+@pytest.mark.security("SEC-06")
 def test_every_authority_decision_is_recorded(policy):
     assert evaluate(policy, Request("admin", "propose", "authority")).record
     assert evaluate(policy, Request("pat", "confirm", "authority", proposer="admin")).record
 
 
+@pytest.mark.security("SEC-06")
 def test_a_change_record_names_who_proposed_and_who_confirmed():
     record = change_record(proposer="admin", confirmer="pat", before="a = 1\n", after="a = 2\n")
     assert record["proposer"] == "admin" and record["confirmer"] == "pat"
@@ -231,6 +237,7 @@ def test_a_change_record_names_who_proposed_and_who_confirmed():
 # ---- who confirms an authority change -------------------------------------------
 
 
+@pytest.mark.security("SEC-03")
 def test_second_person_confirm_refuses_the_proposer(policy):
     assert not evaluate(policy, Request("pat", "confirm", "authority", proposer="pat")).allowed
     assert evaluate(policy, Request("pat", "confirm", "authority", proposer="admin")).allowed
@@ -241,6 +248,7 @@ def test_self_confirm_lets_a_solo_person_confirm_their_own_change():
     assert evaluate(solo, Request("pat", "confirm", "authority", proposer="pat")).allowed
 
 
+@pytest.mark.security("SEC-07")
 def test_nobody_grants_what_they_do_not_hold(policy):
     assert may_grant(policy, "pat", parse_permission("release:payment"))
     assert not may_grant(policy, "sam", parse_permission("release:payment"))
@@ -250,6 +258,7 @@ def test_nobody_grants_what_they_do_not_hold(policy):
     assert may_grant(policy, "sam", parse_permission("approve:expense.report@own<=100"))
 
 
+@pytest.mark.security("SEC-07")
 def test_a_change_is_checked_against_the_confirmer(policy):
     added = [parse_permission("release:payment")]
     assert check_change(policy, proposer="admin", confirmer="pat", added=added) == []
@@ -350,12 +359,21 @@ EXPECTED_SAFEGUARDS = {
         "report_self_approvals": "always",
     },
 }
+# A church: nobody approves their own spending at any amount, as in an
+# organization (the owner's decision of 2026-10-16, after a treasurer tapped
+# her own report).
+EXPECTED_SAFEGUARDS["nonprofit-small"] = {
+    **EXPECTED_SAFEGUARDS["small"],
+    "self_approval": "never",
+    "report_self_approvals": "always",
+}
 
 
 @pytest.mark.parametrize("shape", SHAPES)
 def test_each_shape_ships_the_safeguards_the_design_names(shape):
     safeguards = _rendered(shape).safeguards
-    for key, value in EXPECTED_SAFEGUARDS[shape.split("-", 1)[1]].items():
+    expected = EXPECTED_SAFEGUARDS.get(shape) or EXPECTED_SAFEGUARDS[shape.split("-", 1)[1]]
+    for key, value in expected.items():
         assert getattr(safeguards, key) == value, (shape, key)
 
 
@@ -395,6 +413,7 @@ AMOUNTS = (None, Decimal("100"), Decimal("1000"), Decimal("20000"))
 
 
 @pytest.mark.parametrize("shape", SHAPES)
+@pytest.mark.security("SEC-01")
 def test_the_floor_and_the_safeguards_hold_for_every_combination(shape):
     policy = _principals_for(_rendered(shape))
     sg = policy.safeguards

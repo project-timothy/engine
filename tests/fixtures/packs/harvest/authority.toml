@@ -1,0 +1,62 @@
+# Who may do what at Harvest Fields Mission (a made-up agency's pack).
+[money]
+out = "human"
+
+[safeguards]
+self_approval = "never"
+self_approval_limit = 0
+review_after = "none"
+distinct_payer = "always"
+distinct_payer_above = 0
+second_approver_above = 0
+authority_confirm = "group"
+report_self_approvals = "always"
+yes_by_word_up_to = 0
+# Every read through the door is written down (who, which tool, whose rows).
+log_reads = "always"
+
+[roles.missionary]
+grants = ["view:*@own", "submit:*@own"]
+
+[roles.team-leader]
+grants = ["view:*@own", "approve:purchase.order@own<=4000"]
+
+[roles.regional-director]
+grants = ["view:*@own", "approve:*@own<=10000"]
+
+[roles.finance]
+grants = ["view:*", "approve:expense.report", "release:payment", "send:message"]
+
+[roles.compliance]
+grants = ["view:*", "review:*"]
+
+[roles.member-care]
+# The people in their care and their dates; never their money.
+grants = ["view:people@own", "view:calendar@own"]
+
+[roles.administrator]
+grants = ["view:*", "propose:authority", "confirm:authority"]
+
+[roles.agent-intake]
+grants = ["view:*", "submit:ap.invoice", "submit:expense.report"]
+
+[roles.agent-admin]
+grants = ["view:*", "propose:authority"]
+
+[agents.intake]
+roles = ["agent-intake"]
+reads_outside = true
+lanes = ["ap", "ar", "brief", "close", "deadlines", "expenses", "mail", "projects", "timesheets"]
+
+[agents.admin]
+roles = ["agent-admin"]
+reads_outside = false
+
+[routing]
+window_days = 5
+first_reminder_days = 2
+second_reminder_days = 4
+backup = false
+backup_after_days = 5
+
+[people]

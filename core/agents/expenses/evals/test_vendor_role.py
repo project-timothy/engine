@@ -24,7 +24,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.agents.expenses import jobs as exp_jobs
+from core.agents.expenses import job_match
 from core.engine.config import load_tenant
 from core.engine.runner import resolve_ledger_root, run
 from core.ledger import Ledger
@@ -79,7 +79,7 @@ class FakeQbo:
 @pytest.fixture()
 def fake_qbo(monkeypatch):
     fake = FakeQbo()
-    monkeypatch.setattr(exp_jobs, "_qbo_write_client", lambda ctx: fake)
+    monkeypatch.setattr(job_match, "_qbo_write_client", lambda ctx: fake)
     return fake
 
 
@@ -202,14 +202,14 @@ def test_missing_project_account_parks_a_card_never_guesses(tmp_path, fake_qbo):
 
 
 def test_empty_template_resolves_nothing_and_lists_every_project():
-    account_ids, missing = exp_jobs._project_accounts("", ["P26_2001"], {})
+    account_ids, missing = job_match._project_accounts("", ["P26_2001"], {})
     assert account_ids == {}
     assert missing == ["P26_2001"]
 
 
 def test_template_resolution_strips_the_letter_prefix():
     account_map = {"Project Costs - PN26_2001": "PC1"}
-    account_ids, missing = exp_jobs._project_accounts(
+    account_ids, missing = job_match._project_accounts(
         "Project Costs - PN{number}", ["P26_2001", ""], account_map
     )
     assert account_ids == {"P26_2001": "PC1"}

@@ -189,6 +189,19 @@ def test_daniel_approves_his_own_report_with_face_id(solo):  # noqa: F811
     assert asked["card"] == str(_card(solo, "living-water", "card-big")["id"])
 
 
+def test_with_no_passkey_the_approve_button_says_check_your_email(solo):  # noqa: F811
+    # The emailed yes (2026-10-30): the link goes to Daniel's email, never
+    # to this page or the browser it is open in.
+    desk = MonthDesk()
+    desk.emailed = {"daniel-reyes"}
+    page = _page("living-water", solo, desk)
+    _, html = page.show({"grant": desk.grant("daniel-reyes", "daniel-reyes", "2026-09")})
+    status, location, shown = page.approve(_approve_form(html))
+    assert status == 200 and location == ""
+    assert "Check your email" in shown and "Tim emailed you a link to finish your yes" in shown
+    assert "/yes#" not in shown
+
+
 def test_the_page_never_decides_by_word_even_under_the_line(solo):  # noqa: F811
     desk = MonthDesk()
     page = _page("living-water", solo, desk)
@@ -308,3 +321,146 @@ def test_the_month_is_never_served_on_a_get(door):
     with pytest.raises(urllib.error.HTTPError) as got:
         urllib.request.urlopen(door["base"] + mp.SHOW_PATH)
     assert got.value.code in (404, 405)
+
+
+# ---- what Tim checked (docs/screens/README.md, R4; screens chunk 3, 2026-11-16)
+
+
+def _month_of(**over) -> dict:
+    person = {
+        "person": "Daniel Reyes",
+        "total": "412.60",
+        "review": "Waiting for approval",
+        "lines": [{"date": "2026-10-01", "said": "$12.00", "dollars": "12.00", "category": "Meals"}]
+        * 3,
+        "drives": [{"date": "2026-10-02", "miles": "12", "dollars": "8.40", "for": "visit"}] * 2,
+        "bank": [
+            {
+                "date": "2026-10-03",
+                "words": "SUPERMART",
+                "dollars": "40.00",
+                "role": "owed back",
+                "receipt": "attached",
+                "waiting_on": None,
+            },
+        ],
+        "bank_waiting": 0,
+    }
+    return person | over
+
+
+def _checks(html: str) -> list[tuple[str, str]]:
+    return re.findall(
+        r'<li class="(yes|no|none)"><span class="mark"[^>]*>[^<]*</span> ([^<]*)</li>', html
+    )
+
+
+def test_the_month_opens_with_what_is_owed_back_and_how_much_is_in_it():
+    html = mp.render(
+        _month_of(),
+        title="Daniel Reyes's October 2026",
+        ministry="LW",
+        approve=None,
+        nonce="n",
+        when="October 2026",
+    )
+    assert "Owed back to Daniel" in html and "$412.60" in html
+    assert "3 receipts, 2 drives and 1 bank line" in html
+
+
+def test_what_tim_checked_says_each_check_and_its_answer():
+    html = mp.render(
+        _month_of(), title="t", ministry="LW", approve=None, nonce="n", card={"policy": "none"}
+    )
+    assert "What I checked" in html
+    assert _checks(html) == [
+        ("yes", "Every line has its receipt"),
+        ("yes", "Everything fits the ministry&#x27;s rules"),
+        ("yes", "Every bank line is accounted for"),
+    ]
+
+
+def test_a_check_that_fails_is_shown_failing_never_left_out():
+    month = _month_of(
+        bank=[
+            {
+                "date": "2026-10-03",
+                "words": "SUPERMART",
+                "dollars": "40.00",
+                "role": "owed back",
+                "receipt": None,
+                "waiting_on": "its receipt, or what it was for",
+            },
+            {
+                "date": "2026-10-04",
+                "words": "TAXI",
+                "dollars": "90.00",
+                "role": "the ministry paid",
+                "receipt": None,
+                "waiting_on": None,
+            },
+        ],
+        bank_waiting=1,
+        rules_say=["A receipt is needed for any expense of $75 or more: the $90.00 taxi has none."],
+    )
+    html = mp.render(
+        month,
+        title="t",
+        ministry="LW",
+        approve=None,
+        nonce="n",
+        card={"policy": "A receipt is needed ..."},
+    )
+    assert _checks(html) == [
+        ("no", "2 bank lines have no receipt yet"),
+        ("no", "The ministry&#x27;s rules say something about this month"),
+        ("no", "1 bank line still waits on Daniel"),
+    ]
+    assert "One thing worth a look" in html
+    assert "the $90.00 taxi has none" in html.split("One thing worth a look")[1]
+
+
+def test_with_no_rules_in_force_and_no_statement_tim_says_what_it_could_not_check():
+    html = mp.render(_month_of(bank=[]), title="t", ministry="LW", approve=None, nonce="n", card={})
+    assert _checks(html) == [
+        ("yes", "Every line has its receipt"),
+        ("none", "No ministry rules are in force yet, so there was nothing to check against"),
+        ("none", "No bank statement for this month yet"),
+    ]
+    assert "One thing worth a look" not in html
+
+
+def test_old_cash_is_the_thing_worth_a_look_when_the_rules_say_nothing():
+    month = _month_of(cash_oldest="NPR 4,300 drawn 2026-09-09, 68 days ago (past 60 days)")
+    html = mp.render(
+        month, title="t", ministry="LW", approve=None, nonce="n", card={"policy": "none"}
+    )
+    assert "One thing worth a look" in html and "NPR 4,300 drawn 2026-09-09" in html
+
+
+def test_the_button_names_the_month():
+    button = {"who": "linda-park", "card": "7", "until": "1", "sig": "x"}
+    html = mp.render(
+        _month_of(), title="t", ministry="LW", approve=button, nonce="n", when="October 2026"
+    )
+    assert "<button>Approve October</button>" in html
+
+
+def test_the_month_page_words_carry_no_machinery_and_no_em_dash():
+    for text in mp.all_words():
+        assert "—" not in text
+        for word in ("card", "ledger", "token", "tenant", "scope", "params", "sha"):
+            assert word not in text.casefold().split()
+
+
+def test_the_rules_check_reads_the_months_own_card(october):
+    desk = MonthDesk()
+    _, html = _page("living-water", october, desk).show(
+        {"grant": desk.grant("linda-park", "daniel-reyes", "2026-10")}
+    )
+    # October's card was made with no rule in force, and says so
+    assert (
+        "none",
+        "No ministry rules are in force yet, so there was nothing to check against",
+    ) in _checks(html)
+    assert "Owed back to Daniel" in html and "1 receipt" in html

@@ -9,7 +9,7 @@ import pytest
 
 from auditor import web as auditor_web
 from core.adapters import qbo
-from core.agents.expenses import jobs as expenses_jobs
+from core.agents.expenses import job_match
 from core.engine import web
 
 
@@ -37,6 +37,7 @@ def test_https_anywhere_and_plain_http_only_to_this_machine(url):
         "https:///no-host",
     ],
 )
+@pytest.mark.security("SEC-18")
 def test_everything_else_is_refused_before_a_socket_opens(url):
     with pytest.raises(web.SchemeRefused):
         web.checked(url)
@@ -44,6 +45,7 @@ def test_everything_else_is_refused_before_a_socket_opens(url):
         web.request(url)
 
 
+@pytest.mark.security("SEC-18")
 def test_an_adapter_never_opens_a_local_file():
     with pytest.raises(web.SchemeRefused):
         qbo._default_transport("file:///etc/passwd", data=None, headers={})
@@ -57,19 +59,22 @@ def test_the_auditor_keeps_the_same_rule_on_its_own():
 
 
 @pytest.mark.parametrize("bad", ["2026-10-01' OR '1'='1", "2026-13-01", "", None])
+@pytest.mark.security("SEC-18")
 def test_only_a_real_iso_date_reaches_a_qbo_query(bad):
     with pytest.raises(ValueError):
         qbo.iso_since(bad)
 
 
 @pytest.mark.parametrize("bad", ["12' OR Id > '0", "", "12a", "-1"])
+@pytest.mark.security("SEC-18")
 def test_only_a_digit_id_reaches_a_qbo_query(bad):
     with pytest.raises(ValueError):
         qbo.qbo_id(bad)
     assert qbo.qbo_id(1234) == "1234"
 
 
+@pytest.mark.security("SEC-18")
 def test_only_known_columns_reach_an_expense_report_update():
-    assert expenses_jobs._sets({"cleared_date": "x"}) == "cleared_date = ?"
+    assert job_match._sets({"cleared_date": "x"}) == "cleared_date = ?"
     with pytest.raises(ValueError):
-        expenses_jobs._sets({"status = 'Paid', total_cents": 0})
+        job_match._sets({"status = 'Paid', total_cents": 0})

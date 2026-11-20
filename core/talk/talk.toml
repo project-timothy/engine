@@ -1,0 +1,64 @@
+# What Tim says in his own voice when the model can't answer
+# (core/talk/loop.py, Standalone Tim shot 1). Code picks which line; these
+# are only the words. A test fails on an em dash or a machinery word here.
+
+[words]
+off = "My own voice isn't switched on for your ministry yet. Whoever set me up for you can turn it on. Your receipt page and your month page work the same as always."
+capped = "I've reached this month's limit on my answers for your ministry. Your receipt page, your photos, your Yes taps and your month page all still work, and my answers come back on the 1st."
+declined = "I can't help with that one. Try saying it another way."
+trouble = "I couldn't finish my answer just now, because the service that does my thinking didn't respond. Nothing in your books changed. Try again in a minute."
+# Past the soft line of his month's limit (card V3), once a day, under his answer.
+near_cap = "I'm getting close to this month's limit on my answers. If I reach it, your receipt page, your photos, your Yes taps and your month page all keep working."
+trouble_after = "I got partway, then the service that does my thinking stopped responding, so some of that may already be done. Ask me what's waiting before you say it again."
+# A turn that broke partway, when code knows each write it finished: {done}
+# is their Yes-button lines (the [card] table below), joined by "; ".
+trouble_done = "I got partway before the service that does my thinking stopped responding. Done: {done}. Nothing else changed. Ask me what's waiting before you say it again."
+# When Tim asks for her tap (card V2): his line above the Yes and Not now
+# buttons, and what he says after she answers them.
+confirm = "Here's what I'd do. Tap Yes if that's right, or Not now."
+yes_page = "That's your yes to give. Tap the button below and use Face ID or your fingerprint, and it's done."
+yes_emailed = "That's your yes to give, so I emailed you a link for it. Tap it on your phone and it's done."
+tapped_yes = "Yes"
+tapped_not_now = "Not now"
+not_now = "All right, I've left it as it was."
+tapped_ran = "I've done that. Ask me where things stand whenever you like."
+tapped_failed = "That didn't go through. Ask me about it and I'll tell you what's in the way."
+
+# What a confirm button says it will do: whose, what for, and how much.
+# Code fills the {names} from what it would run, never from Tim's words.
+[card]
+any = "Make this change to your books"
+add_receipt = "Add a receipt{much}"
+agree_to_readings = "Agree to what I read on {whose} receipts for {month}"
+ask_for_ok = "Ask for an OK to buy {what}{much}"
+bank_statement = "Keep {whose} bank statement in the books"
+catch_up_link = "Make a link for sending {whose} pile of receipts"
+close_year = "Close the books for {year}"
+count_cash = "Count {whose} cash in hand{much}"
+draft_rule = "Write up a rule from {document} for a yes"
+explain_bank_line = "Keep what a bank line was for: {said}, filed {filed}"
+explain_cash = "Say where {whose} missing cash went{much}"
+keep_own_lines = "Keep the lines picked from {whose} own bank statement"
+keep_payers = "Keep {payer} on {whose} list of who pays{much}"
+# A tax form's own figure (V4 Y02, 2026-11-18): the form, never the pay.
+keep_payers_form = "Keep what {payer}'s {year} tax form says{much}, to check against what came in"
+keep_school_list = "Add {whose} school list to the books"
+keep_tax_facts = "Keep {whose} tax facts for {year}{much}"
+keep_travel = "Keep {whose} trip to {country}"
+letter_details = "Keep what the donor letters need"
+paid_it_myself = "Record a ministry cost you paid yourself{much}"
+pick_card_receipt = "Match a bank line to the receipt it paid"
+record_reading = "Keep what a receipt shows{much}"
+reopen_year = "Reopen the books for {year}"
+send_month_for_review = "Send {whose} receipts for {month} to be looked over"
+set_amount = "Set how much a receipt was{much}"
+set_budget = "Set the {year} budget for {kind}{much}"
+set_category = "Put a receipt under {kind}"
+set_drive_purpose = "Say what a drive was for"
+set_pay = "Set {person}'s pay{much} a year"
+set_program_share = "Set the program share at {percent} percent"
+set_receipt_day = "Move a receipt to the day you said"
+split_line = "Split part of a bank line off{much}"
+# Her own yes or no back to waiting, when her words came close (2026-11-19):
+# {answer} is "yes" or "no", {what} the card in her terms.
+take_back = "Take back your {answer} on {what}"

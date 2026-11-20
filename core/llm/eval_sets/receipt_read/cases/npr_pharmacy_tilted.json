@@ -1,0 +1,12 @@
+{
+  "name": "npr_pharmacy_tilted",
+  "note": "a tilted receipt: the total, its currency, and its day read off the picture",
+  "document": "npr_pharmacy_tilted.png",
+  "text": "Sita Pharmacy\nLalitpur, Nepal\n2026-11-01\nParacetamol 120.00\nORS x5 125.00\nTotal Rs. 245.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "245.00",
+    "currency": "NPR",
+    "invoice_date": "2026-11-01"
+  }
+}

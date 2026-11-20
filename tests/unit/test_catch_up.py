@@ -136,3 +136,22 @@ def test_a_first_name_is_enough(solo):  # noqa: F811
     assert (
         _door(solo, "linda-park").call("catch_up_link", {"person": "Dan"})["status"] == "not_found"
     )
+
+
+def test_a_statement_on_a_one_receipt_link_never_costs_the_link(solo):  # noqa: F811
+    """The weekly attacker's first hit (chunk 6, 2026-10-16): a bank
+    statement sent through a one-receipt link was refused, and the refusal
+    spent the link, so the person's real photo then got "already used". A
+    wrong file costs nothing (_take_file)."""
+    desk = ReceiptDesk()
+    token = desk.issue("daniel-reyes", "Daniel Reyes", None)
+    csv = (
+        b"Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #\n"
+        b'DEBIT,10/05/2026,"TEA HOUSE",-3.00,DEBIT_CARD,100.00,,\n'
+    )
+    status, body = _send(solo, desk, token, csv)
+    assert status == 415 and "catch-up link" in body["say"]
+    status, _ = _send(solo, desk, token, JPEG)
+    assert status == 200
+    status, body = _send(solo, desk, token, csv)
+    assert status == 410 and body["say"].startswith("This link was already used")

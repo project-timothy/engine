@@ -1,0 +1,36 @@
+{
+  "name": "tidewater_july_tilted",
+  "note": "a crooked photo: the lines, balances, and period read off the picture",
+  "document": "tidewater_july_tilted.png",
+  "text": "TIDEWATER HOLLOW CREDIT UNION\nShare Draft Account ...0932   Hope Springs Ministries Inc.\nPeriod 07/01/2026 through 07/31/2026\nPrevious balance                                    1,950.00\n\nDATE    DESCRIPTION             WITHDRAWALS   DEPOSITS     BALANCE\nJul 01  DEPOSIT WILLOW RUN                      650.00    2,600.00\nJul 08  MAMA GRACE GROCERS            42.70               2,557.30\nJul 12  WIRE FEE                      25.00               2,532.30\nJul 20  WIRE TO NAKURU PARTNER     1,000.00               1,532.30\nJul 29  ONLINE GIFT P OKAFOR                    120.00    1,652.30\nNew balance                                         1,652.30",
+  "expect": {
+    "doc_type": "bank_statement",
+    "currency": "USD",
+    "period_start": "2026-07-01",
+    "period_end": "2026-07-31",
+    "opening_balance": "1950.00",
+    "closing_balance": "1652.30",
+    "lines": [
+      {
+        "day": "2026-07-01",
+        "amount": "650.00"
+      },
+      {
+        "day": "2026-07-08",
+        "amount": "-42.70"
+      },
+      {
+        "day": "2026-07-12",
+        "amount": "-25.00"
+      },
+      {
+        "day": "2026-07-20",
+        "amount": "-1000.00"
+      },
+      {
+        "day": "2026-07-29",
+        "amount": "120.00"
+      }
+    ]
+  }
+}

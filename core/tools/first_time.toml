@@ -1,0 +1,43 @@
+# The first time a person meets something new, Tim says what is happening,
+# why, and the rule, once (docs/screens/README.md, chunk 2; mockups F1 to F6).
+# Each rule is taken word for word from the FAQ answer named by `faq`
+# (core/capabilities/faq.toml); a test holds every sentence of it there.
+# The words a person reads carry no machinery and no em dash.
+
+once = "I'll explain this once. Ask me why any time."
+
+[face_id]
+faq = "why-face-id"
+what = "This yes needs your Face ID."
+why = "It shows it was you who said yes, and nobody else holding your phone or signed in as you. Your face never leaves your phone."
+rule = "Your ministry sets a dollar line. At or under it, saying yes to your AI is enough. Over it, Face ID proves it was you who said it, not someone else on your account."
+
+[cash]
+faq = "cash-clock"
+what = "You took out cash. Cash in your hand isn't spending yet."
+why = "Your receipts in that currency get paid from this cash, so I can tell you how much is still in hand. Tell me how much the machine gave you; it's on the slip."
+rule = "Account for it within 60 days: receipts, or a count that says where it went. Tim nudges you at 45 days, and your month shows the oldest cash and how old it is."
+
+[other_currency]
+faq = "other-currency"
+what = "You paid in another currency. I keep both."
+why = "Your books are kept in dollars, and your month is read in dollars. You never do the math."
+rule = "Tim keeps what you paid as you said it, and works out its dollar value at the exchange rate on the receipt's own day."
+
+[split]
+faq = "split-receipt"
+what = "Part of that receipt was yours, so I split it."
+why = "Your books carry only what was for the ministry. If ministry money paid for all of it, your part shows as owed to the ministry."
+rule = "Only the ministry's part counts."
+
+[drives]
+faq = "drives"
+what = "Your phone sent me a drive."
+why = "A ministry drive goes on your month and is paid back by the mile. On Fridays I ask what the week's drives were for."
+rule = "The tracker app on your phone sends Tim the miles and times, never where you went. A drive you call personal never turns into money."
+
+[month_sent]
+faq = "approved-stays"
+what = "Your month is ready to send to whoever looks it over."
+why = "They read the whole month at once and say one yes, and that yes is what lets the ministry pay you back."
+rule = "What was approved stays approved. If an approved receipt changes, only that one comes back for a yes."

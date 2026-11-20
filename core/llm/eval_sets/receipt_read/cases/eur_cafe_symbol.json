@@ -1,0 +1,12 @@
+{
+  "name": "eur_cafe_symbol",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "eur_cafe_symbol.png",
+  "text": "CAFE DO PORTO\nLisboa, Portugal\n2026-11-04\n2 Galao 3,60\n2 Pastel de nata 2,80\nTOTAL €6,40",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "6.40",
+    "currency": "EUR",
+    "invoice_date": "2026-11-04"
+  }
+}

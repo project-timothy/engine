@@ -1,0 +1,12 @@
+{
+  "name": "etb_cafe_hand",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "etb_cafe_hand.png",
+  "text": "Abebe Cafe\nAddis Ababa\ncoffee and bread for 8\nBr 960\nNov 9, 2026",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "960.00",
+    "currency": "ETB",
+    "invoice_date": "2026-11-09"
+  }
+}

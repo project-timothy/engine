@@ -53,6 +53,9 @@ class OnboardingTools:
     data_root: str | Path | None = None
     ledger_dir: str | Path | None = None
     run_audit: bool = True
+    pack: str | Path | None = None
+    """An agency pack the host sets every ministry here up from (core/pack):
+    its roles, numbers and rules. Named by the host, never by the person."""
     server_name: str = SERVER_NAME
     instructions: str = INSTRUCTIONS
 
@@ -79,6 +82,8 @@ class OnboardingTools:
     def _load(self, args: dict) -> tuple[str, Path, dict]:
         slug, store = self._store(args)
         answers = json.loads(store.read_text(encoding="utf-8")) if store.exists() else {}
+        if self.pack:
+            answers["pack"] = str(Path(self.pack).resolve())
         return slug, store, answers
 
 
@@ -87,7 +92,7 @@ def _state(slug: str, answers: dict) -> dict:
         "slug": slug,
         "next": next_question(answers),
         "missing": missing(answers),
-        "answers": answers,
+        "answers": {k: v for k, v in answers.items() if k != "pack"},
     }
 
 
@@ -127,6 +132,7 @@ def _plan(t: OnboardingTools, args: dict) -> dict:
             "second_person_above": p.self_approval_limit,
             "two_approvals_above": p.two_approvals_above,
             "yes_by_word_up_to": p.yes_by_word_up_to,
+            "mileage_rate": p.mileage_rate or "IRS rate",
             "spelling": p.spelling,
             "banned_words": list(p.banned),
         },

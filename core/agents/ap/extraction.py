@@ -242,8 +242,12 @@ class GatewayExtractor:
         adapter: Any | None = None,
         text_reader: Callable[[Path], str] | None = None,
         completer: Callable[..., Any] | None = None,
+        output_model: type[ExtractionReply] | None = None,
+        also: str = "",
     ) -> None:
         self._ctx = ctx
+        self._output_model = output_model or ExtractionReply
+        self._also = also
         self._job_type = job_type
         self._tier = tier
         self._timeout_s = timeout_s
@@ -253,6 +257,14 @@ class GatewayExtractor:
         self._complete = completer
 
     def extract(self, path: Path) -> ExtractedDocument:
+        return self.read(path).to_document()
+
+    def read(self, path: Path) -> ExtractionReply:
+        """The validated reply itself, in ``output_model``: what
+        :meth:`extract` turns into an :class:`ExtractedDocument`. The receipt
+        page reads the same way with one field more (its currency), which is
+        what ``output_model`` and ``also`` (one line added to the brief) are
+        for; left at their defaults, the call is the jobs' own, word for word."""
         from core.llm.policy import complete_for
 
         size = path.stat().st_size
@@ -265,7 +277,7 @@ class GatewayExtractor:
             )
         text = self._text_layer(path)
         messages = [
-            Message("system", _JSON_SPEC),
+            Message("system", _JSON_SPEC + self._also),
             Message("user", _TEXT_ASK.format(text=text) if text else _ATTACHED_ASK),
         ]
         call = self._complete or complete_for
@@ -274,7 +286,7 @@ class GatewayExtractor:
                 self._ctx,
                 self._job_type,
                 messages,
-                ExtractionReply,
+                self._output_model,
                 attachments=[Attachment(path, document_mime(path))],
                 timeout_s=self._timeout_s,
                 adapter=self._adapter,
@@ -282,7 +294,7 @@ class GatewayExtractor:
             )
         except Exception as exc:
             raise self._as_extraction_error(path, exc) from exc
-        return result.output.to_document()
+        return result.output
 
     def _text_layer(self, path: Path) -> str:
         """The text layer, or "" when there is none. Reading a text layer is

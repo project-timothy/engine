@@ -1,0 +1,11 @@
+{
+  "name": "zar_rental_two_pages",
+  "note": "a two pages receipt: the total, its currency, and its day read off the picture",
+  "document": "zar_rental_two_pages.pdf",
+  "text": "CAPE CAR HIRE\nCape Town, South Africa\nInvoice date 2026-08-28\nRental 4 days 2,160.00\nInsurance 480.00\nsee page 2\n\f\nCAPE CAR HIRE  page 2\nFuel refill 615.00\nVAT 15% 488.25\nTOTAL DUE ZAR 3,743.25",
+  "expect": {
+    "amount": "3743.25",
+    "currency": "ZAR",
+    "invoice_date": "2026-08-28"
+  }
+}

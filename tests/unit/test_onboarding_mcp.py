@@ -93,7 +93,8 @@ def test_the_tenant_tools_stay_read_only(world):
 
     server = McpServer(catalog.Tools("demo", ledger_root=Path("/nonexistent")))
     for tool in _rpc(server, "tools/list")["result"]["tools"]:
-        assert tool["annotations"] == {"readOnlyHint": True, "openWorldHint": False}
+        hints = {k: v for k, v in tool["annotations"].items() if k != "title"}
+        assert hints == {"readOnlyHint": True, "openWorldHint": False}
     init = _rpc(server, "initialize", {"protocolVersion": "2025-06-18"})
     assert init["result"]["serverInfo"]["name"] == "timothy-engine"
 

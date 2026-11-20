@@ -1,0 +1,12 @@
+{
+  "name": "tzs_bookshop",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "tzs_bookshop.png",
+  "text": "KILIMANJARO BOOKSHOP\nArusha, Tanzania\n2026-10-02\nBibles x6 90,000\nNotebooks x20 30,000\nTOTAL TSh 120,000",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "120000.00",
+    "currency": "TZS",
+    "invoice_date": "2026-10-02"
+  }
+}

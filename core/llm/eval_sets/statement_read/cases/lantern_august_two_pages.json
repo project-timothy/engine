@@ -1,0 +1,66 @@
+{
+  "name": "lantern_august_two_pages",
+  "note": "a statement on two pages, its ending balance on the first: the lines, balances, and period read off the picture",
+  "document": "lantern_august_two_pages.pdf",
+  "text": "LANTERN PRAIRIE BANK                              Member FDIC\nHope Springs Ministries Inc.          Business Checking ...4417\nStatement period 08/01/2026 - 08/31/2026\nBeginning balance                              $5,120.00\nDeposits and credits                           $1,800.00\nWithdrawals and debits                         $2,534.49\nEnding balance                                 $4,385.51\n\nDATE   DESCRIPTION                                 AMOUNT\n08/01  ONLINE GIFT HOLLIS FAMILY                     250.00\n08/03  CHECK 1731                                   -450.00\n08/05  INTL WIRE TO NEPAL                           -500.00\n08/07  CORNER FUEL DAYTON OH                         -41.26\n08/10  DEPOSIT STONEBRIDGE CHURCH                  1,200.00\n08/12  PAPER & INK SUPPLY                            -36.88\n08/15  ONLINE GIFT T NGUYEN                          100.00\n(continued on next page)\n\f\nLANTERN PRAIRIE BANK   ...4417   page 2\n08/18  CHECK 1732                                   -275.00\n08/20  PEACEFUL HILL LODGE                        -1,204.50\n08/24  ONLINE GIFT HOLLIS FAMILY                     250.00\n08/27  POST OFFICE 3812                              -14.85\n08/31  MONTHLY SERVICE FEE                           -12.00",
+  "expect": {
+    "doc_type": "bank_statement",
+    "currency": "USD",
+    "period_start": "2026-08-01",
+    "period_end": "2026-08-31",
+    "opening_balance": "5120.00",
+    "closing_balance": "4385.51",
+    "total_in": "1800.00",
+    "total_out": "2534.49",
+    "lines": [
+      {
+        "day": "2026-08-01",
+        "amount": "250.00"
+      },
+      {
+        "day": "2026-08-03",
+        "amount": "-450.00"
+      },
+      {
+        "day": "2026-08-05",
+        "amount": "-500.00"
+      },
+      {
+        "day": "2026-08-07",
+        "amount": "-41.26"
+      },
+      {
+        "day": "2026-08-10",
+        "amount": "1200.00"
+      },
+      {
+        "day": "2026-08-12",
+        "amount": "-36.88"
+      },
+      {
+        "day": "2026-08-15",
+        "amount": "100.00"
+      },
+      {
+        "day": "2026-08-18",
+        "amount": "-275.00"
+      },
+      {
+        "day": "2026-08-20",
+        "amount": "-1204.50"
+      },
+      {
+        "day": "2026-08-24",
+        "amount": "250.00"
+      },
+      {
+        "day": "2026-08-27",
+        "amount": "-14.85"
+      },
+      {
+        "day": "2026-08-31",
+        "amount": "-12.00"
+      }
+    ]
+  }
+}

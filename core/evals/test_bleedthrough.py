@@ -3,9 +3,12 @@ suite so a local ``pytest`` catches a leak even before CI does."""
 
 from __future__ import annotations
 
+import pytest
+
 from core.evals.bleedthrough_lint import scan
 
 
+@pytest.mark.security("SEC-14")
 def test_no_tenant_bleed_through_under_core():
     hits = scan()
     report = "\n".join(f"  {h.path}:{h.line_number}: token {h.token!r}" for h in hits)
@@ -85,6 +88,7 @@ def test_a_path_shape_matches_exactly_and_a_name_ignores_case(tmp_path):
     assert sorted(h.line_number for h in hits) == [2, 3]
 
 
+@pytest.mark.security("SEC-14")
 def test_scripts_the_dockerfile_and_dotfiles_are_scanned_too(tmp_path):
     """2026-09-27 pre-publish read: a vendor name sat in a shell script's
     comment, and .sh was not a scanned suffix. Everything text-shaped that

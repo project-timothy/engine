@@ -1,0 +1,12 @@
+{
+  "name": "php_jeepney_hand",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "php_jeepney_hand.png",
+  "text": "Jeepney rental, Cebu\nwhole day, youth camp\nPHP 3,500.00\nOct 24, 2026\nMang Rudy",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "3500.00",
+    "currency": "PHP",
+    "invoice_date": "2026-10-24"
+  }
+}

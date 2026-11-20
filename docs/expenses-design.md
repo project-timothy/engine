@@ -34,7 +34,8 @@ clearing from bank-CSV evidence.
 ## Agent shape
 
 `core/agents/expenses/`: `brief.md` + `schema.py` + `jobs.py` + `evals/`,
-the timesheets-vertical pattern. Four jobs.
+the timesheets-vertical pattern. Four jobs. (Since 2026-11-11 `jobs.py` is
+only the registry; each job's code lives in its own `job_*.py` module.)
 
 ### 1. `expenses/intake` — drop folders to filed receipts (daily run)
 

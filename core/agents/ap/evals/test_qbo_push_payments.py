@@ -624,7 +624,7 @@ def test_unmapped_bank_account_parks_and_writes_nothing(tmp_path, fake_qbo, paym
 
 def test_unmapped_vendor_parks_and_writes_nothing(tmp_path, fake_qbo, payment_records_on):
     d = tmp_path / "d"
-    root = _seed(d, ("Z-1", 5000, "Scheduled", "9070", "B5"), vendor="Zeta Freight")
+    root = _seed(d, ("Z-1", 5000, "Scheduled", "9170", "B5"), vendor="Zeta Freight")
     _run(d)
     _approve_pending(root)
 

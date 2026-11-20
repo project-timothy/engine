@@ -1,0 +1,16 @@
+# The made-up handbook's expense rules (core/policy), as a pack carries them.
+layer = "handbook"
+document = "Harvest Fields Field Handbook"
+copy = { file = "harvest-handbook.txt", sha = "75f6ae810fcd2d83334c0023f2a78331f2dbb2616a406b7eedabc30dd6bfd858" }
+
+[[rule]]
+id = "equipment-ok-first"
+kinds = ["Work Equipment"]
+over = "800"
+says = "Work equipment over $800 needs your team leader's OK before you buy it."
+needs = { before = true, approver = "team-leader" }
+
+[rule.source]
+section = "Work equipment"
+page = 3
+quote = "From $801 to $4,000 your team leader approves it first"

@@ -12,8 +12,9 @@ the total, and where the review stands. Plain HTML, escaped here, no script.
 
 When the month's card waits on this reviewer, an Approve button asks for
 their yes the usual way (core/tools/decide.py): a witness link, Face ID, and
-the tap finishes it. The button's form carries a signature, alive
-``BUTTON_TTL``, naming the reviewer and the card; it never decides by word.
+the tap finishes it; with no passkey, the link comes to their email. The
+button's form carries a signature, alive ``BUTTON_TTL``, naming the reviewer
+and the card; it never decides by word.
 Standard library only (invariant 9).
 """
 
@@ -25,16 +26,21 @@ import json
 import re
 import secrets
 import time
+import tomllib
 from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from functools import cache
 from html import escape
+from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import parse_qs
 
-from ..agents.expenses.jobs import REVIEW_CARD
-from .receipts import _MARK, _STYLE
-from .viewer import ViewerError, display_name, unit_of
+from ..agents.expenses.records import REVIEW_CARD
+from ..agents.expenses.statements import SPENDING
+from ..engine import private_file
+from .receipts import shell
+from .viewer import ViewerError, display_name, first_name, unit_of
 
 SHOW_PATH = "/month/show"
 APPROVE_PATH = "/month/approve"
@@ -42,8 +48,13 @@ PATHS = frozenset({SHOW_PATH, APPROVE_PATH})
 MAX_FORM = 4096
 BUTTON_TTL = 15 * 60
 _MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+WORDS_FILE = Path(__file__).with_name("month_page.toml")
 
 _AGAIN = "Open the link in your email again; your Face ID opens the month."
+_EMAILED = (
+    "Tim emailed you a link to finish your yes. Open it on any phone or computer and tap "
+    "the button."
+)
 
 
 class GrantDesk(Protocol):
@@ -93,9 +104,27 @@ def answer(
     return status, out, data
 
 
-def page_for(desk: Any, *, tools_for: Callable[[str], Any], ministry: str) -> MonthPage | None:
+def _signing_key(key_file: Path | None) -> bytes:
+    """The key the page's buttons are signed with. In ``key_file`` (beside
+    the books, private to the box's account), so a room that naps and wakes
+    (shot 4, card H3) still honors the buttons on a reviewer's open page;
+    with none, a fresh one each start, and a restart retires every button."""
+    if key_file is None:
+        return secrets.token_bytes(32)
+    if key_file.is_file():
+        return bytes.fromhex(key_file.read_text(encoding="utf-8").strip())
+    key = secrets.token_bytes(32)
+    private_file.keep(key_file, key.hex())
+    return key
+
+
+def page_for(
+    desk: Any, *, tools_for: Callable[[str], Any], ministry: str, key_file: Path | None = None
+) -> MonthPage | None:
     """The month page, on a box whose doorkeeper can vouch for a reviewer."""
-    return MonthPage(desk=desk, tools_for=tools_for, ministry=ministry) if desk else None
+    if not desk:
+        return None
+    return MonthPage(desk=desk, tools_for=tools_for, ministry=ministry, key_file=key_file)
 
 
 class MonthPage:
@@ -106,9 +135,10 @@ class MonthPage:
         tools_for: Callable[[str], Any],
         ministry: str = "",
         now: Callable[[], float] = time.time,
+        key_file: Path | None = None,
     ) -> None:
         self.desk, self.tools_for, self.ministry, self.now = desk, tools_for, ministry, now
-        self._key = secrets.token_bytes(32)  # a restart retires every button
+        self._key = _signing_key(key_file)
 
     # ---- showing the month
 
@@ -139,7 +169,13 @@ class MonthPage:
         card = self._card(t, person, month)
         approve = self._button(reviewer, card) if card is not None else None
         page = render(
-            shown, title=title, when=when, ministry=self.ministry, approve=approve, nonce=nonce
+            shown,
+            title=title,
+            when=when,
+            ministry=self.ministry,
+            approve=approve,
+            nonce=nonce,
+            card=_review(t, person, month),
         )
         return 200, page
 
@@ -188,6 +224,8 @@ class MonthPage:
             return 400, "", self._note("Not approved", str(exc), nonce)
         if out.get("link"):
             return 303, str(out["link"]), ""
+        if out.get("status") == "emailed":  # no passkey: the link went to their email
+            return 200, "", self._note("Check your email", _EMAILED, nonce)
         return 200, "", self._note("Your yes", _plain(str(out.get("say", ""))), nonce)
 
     def _note(self, title: str, words: str, nonce: str) -> str:
@@ -196,10 +234,152 @@ class MonthPage:
         )
 
 
+def _review(t: Any, person: str, month: str) -> dict | None:
+    """The month's newest review card for the person, waiting or approved:
+    the one place the rules' check was worked out. None before it's sent."""
+    rows = t._rows(
+        "SELECT params_json, status, resolved_at FROM approval_queue "
+        "WHERE tenant = ? AND action_type = ? "
+        "AND status IN ('pending', 'approved') ORDER BY id DESC",
+        (t.tenant, REVIEW_CARD),
+    )
+    for r in rows:
+        params = json.loads(r["params_json"] or "{}")
+        if params.get("month") == month and unit_of(str(params.get("person", ""))) == person:
+            if r["status"] == "approved":
+                params["approved_on"] = str(r["resolved_at"] or "")
+            return params
+    return None
+
+
+def without_you(card: dict | None, when: str) -> str:
+    """Where a month approver was named and the person approved their own
+    month instead, the words that tell the approver so (board c48, the
+    owner's decision of 2026-11-17); "" otherwise. The card says it: only a
+    ministry that asked to hear of it stamps a yes as someone's own."""
+    if not card or card.get("self_approved") != "true":
+        return ""
+    who = str(card.get("person", ""))
+    if unit_of(str(card.get("decided_by", ""))) != unit_of(who):
+        return ""
+    words = _words()["without_you"].replace("{who}", first_name(who))
+    words = words.replace("{month}", _month_name(when))
+    return words.replace("{day}", _on(str(card.get("approved_on", ""))))
+
+
+def _on(iso: str) -> str:
+    """ "2026-11-20T..." reads "November 20"; "" when it can't be read."""
+    try:
+        day = datetime.strptime(iso[:10], "%Y-%m-%d")
+    except ValueError:
+        return ""
+    return f"{day:%B} {day.day}"
+
+
+# ---- what Tim checked (docs/screens/README.md, R4)
+
+
+@cache
+def _words() -> dict:
+    with WORDS_FILE.open("rb") as handle:
+        return tomllib.load(handle)
+
+
+def all_words() -> list[str]:
+    """Every string a reviewer may read from the words file."""
+    out: list[str] = []
+
+    def walk(value: Any) -> None:
+        if isinstance(value, str):
+            out.append(value)
+        elif isinstance(value, dict):
+            for v in value.values():
+                walk(v)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v)
+
+    walk(_words())
+    return out
+
+
+def _one_or_many(pair: list[str], n: int, **fill: str) -> str:
+    return (pair[0] if n == 1 else pair[1]).replace("{n}", str(n)).format_map(_Keep(fill))
+
+
+class _Keep(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _listed(parts: list[str]) -> str:
+    """ "3 receipts, 2 drives and 1 bank line"."""
+    if len(parts) < 2:
+        return "".join(parts)
+    return f"{', '.join(parts[:-1])} {_words()['and']} {parts[-1]}"
+
+
+def counts(person: dict) -> str:
+    said = _words()["count"]
+    parts = []
+    for key, rows in (
+        ("receipt", person.get("lines", [])),
+        ("drive", person.get("drives", [])),
+        ("bank", person.get("bank", [])),
+    ):
+        if rows:
+            parts.append(f"{len(rows)} {said[key][0 if len(rows) == 1 else 1]}")
+    return _listed(parts)
+
+
+def checks(person: dict, card: dict | None) -> list[tuple[str, str]]:
+    """(``yes`` | ``no`` | ``none``, the words) for each thing Tim checked,
+    in the reviewer's order: receipts, the ministry's rules, the bank."""
+    w, who = _words(), first_name(str(person.get("person", "")))
+    out: list[tuple[str, str]] = []
+    bank = person.get("bank", [])
+    missing = sum(1 for b in bank if b.get("role") in SPENDING and not b.get("receipt"))
+    out.append(
+        ("no", _one_or_many(w["receipts"]["no"], missing))
+        if missing
+        else ("yes", w["receipts"]["yes"])
+    )
+    if card is not None:
+        said = card.get("policy")
+        if said is None:
+            out.append(("none", w["rules"]["none"]))
+        elif said == "none" and not person.get("rules_say"):
+            out.append(("yes", w["rules"]["yes"]))
+        else:
+            out.append(("no", w["rules"]["no"]))
+    waiting = int(person.get("bank_waiting", 0) or 0)
+    if not bank:
+        out.append(("none", w["bank"]["none"]))
+    elif waiting:
+        out.append(("no", _one_or_many(w["bank"]["no"], waiting, who=who)))
+    else:
+        out.append(("yes", w["bank"]["yes"]))
+    return out
+
+
+def worth_a_look(person: dict) -> str:
+    """The one thing a reviewer should look at first: what the ministry's
+    rules say about the month, else cash held past its nudge day; else
+    nothing."""
+    said = person.get("rules_say") or []
+    if said:
+        return str(said[0])
+    return str(person.get("cash_oldest") or "")
+
+
+_MARKS = {"yes": "\u2713", "no": "!", "none": "\u00b7"}
+
+
 def _plain(say: str) -> str:
     """The decider's words meant for an AI, as a sentence for a person."""
     if say.startswith("They've tapped"):
         return "Your yes is being written now. You can close this page."
+
     if say.startswith("It's already done."):
         return say.removeprefix("It's already done.").strip() or "It's already done."
     return "It's already done."
@@ -270,7 +450,11 @@ def _bank(b: dict) -> str:
 _MORE = """h2{font-size:1.05rem;margin:1.2rem 0 .3rem}
 .total{font-size:1.6rem;font-weight:700;margin:.2rem 0}
 li{margin:.45rem 0}
-form{margin-top:1.2rem}"""
+form{margin-top:1.2rem}
+ul.checked{list-style:none;padding-left:0}
+.mark{display:inline-block;width:1.3rem;font-weight:700}
+li.no .mark{color:#a33}
+.look{border-left:3px solid #c90;padding:.2rem .7rem}"""
 
 
 def render(
@@ -281,15 +465,35 @@ def render(
     approve: dict[str, str] | None,
     nonce: str,
     when: str = "this month",
+    card: dict | None = None,
 ) -> str:
-    """One person's month, every word escaped here."""
+    """One person's month, every word escaped here. ``card``: the month's
+    review card, whose rules' check the page says back (None: not sent)."""
+    w = _words()
     body = [f"<h1>{escape(title)}</h1>"]
     body.append(f"<p>Where it stands: <b>{escape(str(person.get('review', '')))}</b></p>")
+    alone = without_you(card, when)
+    if alone:
+        body.append(f'<p class="alone">{escape(alone)}</p>')
     lines, drives, bank = person.get("lines", []), person.get("drives", []), person.get("bank", [])
     if person.get("empty") or not (lines or drives or bank):
         body.append(f"<p>Nothing in {escape(when)} yet.</p>")
     else:
+        who = first_name(str(person.get("person", "")))
+        body.append(f"<p>{escape(w['owed'].replace('{who}', who))}</p>")
         body.append(f'<p class="total">{_dollars(person.get("total", "0"))}</p>')
+        body.append(f'<p class="note">{escape(counts(person))}</p>')
+        said = "".join(
+            f'<li class="{mark}"><span class="mark" aria-hidden="true">{_MARKS[mark]}</span> '
+            f"{escape(words)}</li>"
+            for mark, words in checks(person, card)
+        )
+        body.append(f'<h2>{escape(w["heading"])}</h2><ul class="checked">{said}</ul>')
+        look = worth_a_look(person)
+        if look:
+            body.append(
+                f'<div class="look"><h2>{escape(w["look"])}</h2><p>{escape(look)}</p></div>'
+            )
         waiting = person.get("waiting_on_a_rate", 0) + person.get("bank_waiting", 0)
         if waiting:
             body.append(f'<p class="note">{waiting} still waiting, so not in the total yet.</p>')
@@ -310,21 +514,20 @@ def render(
         )
         body.append(
             f'<form method=post action="{APPROVE_PATH}">{fields}'
-            "<button>Approve with Face ID or fingerprint</button></form>"
+            f"<button>{escape(w['approve'].replace('{month}', _month_name(when)))}</button></form>"
             '<p class="note">Next, your phone asks for your Face ID, so it\'s you saying yes.</p>'
         )
     return _shell(title, "".join(body), ministry, nonce)
 
 
+def _month_name(when: str) -> str:
+    """ "October 2026" reads "October"."""
+    head, _, year = when.rpartition(" ")
+    return head if year.isdigit() and head else when
+
+
 def _shell(title: str, body: str, ministry: str, nonce: str) -> str:
-    who = f'<span class="who">for {escape(ministry)}</span>' if ministry else ""
-    return (
-        "<!doctype html><html lang=en><head><meta charset=utf-8>"
-        '<meta name=viewport content="width=device-width,initial-scale=1">'
-        f'<title>{escape(title)}</title><style nonce="{escape(nonce)}">{_STYLE}{_MORE}</style>'
-        f'</head><body><div class="wrap"><header class="top">{_MARK}<span><b>Tim</b>{who}'
-        f"</span></header><main>{body}</main></div></body></html>"
-    )
+    return shell(title, body, nonce, ministry=ministry, more=_MORE)
 
 
 __all__ = [
@@ -333,8 +536,12 @@ __all__ = [
     "PATHS",
     "SHOW_PATH",
     "MonthPage",
+    "all_words",
+    "checks",
+    "counts",
     "answer",
     "page_for",
     "csp",
     "render",
+    "worth_a_look",
 ]

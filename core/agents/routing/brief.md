@@ -25,11 +25,17 @@ The clock behind every card on a route (docs/tenant-kit-design.md, section 3,
   day that a yes is waiting (`waiting`, naming nothing). On Fridays, a
   person with a drive in the last seven days that nobody has said what it
   was for hears once that day (`drives_week`, naming nothing, never a place
-  or a count of miles). Each is a
+  or a count of miles). Once the newest month with month cards closes
+  (each person's newest card for it approved), everyone who looks over every
+  month hears once that its board pack is attached (`board_pack`, naming the
+  month; t-pack-by-email, the owner 2026-11-12). Only the newest month, so
+  turning it on never mails a backlog. Each is a
   `route.notice` event (id, to, kind, about, month, day): never a figure or
   what a card is. `engine notices <tenant>` prints the last week's as JSON
-  lines; the doorkeeper's `send-notices` words each one and sends it once to
-  the address on the roster.
+  lines (with `--packs <dir>`, first writing each named month's board pack
+  there as `board-pack-YYYY-MM.pdf`, only when it balances and agrees with
+  the books); the doorkeeper's `send-notices` words each one and sends it
+  once to the address on the roster, the pack's PDF attached.
 - **delegate** / **revoke**: record a dated delegation (`route.delegated`) or
   its end (`route.revoked`). Called by `engine queue delegate|revoke`, which
   checks that a person at a terminal is giving away a role they hold

@@ -1,0 +1,287 @@
+{
+  "job": "statement_read",
+  "model_id": "default",
+  "adapter": "claude_agent_sdk",
+  "tier": "seat",
+  "seeded": false,
+  "ran_at": "2026-11-18T05:28:10.480015+00:00",
+  "engine_commit": "4d8345b286e2c4c2afee9b6148e0ee1f1be5a711",
+  "provider_models": [
+    "claude-opus-5"
+  ],
+  "cases": 5,
+  "passed": 5,
+  "failed": 0,
+  "summary": "statement_read: 5 of 5 cases passed on model 'default' (adapter claude_agent_sdk, tier seat)",
+  "results": [
+    {
+      "case": "lantern_august_two_pages",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "closing_balance",
+          "expected": "4385.51",
+          "actual": "4385.51",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "bank_statement",
+          "actual": "bank_statement",
+          "passed": true
+        },
+        {
+          "field": "lines",
+          "expected": "[{\"amount\": \"250.00\", \"day\": \"2026-08-01\"}, {\"amount\": \"-450.00\", \"day\": \"2026-08-03\"}, {\"amount\": \"-500.00\", \"day\": \"2026-08-05\"}, {\"amount\": \"-41.26\", \"day\": \"2026-08-07\"}, {\"amount\": \"1200.00\", \"day\": \"2026-08-10\"}, {\"amount\": \"-36.88\", \"day\": \"2026-08-12\"}, {\"amount\": \"100.00\", \"day\": \"2026-08-15\"}, {\"amount\": \"-275.00\", \"day\": \"2026-08-18\"}, {\"amount\": \"-1204.50\", \"day\": \"2026-08-20\"}, {\"amount\": \"250.00\", \"day\": \"2026-08-24\"}, {\"amount\": \"-14.85\", \"day\": \"2026-08-27\"}, {\"amount\": \"-12.00\", \"day\": \"2026-08-31\"}]",
+          "actual": "[{\"amount\": \"250.00\", \"day\": \"2026-08-01\", \"words\": \"ONLINE GIFT HOLLIS FAMILY\"}, {\"amount\": \"-450.00\", \"day\": \"2026-08-03\", \"words\": \"CHECK 1731\"}, {\"amount\": \"-500.00\", \"day\": \"2026-08-05\", \"words\": \"INTL WIRE TO NEPAL\"}, {\"amount\": \"-41.26\", \"day\": \"2026-08-07\", \"words\": \"CORNER FUEL DAYTON OH\"}, {\"amount\": \"1200.00\", \"day\": \"2026-08-10\", \"words\": \"DEPOSIT STONEBRIDGE CHURCH\"}, {\"amount\": \"-36.88\", \"day\": \"2026-08-12\", \"words\": \"PAPER & INK SUPPLY\"}, {\"amount\": \"100.00\", \"day\": \"2026-08-15\", \"words\": \"ONLINE GIFT T NGUYEN\"}, {\"amount\": \"-275.00\", \"day\": \"2026-08-18\", \"words\": \"CHECK 1732\"}, {\"amount\": \"-1204.50\", \"day\": \"2026-08-20\", \"words\": \"PEACEFUL HILL LODGE\"}, {\"amount\": \"250.00\", \"day\": \"2026-08-24\", \"words\": \"ONLINE GIFT HOLLIS FAMILY\"}, {\"amount\": \"-14.85\", \"day\": \"2026-08-27\", \"words\": \"POST OFFICE 3812\"}, {\"amount\": \"-12.00\", \"day\": \"2026-08-31\", \"words\": \"MONTHLY SERVICE FEE\"}]",
+          "passed": true
+        },
+        {
+          "field": "opening_balance",
+          "expected": "5120.00",
+          "actual": "5120.00",
+          "passed": true
+        },
+        {
+          "field": "period_end",
+          "expected": "2026-08-31",
+          "actual": "2026-08-31",
+          "passed": true
+        },
+        {
+          "field": "period_start",
+          "expected": "2026-08-01",
+          "actual": "2026-08-01",
+          "passed": true
+        },
+        {
+          "field": "total_in",
+          "expected": "1800.00",
+          "actual": "1800.00",
+          "passed": true
+        },
+        {
+          "field": "total_out",
+          "expected": "2534.49",
+          "actual": "2534.49",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "lantern_june_does_not_add_up",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "closing_balance",
+          "expected": "1047.80",
+          "actual": "1047.80",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "bank_statement",
+          "actual": "bank_statement",
+          "passed": true
+        },
+        {
+          "field": "lines",
+          "expected": "[{\"amount\": \"100.00\", \"day\": \"2026-06-02\"}, {\"amount\": \"-250.00\", \"day\": \"2026-06-09\"}, {\"amount\": \"-63.20\", \"day\": \"2026-06-16\"}, {\"amount\": \"400.00\", \"day\": \"2026-06-23\"}, {\"amount\": \"-12.00\", \"day\": \"2026-06-30\"}]",
+          "actual": "[{\"amount\": \"100.00\", \"day\": \"2026-06-02\", \"words\": \"ONLINE GIFT R DAVIS\"}, {\"amount\": \"-250.00\", \"day\": \"2026-06-09\", \"words\": \"CHECK 1019\"}, {\"amount\": \"-63.20\", \"day\": \"2026-06-16\", \"words\": \"CORNER FRESH MARKET\"}, {\"amount\": \"400.00\", \"day\": \"2026-06-23\", \"words\": \"DEPOSIT FOXGLOVE CHAPEL\"}, {\"amount\": \"-12.00\", \"day\": \"2026-06-30\", \"words\": \"SERVICE FEE\"}]",
+          "passed": true
+        },
+        {
+          "field": "opening_balance",
+          "expected": "900.00",
+          "actual": "900.00",
+          "passed": true
+        },
+        {
+          "field": "period_end",
+          "expected": "2026-06-30",
+          "actual": "2026-06-30",
+          "passed": true
+        },
+        {
+          "field": "period_start",
+          "expected": "2026-06-01",
+          "actual": "2026-06-01",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "lantern_october",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "closing_balance",
+          "expected": "3514.79",
+          "actual": "3514.79",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "bank_statement",
+          "actual": "bank_statement",
+          "passed": true
+        },
+        {
+          "field": "lines",
+          "expected": "[{\"amount\": \"150.00\", \"day\": \"2026-10-01\"}, {\"amount\": \"-320.00\", \"day\": \"2026-10-03\"}, {\"amount\": \"-48.17\", \"day\": \"2026-10-06\"}, {\"amount\": \"1800.00\", \"day\": \"2026-10-09\"}, {\"amount\": \"-600.00\", \"day\": \"2026-10-14\"}, {\"amount\": \"-73.40\", \"day\": \"2026-10-17\"}, {\"amount\": \"200.00\", \"day\": \"2026-10-22\"}, {\"amount\": \"-12.00\", \"day\": \"2026-10-28\"}]",
+          "actual": "[{\"amount\": \"150.00\", \"day\": \"2026-10-01\", \"words\": \"ONLINE GIFT M HOLLIS\"}, {\"amount\": \"-320.00\", \"day\": \"2026-10-03\", \"words\": \"CHECK 1742\"}, {\"amount\": \"-48.17\", \"day\": \"2026-10-06\", \"words\": \"PRAIRIE GAS #22 SALINA KS\"}, {\"amount\": \"1800.00\", \"day\": \"2026-10-09\", \"words\": \"DEPOSIT CEDAR HOLLOW CHURCH\"}, {\"amount\": \"-600.00\", \"day\": \"2026-10-14\", \"words\": \"ONLINE TRANSFER TO SAVINGS\"}, {\"amount\": \"-73.40\", \"day\": \"2026-10-17\", \"words\": \"PAPER & INK SUPPLY\"}, {\"amount\": \"200.00\", \"day\": \"2026-10-22\", \"words\": \"ONLINE GIFT J ARNOLD\"}, {\"amount\": \"-12.00\", \"day\": \"2026-10-28\", \"words\": \"MONTHLY SERVICE FEE\"}]",
+          "passed": true
+        },
+        {
+          "field": "opening_balance",
+          "expected": "2418.36",
+          "actual": "2418.36",
+          "passed": true
+        },
+        {
+          "field": "period_end",
+          "expected": "2026-10-31",
+          "actual": "2026-10-31",
+          "passed": true
+        },
+        {
+          "field": "period_start",
+          "expected": "2026-10-01",
+          "actual": "2026-10-01",
+          "passed": true
+        },
+        {
+          "field": "total_in",
+          "expected": "2150.00",
+          "actual": "2150.00",
+          "passed": true
+        },
+        {
+          "field": "total_out",
+          "expected": "1053.57",
+          "actual": "1053.57",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "tidewater_july_tilted",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "closing_balance",
+          "expected": "1652.30",
+          "actual": "1652.30",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "bank_statement",
+          "actual": "bank_statement",
+          "passed": true
+        },
+        {
+          "field": "lines",
+          "expected": "[{\"amount\": \"650.00\", \"day\": \"2026-07-01\"}, {\"amount\": \"-42.70\", \"day\": \"2026-07-08\"}, {\"amount\": \"-25.00\", \"day\": \"2026-07-12\"}, {\"amount\": \"-1000.00\", \"day\": \"2026-07-20\"}, {\"amount\": \"120.00\", \"day\": \"2026-07-29\"}]",
+          "actual": "[{\"amount\": \"650.00\", \"day\": \"2026-07-01\", \"words\": \"DEPOSIT WILLOW RUN\"}, {\"amount\": \"-42.70\", \"day\": \"2026-07-08\", \"words\": \"MAMA GRACE GROCERS\"}, {\"amount\": \"-25.00\", \"day\": \"2026-07-12\", \"words\": \"WIRE FEE\"}, {\"amount\": \"-1000.00\", \"day\": \"2026-07-20\", \"words\": \"WIRE TO NAKURU PARTNER\"}, {\"amount\": \"120.00\", \"day\": \"2026-07-29\", \"words\": \"ONLINE GIFT P OKAFOR\"}]",
+          "passed": true
+        },
+        {
+          "field": "opening_balance",
+          "expected": "1950.00",
+          "actual": "1950.00",
+          "passed": true
+        },
+        {
+          "field": "period_end",
+          "expected": "2026-07-31",
+          "actual": "2026-07-31",
+          "passed": true
+        },
+        {
+          "field": "period_start",
+          "expected": "2026-07-01",
+          "actual": "2026-07-01",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "case": "tidewater_september",
+      "passed": true,
+      "error": "",
+      "checks": [
+        {
+          "field": "closing_balance",
+          "expected": "1107.97",
+          "actual": "1107.97",
+          "passed": true
+        },
+        {
+          "field": "currency",
+          "expected": "USD",
+          "actual": "USD",
+          "passed": true
+        },
+        {
+          "field": "doc_type",
+          "expected": "bank_statement",
+          "actual": "bank_statement",
+          "passed": true
+        },
+        {
+          "field": "lines",
+          "expected": "[{\"amount\": \"500.00\", \"day\": \"2026-09-02\"}, {\"amount\": \"-64.38\", \"day\": \"2026-09-04\"}, {\"amount\": \"-100.00\", \"day\": \"2026-09-11\"}, {\"amount\": \"-85.12\", \"day\": \"2026-09-15\"}, {\"amount\": \"75.00\", \"day\": \"2026-09-19\"}, {\"amount\": \"-29.99\", \"day\": \"2026-09-25\"}, {\"amount\": \"0.41\", \"day\": \"2026-09-30\"}]",
+          "actual": "[{\"amount\": \"500.00\", \"day\": \"2026-09-02\", \"words\": \"ACH DEP MILLBROOK CHAPEL\"}, {\"amount\": \"-64.38\", \"day\": \"2026-09-04\", \"words\": \"CORNER FRESH MARKET\"}, {\"amount\": \"-100.00\", \"day\": \"2026-09-11\", \"words\": \"ATM WITHDRAWAL 2140 MAIN\"}, {\"amount\": \"-85.12\", \"day\": \"2026-09-15\", \"words\": \"BLUEWAVE MOBILE\"}, {\"amount\": \"75.00\", \"day\": \"2026-09-19\", \"words\": \"MOBILE DEPOSIT\"}, {\"amount\": \"-29.99\", \"day\": \"2026-09-25\", \"words\": \"RIVERSIDE BOOKS\"}, {\"amount\": \"0.41\", \"day\": \"2026-09-30\", \"words\": \"DIVIDEND\"}]",
+          "passed": true
+        },
+        {
+          "field": "opening_balance",
+          "expected": "812.05",
+          "actual": "812.05",
+          "passed": true
+        },
+        {
+          "field": "period_end",
+          "expected": "2026-09-30",
+          "actual": "2026-09-30",
+          "passed": true
+        },
+        {
+          "field": "period_start",
+          "expected": "2026-09-01",
+          "actual": "2026-09-01",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

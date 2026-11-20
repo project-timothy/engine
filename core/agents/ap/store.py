@@ -227,9 +227,29 @@ def engine_authored_qbo_ids(ledger: Ledger, tenant: str) -> set[str]:
     ids = set()
     for row in rows:
         for value in (row["qbo_bill_id"], row["qbo_payment_id"]):
-            if value:
-                ids.add(str(value))
+            # A row paid with several checks carries one payment id per check,
+            # comma-joined (issue #688, ``add_qbo_payment_id``).
+            ids.update(v for v in str(value or "").split(",") if v)
     return ids
+
+
+def add_qbo_payment_id(ledger: Ledger, *, invoice_id: int, payment_id: str) -> None:
+    """Add one engine-created payment id to a row paid with several checks
+    (issue #688): the ids are comma-joined, each kept once, in write order.
+    A row paid with one check never reaches here (``record_qbo_ids``)."""
+    row = ledger.conn.execute(
+        "SELECT qbo_payment_id FROM ap_invoices WHERE id = ?", (invoice_id,)
+    ).fetchone()
+    if row is None:
+        raise LookupError(f"no ap_invoices row with id {invoice_id}")
+    ids = [v for v in str(row["qbo_payment_id"] or "").split(",") if v]
+    if payment_id in ids:
+        return
+    ledger.conn.execute(
+        "UPDATE ap_invoices SET qbo_payment_id = ?, updated_at = ? WHERE id = ?",
+        (",".join([*ids, payment_id]), _now(), invoice_id),
+    )
+    ledger.conn.commit()
 
 
 def append_note_once(ledger: Ledger, *, invoice_id: int, note: str) -> bool:

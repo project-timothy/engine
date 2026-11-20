@@ -1,0 +1,15 @@
+# What the catch-up page says when Tim reads a bank statement's photo or PDF
+# (core/tools/statement_read.py, Standalone Tim card R2). Code picks the line
+# and fills each {name} from what it checked; these are only the words. A
+# test fails on an em dash or a machinery word here.
+
+[words]
+# The lines add up to the balances the statement prints: what it reads, for her tap.
+reads = "Your statement reads {lines}, {start} to {end}, starting at {opening} and ending at {closing}. The lines add up to both. Keep them?"
+keep = "Keep them"
+no = "No"
+# After her tap.
+not_kept = "All right. I didn't keep any of it."
+gone = "That question has already closed. Questions close once answered, or after 15 minutes, to keep your books safe. If you haven't kept the statement yet, send it again, and I'll read it again."
+# The lines don't add up, or Tim couldn't read them: nothing is kept.
+csv = "I couldn't make that statement's lines add up to the balances it prints, so I didn't keep any of it. Send the CSV file your bank's website exports instead: look for Download or Export beside your account's transactions."

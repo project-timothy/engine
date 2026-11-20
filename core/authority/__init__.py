@@ -11,7 +11,9 @@ Two layers, in this order:
    external sends happen only through a card (invariant 7); no agent releases
    money while ``[money].out`` is ``"human"`` (the only value the engine
    accepts); no agent confirms an authority change; an agent that reads
-   outside documents never proposes one; and every authority decision carries
+   outside documents never proposes one; nobody decides a card that covers
+   them, such as adopting the plan for their own cash; and every authority
+   decision carries
    ``record=True`` so the caller writes it down.
 2. **Grants and safeguards**, in data. Default deny, a forbid always wins,
    ``own`` scopes stop sideways movement, limits cap amounts, and nobody
@@ -50,12 +52,15 @@ RESOURCES = (
     "books",
     "calendar",
     "card",
+    "people",
 )
 """What it is done to. ``authority`` is this policy itself; ``vendor`` is a
 new vendor or a vendor's tax facts (the new-vendor door); ``books`` is a
 write to the accounting system or the month's lock; ``calendar`` is a write
 to someone's calendar; ``card`` is a card type no agent has described, which
-only ``approve:*`` or ``approve:card`` decides."""
+only ``approve:*`` or ``approve:card`` decides; ``people`` is who someone is
+and who looks after them, never their money (member care at a sending agency
+views ``people`` and ``calendar`` in their care and nothing else, chunk 9)."""
 
 SCOPES = ("any", "own")
 """``any``: every project, fund or unit. ``own``: only the ones the
@@ -66,11 +71,13 @@ REVIEW_AFTER = ("none", "monthly")
 DISTINCT_PAYER = ("off", "above_limit", "always")
 AUTHORITY_CONFIRM = ("self", "second_person", "group")
 REPORT_SELF_APPROVALS = ("never", "above_limit", "always")
+LOG_READS = ("never", "always")
 
 MONEY_OUT = ("human",)
 
 _PERMISSION = re.compile(
     r"^(?P<action>\*|[a-z]+):(?P<resource>\*|[a-z][a-z.]*)"
+    r"(?:#(?P<kind>[a-z][a-z_]*))?"
     r"(?:@(?P<scope>[a-z]+))?(?:<=(?P<limit>\d+(?:\.\d{1,2})?))?$"
 )
 
@@ -82,17 +89,24 @@ class Permission:
     scope: str = "any"
     limit: Decimal | None = None
     text: str = ""
+    kind: str = ""
+    """One kind of card on the resource (``approve:expense.report#month``: a
+    month's review and nothing else, board c48); empty: every card on it."""
 
-    def matches(self, action: str, resource: str) -> bool:
-        return self.action in ("*", action) and self.resource in ("*", resource)
+    def matches(self, action: str, resource: str, kind: str = "") -> bool:
+        return (
+            self.action in ("*", action)
+            and self.resource in ("*", resource)
+            and self.kind in ("", kind)
+        )
 
 
 def parse_permission(text: str) -> Permission:
-    """``action:resource[@scope][<=limit]``, for example
-    ``approve:expense.report@own<=500``."""
+    """``action:resource[#kind][@scope][<=limit]``, for example
+    ``approve:expense.report@own<=500`` or ``approve:expense.report#month``."""
     match = _PERMISSION.match(text.strip())
     if not match:
-        raise AuthorityError(f"{text!r} is not action:resource[@scope][<=limit]")
+        raise AuthorityError(f"{text!r} is not action:resource[#kind][@scope][<=limit]")
     action, resource = match["action"], match["resource"]
     scope = match["scope"] or "any"
     if action != "*" and action not in ACTIONS:
@@ -102,7 +116,7 @@ def parse_permission(text: str) -> Permission:
     if scope not in SCOPES:
         raise AuthorityError(f"{text!r}: scope must be one of {', '.join(SCOPES)}")
     limit = Decimal(match["limit"]) if match["limit"] else None
-    return Permission(action, resource, scope, limit, text.strip())
+    return Permission(action, resource, scope, limit, text.strip(), match["kind"] or "")
 
 
 @dataclass(frozen=True)
@@ -120,6 +134,12 @@ class Principal:
     reads_outside: bool = False
     lanes: tuple[str, ...] = ()
     backup: str = ""  # a person's named backup, for "covering for" (#436)
+    full_name: str = ""
+    """The person's name as their cards carry it ("Sam Staffer" for id
+    ``sam``); empty: their id is the slug of their name (review 2026-11-10)."""
+    family: tuple[str, ...] = ()
+    """The people in the file who are this person's family, as their entry
+    names them (c34): they abstain from a pay card that covers this person."""
 
 
 @dataclass(frozen=True)
@@ -139,6 +159,12 @@ class Safeguards:
     """A person's yes said to their own AI through the box's door decides a
     money card up to this much, with no Face ID (the owner's decision of
     2026-10-11). 0: every yes through the door takes Face ID."""
+    log_reads: str = "never"
+    """``always``: every read through the door is written down, who asked,
+    which tool, and whose rows reached them (core/tools/catalog.py, chunk 9).
+    The one default that is not the strictest: a log is a record, not a
+    control, and a ministry that has not asked for one keeps its door
+    exactly as it was."""
 
 
 @dataclass(frozen=True)
@@ -162,6 +188,34 @@ class Policy:
 
     def principal(self, name: str) -> Principal | None:
         return self.people.get(name) or self.agents.get(name)
+
+    def person_named(self, text: str) -> str | None:
+        """The id of the person ``text`` names: their id, or the name their
+        entry carries; None when it names nobody in [people]."""
+        said = _slug(text)
+        return next(
+            (
+                p.name
+                for p in self.people.values()
+                if said and said in (p.name, _slug(p.full_name) if p.full_name else p.name)
+            ),
+            None,
+        )
+
+    def family_of(self, name: str) -> set[str]:
+        """Everyone in [people] who is ``name``'s family, whichever of the
+        two entries says so."""
+        me = self.people.get(name)
+        said = set(me.family) if me else set()
+        return said | {p.name for p in self.people.values() if name in p.family}
+
+    def display(self, name: str) -> str:
+        """How a person is named in plain words: the name their entry
+        carries, or their id read as a name ("ruth-hollis" is Ruth Hollis)."""
+        me = self.people.get(name)
+        if me is not None and me.full_name:
+            return me.full_name
+        return " ".join(w.capitalize() for w in name.split("-"))
 
     def agent_for_lane(self, lane: str) -> Principal | None:
         """The agent principal an engine lane (``core/agents/<lane>``) runs
@@ -206,6 +260,18 @@ class Request:
     approver: str = ""
     proposer: str = ""
     via_card: bool = False
+    role: str = ""  # the role a ministry's rule names to decide this (core/policy)
+    kind: str = ""
+    """The kind of card it is, as a grant can name it (``CardRule.kind``)."""
+    covered: tuple[str, ...] = ()
+    """Whom the decision covers, as roles, people, or "*" (an accountable
+    plan's rules, core/policy): none of them decides it."""
+    kin_abstain: bool = False
+    """The family of each person it covers abstains too (a pay resolution,
+    c34): a director with no family tie decides it."""
+    submitter_unknown: bool = False
+    """The card names a person who matches nobody in [people]: it may be the
+    decider's own unless the decider's entry says their name (2026-11-10)."""
 
 
 @dataclass(frozen=True)
@@ -275,6 +341,7 @@ def parse_policy(data: dict) -> Policy:
         authority_confirm=_choice(sg, "authority_confirm", AUTHORITY_CONFIRM, "second_person"),
         report_self_approvals=_choice(sg, "report_self_approvals", REPORT_SELF_APPROVALS, "always"),
         yes_by_word_up_to=_amount(sg, "yes_by_word_up_to"),
+        log_reads=_choice(sg, "log_reads", LOG_READS, "never"),
     )
     roles = {
         name: Role(
@@ -291,6 +358,8 @@ def parse_policy(data: dict) -> Policy:
             tuple(table.get("roles", [])),
             tuple(table.get("scopes", [])),
             backup=str(table.get("backup", "")),
+            full_name=_full_name(name, table.get("name", "")),
+            family=_family(name, table.get("family", [])),
         )
         _check_roles(name, person.roles, roles)
         people[name] = person
@@ -324,12 +393,29 @@ def parse_policy(data: dict) -> Policy:
     for person in people.values():
         if person.backup and (person.backup not in people or person.backup == person.name):
             raise AuthorityError(f"[people.{person.name}] backup names another person")
+        for kin in person.family:
+            if kin not in people or kin == person.name:
+                raise AuthorityError(
+                    f"[people.{person.name}] family names another person in [people], not {kin!r}"
+                )
     routing = parse_routing(
         data.get("routing", {}), roles=set(roles), people=set(people), resources=RESOURCES
     )
     door = _door(data.get("presence", {}))
     vouch = _vouch(data.get("vouch", {}), people)
     return Policy(str(money["out"]), safeguards, roles, people, agents, routing, door, vouch)
+
+
+def _family(person: str, raw: object) -> tuple[str, ...]:
+    if not isinstance(raw, list) or not all(isinstance(x, str) for x in raw):
+        raise AuthorityError(f"[people.{person}] family is a list of people's ids")
+    return tuple(raw)
+
+
+def _full_name(person: str, raw: object) -> str:
+    if not isinstance(raw, str):
+        raise AuthorityError(f"[people.{person}] name is the person's name, in words")
+    return raw.strip()
 
 
 def _vouch(table: object, people: dict) -> dict[str, str]:
@@ -389,6 +475,16 @@ def _floor(policy: Policy, who: Principal, req: Request) -> str:
             return "the person who proposed an authority change does not confirm it"
     if req.resource == "authority" and req.action == "propose" and agent and who.reads_outside:
         return "an agent that reads outside documents never proposes an authority change"
+    covered = set(req.covered)
+    if covered and ("*" in covered or who.name in covered or covered & set(who.roles)):
+        return f"this covers {who.name}, so someone it does not cover decides it"
+    if req.kin_abstain:
+        kin = sorted(c for c in covered if who.name in policy.family_of(c))
+        if kin:
+            return (
+                f"{policy.display(who.name)} is family of {policy.display(kin[0])}, so a "
+                "director with no family tie decides it"
+            )
     return ""
 
 
@@ -402,11 +498,18 @@ def _safeguards(sg: Safeguards, who: Principal, req: Request) -> Decision | str:
     decision carries."""
     review_after = report = needs_second = False
     if req.action == "approve":
-        if who.name in (req.submitter, req.payee):
+        maybe = req.submitter_unknown and not who.full_name and who.kind == "person"
+        if who.name in (req.submitter, req.payee) or maybe:
+            why = (
+                " (this card's person matches nobody in the people list, so it may be "
+                f"{who.name}'s own: give each person's entry their name, name = \"...\")"
+                if maybe and who.name not in (req.submitter, req.payee)
+                else ""
+            )
             if sg.self_approval == "never":
-                return "this tenant does not let anyone approve their own"
+                return "this tenant does not let anyone approve their own" + why
             if sg.self_approval == "below_limit" and _unknown(req.amount, sg.self_approval_limit):
-                return f"approving your own is allowed only below {sg.self_approval_limit}"
+                return f"approving your own is allowed only below {sg.self_approval_limit}" + why
             review_after = sg.review_after == "monthly"
             report = sg.report_self_approvals == "always" or (
                 sg.report_self_approvals == "above_limit"
@@ -442,12 +545,34 @@ def evaluate(policy: Policy, req: Request) -> Decision:
     if refused:
         return deny(refused)
     for forbid in policy.forbids_of(who):
-        if forbid.matches(req.action, req.resource) and _in_scope(forbid, who, req.scope):
+        if forbid.matches(req.action, req.resource, req.kind) and _in_scope(forbid, who, req.scope):
             return deny(f"forbid {forbid.text!r} wins")
+    if req.role:
+        # A rule a person said yes to names who gives this OK (core/policy):
+        # holding that role is the grant, and only it is. Its one OK is what
+        # the rule asks for, so no second approver is added on top; the
+        # self-approval safeguards still hold.
+        if req.role not in who.roles:
+            return deny(f"only the {req.role} gives this OK, by the ministry's own rule")
+        if not any(
+            g.resource in ("*", req.resource)
+            and g.kind in ("", req.kind)
+            and _in_scope(g, who, req.scope)
+            for g in policy.grants_of(who)
+        ):
+            # A role's OK reaches only the people its holder's grants reach:
+            # in an agency with several team leaders, each OKs only for the
+            # people they look after (chunk 8, found by the first agency pack).
+            return deny(f"the {req.role} gives this OK only for the people they look after")
+        named = _safeguards(policy.safeguards, who, req)
+        if isinstance(named, str):
+            return deny(named)
+        reason = f"the ministry's rule names the {req.role}"
+        return replace(named, reason=reason, needs_second=False, record=record)
     granted = [
         g
         for g in policy.grants_of(who)
-        if g.matches(req.action, req.resource)
+        if g.matches(req.action, req.resource, req.kind)
         and _in_scope(g, who, req.scope)
         and _within_limit(g, req.amount)
     ]
@@ -469,7 +594,10 @@ class CardRule:
     the money the decision commits (``cents`` when it is whole cents);
     ``money=False`` says the card commits none. ``submitter`` names the
     param holding the person the card is about, for the self-approval
-    safeguards."""
+    safeguards. ``role`` names the param holding the role a ministry's rule
+    says decides the card; where it is empty, the grants decide as always.
+    ``covers`` names the param listing whom the decision covers (roles,
+    people, or "*", comma-separated); the floor refuses each of them."""
 
     action: str
     resource: str
@@ -477,6 +605,15 @@ class CardRule:
     cents: bool = False
     money: bool = True
     submitter: str = ""
+    role: str = ""
+    covers: str = ""
+    kin: str = ""
+    """The param that, when "yes", has the family of whom it covers abstain
+    too (a pay resolution's card, c34)."""
+    kind: str = ""
+    """A short name a grant can give this one card type (``month``: a
+    grant ``approve:expense.report#month`` decides it and no other card on
+    the resource, board c48)."""
 
 
 UNDESCRIBED = CardRule("approve", "card")
@@ -519,13 +656,17 @@ def card_month(params: dict) -> str:
         return ""
 
 
-def card_request(rule: CardRule, principal: str, params: dict) -> Request:
+def card_request(rule: CardRule, principal: str, params: dict, policy: Policy) -> Request:
     """The request deciding a card is evaluated as. Deciding happens on a
     card, so ``via_card`` is always true; a submitter is matched to people
-    by their id (the slug of their name), and the card is decided in that
-    person's unit, the unit it is seen in (core/tools/catalog), so an
-    ``@own`` approver decides the cards of the people they look after."""
-    submitter = _slug(str(params.get(rule.submitter, ""))) if rule.submitter else ""
+    by their id or the name their entry carries (review 2026-11-10), and the
+    card is decided in that person's unit, the unit it is seen in
+    (core/tools/catalog), so an ``@own`` approver decides the cards of the
+    people they look after. A person who matches nobody is marked, so the
+    self-approval safeguard fails closed."""
+    said = str(params.get(rule.submitter, "")) if rule.submitter else ""
+    found = policy.person_named(said) if said else None
+    submitter = found or _slug(said)
     return Request(
         principal,
         rule.action,
@@ -534,7 +675,16 @@ def card_request(rule: CardRule, principal: str, params: dict) -> Request:
         amount=card_amount(rule, params),
         submitter=submitter,
         via_card=True,
+        role=str(params.get(rule.role, "")) if rule.role else "",
+        covered=_listed(params.get(rule.covers, "")) if rule.covers else (),
+        kin_abstain=bool(rule.kin) and str(params.get(rule.kin, "")) == "yes",
+        submitter_unknown=bool(said) and found is None,
+        kind=rule.kind,
     )
+
+
+def _listed(raw: object) -> tuple[str, ...]:
+    return tuple(w.strip() for w in str(raw or "").split(",") if w.strip())
 
 
 # ---- changing authority -----------------------------------------------------------
@@ -544,6 +694,7 @@ def _covers(held: Permission, wanted: Permission) -> bool:
     return (
         held.action in ("*", wanted.action)
         and held.resource in ("*", wanted.resource)
+        and held.kind in ("", wanted.kind)
         and (held.scope == "any" or wanted.scope == "own")
         and (held.limit is None or (wanted.limit is not None and wanted.limit <= held.limit))
     )

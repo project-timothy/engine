@@ -66,6 +66,7 @@ def test_the_new_vendor_card_says_it_is_human_only(tmp_path):
 
 
 @pytest.mark.parametrize("verb", ["approve", "reject"])
+@pytest.mark.security("SEC-08")
 def test_an_agent_shell_cannot_decide_a_human_only_card(tmp_path, capsys, at_terminal, verb):
     _seed(tmp_path)
     at_terminal(False)
@@ -109,6 +110,7 @@ def test_the_wrong_number_typed_back_decides_nothing(tmp_path, at_terminal):
     "param",
     ["human_only=false", "decided_via=terminal", "decided_via=door", "witness={}", "witness_at=x"],
 )
+@pytest.mark.security("SEC-08")
 def test_no_one_can_write_the_gate_fields_by_hand(tmp_path, at_terminal, param):
     _seed(tmp_path)
     card = _card(tmp_path, "ap.new_vendor_decision")
@@ -123,6 +125,7 @@ def test_no_one_can_write_the_gate_fields_by_hand(tmp_path, at_terminal, param):
     assert _card(tmp_path, "ap.new_vendor_decision")["status"] == "pending"
 
 
+@pytest.mark.security("SEC-08")
 def test_an_older_unstamped_card_of_the_type_is_still_human_only(tmp_path, at_terminal):
     # Cards queued before the stamp existed are gated by their action type.
     _seed(tmp_path)

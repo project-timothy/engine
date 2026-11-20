@@ -10,7 +10,7 @@ sure the act is never a surprise.
 
 Built 2026-10-04 as the first of the three missionary-shaped capabilities
 (the deadline calendar, then the weekly brief, then field books). The same
-lane serves a small business: its filings, licences and expiring
+lane serves a small business: its filings, licenses and expiring
 credentials are obligations too.
 
 ## What it does

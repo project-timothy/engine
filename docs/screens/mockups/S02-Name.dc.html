@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Name and how to reach you</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#16233F}a:hover{color:#55617A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #FAF6EE; color: #16233F; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; padding: 28px 24px 36px; display: flex; flex-direction: column">
+<svg aria-hidden="true" width="36" height="36" viewBox="0 0 1000 1000"><rect width="1000" height="1000" rx="220" fill="#16233F"/><circle cx="500" cy="485" r="315" fill="#FFFFFF"/><path d="M297.5,726.3 Q390.0,768.0 412,858 Q492.0,828.0 450.7,796.1 Z" fill="#FFFFFF"/><path d="M500,280 L500,635 C500,685 540,715 592,700" fill="none" stroke="#16233F" stroke-width="50" stroke-linecap="round"/><path d="M392,430 L608,430" fill="none" stroke="#16233F" stroke-width="50" stroke-linecap="round"/><circle cx="405" cy="895" r="50" fill="#D3A24B"/></svg>
+<h1 style="margin: 44px 0 0; font-family: 'Source Serif 4', Georgia, serif; font-weight: 600; font-size: 32px; line-height: 1.15; letter-spacing: -0.01em">What's your name, and where do I reach you?</h1>
+<div style="margin-top: 32px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="n" style="font-size: 14px; font-weight: 500; color: #55617A">Your name</label>
+<input id="n" type="text" value="Hannah Cole" style="height: 56px; box-sizing: border-box; border: 1.5px solid #D9D1BE; border-radius: 12px; background: #FFFFFF; padding: 0 16px; font-family: inherit; font-size: 18px; color: #16233F">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="e" style="font-size: 14px; font-weight: 500; color: #55617A">Email</label>
+<input id="e" type="email" value="hannah@hopesprings.example" style="height: 56px; box-sizing: border-box; border: 1.5px solid #D9D1BE; border-radius: 12px; background: #FFFFFF; padding: 0 16px; font-family: inherit; font-size: 18px; color: #16233F">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="p" style="font-size: 14px; font-weight: 500; color: #55617A">Mobile number</label>
+<input id="p" type="tel" value="+254 7XX XXX XXX" style="height: 56px; box-sizing: border-box; border: 2px solid #16233F; border-radius: 12px; background: #FFFFFF; padding: 0 16px; font-family: inherit; font-size: 18px; color: #16233F">
+</div>
+</div>
+<p style="margin: 20px 0 0; font-size: 15px; line-height: 1.5; color: #55617A">No password to make up. I'll send a link to your email, and that's how you get in.</p>
+<a href="S03-Email.dc.html" style="margin-top: auto; display: flex; align-items: center; justify-content: center; height: 58px; border-radius: 14px; background: #16233F; color: #FFFFFF; font-weight: 600; font-size: 17px; text-decoration: none">Send my link</a>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

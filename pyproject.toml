@@ -11,8 +11,9 @@ dependencies = [
     "openai==2.44.0",
     "openpyxl==3.1.5",
     "pydantic==2.13.5",
-    "pypdf==6.19.0",
+    "pypdf==6.21.4",
     "pypdfium2==5.13.0",
+    "segno==1.6.6",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,13 @@ build-backend = "hatchling.build"
 # auditor/ is a separate top-level package: an independent application that
 # imports nothing from core (enforced by auditor.evals.independence_lint).
 packages = ["core", "auditor"]
+
+[tool.uv]
+# mcp arrives through claude-agent-sdk, never imported here. Hold the 1.x line
+# (1.30.0 carries the CVE-2026-59951 fix) until the 2.x move, which adds
+# packages of its own, gets its own review; a blanket `uv lock --upgrade`
+# would otherwise take it along.
+constraint-dependencies = ["mcp>=1.30.0,<2"]
 
 [tool.ruff]
 # The vulture whitelist is machine-generated bare-name stubs by design, which
@@ -112,6 +120,7 @@ tmp_path_retention_policy = "failed"
 tmp_path_retention_count = 1
 markers = [
     "phase2: eval whose engine module lands in a later phase; skipped with fixture in place",
+    "security(*rules): proves the named rules of docs/security/charter.md (core.evals.security_charter)",
 ]
 
 [tool.mypy]
@@ -130,6 +139,8 @@ files = [
   "core/onboarding",
   "core/engine/contracts.py",
   "core/llm/gateway.py",
+  # Tim's own voice (Standalone Tim, shot 1): typed from its first day.
+  "core/talk",
   "core/adapters",
   # The plug shapes (#344): Apache-2.0, imported by the adapters above.
   "core/contracts",

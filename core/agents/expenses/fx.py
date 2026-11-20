@@ -65,6 +65,29 @@ class Rate:
         }
 
 
+@dataclass(frozen=True)
+class Drawn:
+    """A foreign amount paid from cash an ATM gave (2026-10-15): its dollars
+    are what those rupees cost, never the day's rate. ``per_usd`` is that
+    cost as a rate; ``ministry`` when the ministry's own cash paid it (it pays
+    first, the owner 2026-10-16), and ``own_cents`` the part the person's own
+    cash paid when it ran short, owed back to them."""
+
+    cents: int
+    per_usd: str
+    atm_day: str
+    ministry: bool
+    own_cents: int = 0
+
+    def source(self) -> str:
+        return f"ATM cash drawn {self.atm_day}"
+
+    def owed(self) -> int:
+        """What is owed back to the person: all of it from their own cash,
+        only their part when the ministry's cash paid the rest."""
+        return self.own_cents if self.ministry else self.cents
+
+
 def rate_key(currency: str, day: str) -> str:
     return f"fx:{currency}:{day}"
 
@@ -132,17 +155,25 @@ def needed(name: str) -> tuple[str, str] | None:
     return None if claim is None else (claim[2], claim[0])
 
 
-def priced(name: str, rates: dict[tuple[str, str], Rate]) -> dict:
+def priced(name: str, rates: dict[tuple[str, str], Rate], drawn: Drawn | None = None) -> dict:
     """A foreign door receipt's line fields from its name and the recorded
     rates: the amount as said, and either its dollar value with the rate
     that set it, or ``rate_pending``. Empty for anything else. The one place
     the dollar value of a foreign receipt is computed (the month job and the
-    reviewer's month tool both read it)."""
+    reviewer's month tool both read it). Paid from ATM cash (``drawn``), its
+    dollars are what that cash cost."""
     claim = parse_foreign_claim(name)
     if claim is None:
         return {}
     day, amount, currency = claim
     fields = {"said_amount": f"{amount:.2f}", "said_currency": currency, "fx_date": day}
+    if drawn is not None:
+        return {
+            **fields,
+            "amount_cents": drawn.cents,
+            "fx_rate": drawn.per_usd,
+            "fx_source": drawn.source(),
+        }
     rate = rates.get((currency, day))
     if rate is None:
         return {**fields, "amount_cents": None, "rate_pending": True}

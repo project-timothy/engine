@@ -289,13 +289,13 @@ def test_redropped_split_original_is_held_never_filed_whole(tmp_path):
 def _crash_after_first_split(tmp_path, monkeypatch):
     """Two scans; the run dies splitting the second, AFTER the first one's
     original moved to _originals/ (the 03-F9 shape). Returns the first scan."""
-    from core.agents.expenses import jobs as exp_jobs
+    from core.agents.expenses import job_intake
 
     first = _drop_pdf(tmp_path, "a-scan.pdf", pages=3)
     _groups_sidecar(first, GROUPS_3)
     second = _drop_pdf(tmp_path, "b-scan.pdf", pages=3, width=400)  # distinct bytes
     _groups_sidecar(second, GROUPS_3)
-    real_split = exp_jobs.split_pdf
+    real_split = job_intake.split_pdf
     calls = {"n": 0}
 
     def exploding_split(path, groups, code=None):
@@ -304,12 +304,12 @@ def _crash_after_first_split(tmp_path, monkeypatch):
             raise RuntimeError("pypdf choked on the second scan")
         return real_split(path, groups, code)
 
-    monkeypatch.setattr(exp_jobs, "split_pdf", exploding_split)
+    monkeypatch.setattr(job_intake, "split_pdf", exploding_split)
     crashed = _run("intake", tmp_path)
     assert crashed.status == "error"
     assert not first.exists()  # a-scan moved before the run died
     assert _events(tmp_path, "expense.scan_split") == []  # the event never landed
-    monkeypatch.setattr(exp_jobs, "split_pdf", real_split)
+    monkeypatch.setattr(job_intake, "split_pdf", real_split)
     return first
 
 
@@ -369,7 +369,7 @@ def test_half_moved_original_is_held_not_resplit(tmp_path, monkeypatch):
     held and the orphan is flagged; nothing is split twice."""
     import shutil
 
-    from core.agents.expenses import jobs as exp_jobs
+    from core.agents.expenses import job_intake
 
     scan = _drop_pdf(tmp_path, "combined-scan.pdf", pages=3)
     _groups_sidecar(scan, GROUPS_3)
@@ -379,13 +379,13 @@ def test_half_moved_original_is_held_not_resplit(tmp_path, monkeypatch):
         shutil.copy2(src, dst)
         raise OSError("unlink failed after the copy")
 
-    monkeypatch.setattr(exp_jobs.shutil, "move", half_move)
+    monkeypatch.setattr(job_intake.shutil, "move", half_move)
     crashed = _run("intake", tmp_path)
     assert crashed.status == "error"
     assert scan.exists()
     assert len(list((tmp_path / "drop" / "_originals").glob("*.pdf"))) == 1
 
-    monkeypatch.setattr(exp_jobs.shutil, "move", real_move)
+    monkeypatch.setattr(job_intake.shutil, "move", real_move)
     result = _run("intake", tmp_path)
 
     assert result.status == "ok"

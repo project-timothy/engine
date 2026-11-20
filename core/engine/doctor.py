@@ -478,7 +478,7 @@ def _document_checks(cfg: TenantConfig) -> list[Check]:
     allowed tier is listed with what its provider retains, and a document job
     routed to a tier off the list is MISSING, found here instead of at the
     first refused call. Imported here: ``core.llm`` reads ``core.engine``."""
-    from ..llm.policy import DOCUMENT_JOB_TYPES
+    from ..llm.policy import DOCUMENT_JOB_TYPES, NAMED_ONLY
 
     llm = cfg.llm
     if llm.document_tiers is None:
@@ -499,7 +499,7 @@ def _document_checks(cfg: TenantConfig) -> list[Check]:
     ]
     default = llm.jobs.get("default")
     for job in sorted(DOCUMENT_JOB_TYPES):
-        tier = llm.jobs.get(job, default)
+        tier = llm.jobs.get(job, None if job in NAMED_ONLY else default)
         if tier is None or tier == LLM_DETERMINISTIC or tier in llm.document_tiers:
             continue
         checks.append(

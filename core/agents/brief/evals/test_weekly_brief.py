@@ -15,6 +15,8 @@ The promises under test:
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from core.agents.ap import store
@@ -193,6 +195,57 @@ def test_a_rejected_card_sends_nothing(world):
     _decide(world, card["id"], "rejected")
     _run(world, "2026-10-06", recipients="owner@example.com")
     assert world["mailer"].sent == []
+
+
+# ---- 4b: a card that outlived its week --------------------------------------------
+#
+# A send card is looked up by ISO week, and the run sends only the card of the week
+# it is running in. So a card still pending when its week ends can never execute:
+# approving it later moves nothing. It must not stay on the queue as a question the
+# owner is asked for a month, and each new week must not add one more to the pile.
+
+
+def _superseded_events(world):
+    with Ledger.open(world["root"]) as ledger:
+        return ledger.conn.execute(
+            "SELECT payload_json FROM events WHERE event_type = 'engine.approval_superseded'"
+        ).fetchall()
+
+
+def test_an_approved_card_from_a_past_week_sends_nothing(world):
+    _run(world, "2026-10-05", recipients="owner@example.com")
+    (old,) = _cards(world, "pending")
+    _decide(world, old["id"], "approved")
+    # The answer arrives after the week is over: the run it belonged to is gone.
+    _run(world, "2026-10-12", recipients="owner@example.com")
+    assert world["mailer"].sent == [], "an old week's yes does not send the new week's page"
+
+
+def test_a_new_weeks_card_retires_every_pending_card_of_a_past_week(world):
+    for day in ("2026-10-05", "2026-10-12", "2026-10-19"):
+        _run(world, day, recipients="owner@example.com")
+    by_week = {json.loads(c["params_json"])["week"]: c["status"] for c in _cards(world)}
+    assert by_week == {
+        "2026-W41": "superseded",
+        "2026-W42": "superseded",
+        "2026-W43": "pending",
+    }, "one question stays on the table: this week's send"
+    assert len(_superseded_events(world)) == 2, "each closure is an event"
+    assert world["mailer"].sent == [], "closing a card is queue hygiene, never a send"
+
+
+def test_a_new_week_leaves_answered_cards_and_the_current_week_alone(world):
+    _run(world, "2026-10-05", recipients="owner@example.com")
+    (sent,) = _cards(world, "pending")
+    _decide(world, sent["id"], "approved")
+    _run(world, "2026-10-06", recipients="owner@example.com")
+    assert len(world["mailer"].sent) == 1
+
+    _run(world, "2026-10-12", recipients="owner@example.com")
+    _run(world, "2026-10-13", recipients="owner@example.com")  # same week: replay
+    by_week = {json.loads(c["params_json"])["week"]: c["status"] for c in _cards(world)}
+    assert by_week == {"2026-W41": "approved", "2026-W42": "pending"}
+    assert _superseded_events(world) == []
 
 
 def test_an_unattended_send_needs_no_card(world):

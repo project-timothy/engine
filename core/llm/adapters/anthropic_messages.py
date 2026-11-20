@@ -17,6 +17,12 @@ accepts a narrower JSON Schema than pydantic emits: every object must carry
 so :func:`constrained_schema` tightens the schema on the way out. Pydantic
 still enforces the bounds on the way back; nothing is lost.
 
+A bundle that asks for caching (``PromptBundle.cache``, Tim's own voice)
+sends its system text as one block marked ``cache_control``: the provider
+bills a repeat of that opening at its cache-read price, and the usage that
+comes back counts cache writes and reads apart. A system text shorter than
+the model's minimum is simply not cached; nothing fails.
+
 The API key comes from the environment variable NAMED by ``api_key_env``;
 the name is tenant config, the value never is (CLAUDE.md, secrets rule).
 """
@@ -106,6 +112,14 @@ def _messages(bundle: PromptBundle) -> list[dict[str, Any]]:
     return out
 
 
+def _system(bundle: PromptBundle) -> str | list[dict[str, Any]]:
+    """The system slot: plain text, or one cached block when the bundle asks."""
+    text = bundle.system_text()
+    if not bundle.cache:
+        return text
+    return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
+
 class AnthropicMessagesAdapter:
     name = "anthropic_messages"
 
@@ -134,7 +148,7 @@ class AnthropicMessagesAdapter:
             # No temperature: current Opus and Sonnet reject any non-default
             # value with a 400. Determinism comes from the schema and from
             # code doing every computation (invariant 2), not from sampling.
-            "system": bundle.system_text(),
+            "system": _system(bundle),
             "messages": _messages(bundle),
             "output_config": {
                 "format": {"type": "json_schema", "schema": constrained_schema(schema)}
@@ -188,6 +202,11 @@ class AnthropicMessagesAdapter:
         usage = payload.get("usage", {})
         return RawReply(
             text=text,
-            usage=Usage(int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))),
+            usage=Usage(
+                int(usage.get("input_tokens") or 0),
+                int(usage.get("output_tokens") or 0),
+                int(usage.get("cache_creation_input_tokens") or 0),
+                int(usage.get("cache_read_input_tokens") or 0),
+            ),
             model=payload.get("model"),
         )

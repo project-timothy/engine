@@ -1,0 +1,12 @@
+{
+  "name": "ugx_guesthouse_hand",
+  "note": "a hand receipt: the total, its currency, and its day read off the picture",
+  "document": "ugx_guesthouse_hand.png",
+  "text": "Gulu Guest House\n1 night, 2 rooms\nUGX 160,000\nreceived 21 Sep 2026\nOkello",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "160000.00",
+    "currency": "UGX",
+    "invoice_date": "2026-09-21"
+  }
+}

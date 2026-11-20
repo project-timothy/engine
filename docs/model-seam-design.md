@@ -151,6 +151,100 @@ flat rate. `complete_for` also takes `tier=<name>`, which pins a tier instead
 of resolving the job type (the AP extractor's `--param extractor=` aliases); a
 job the table calls `deterministic` is refused even with a tier in hand.
 
+## A caller that is not a job: `complete_metered` and Tim's own voice
+
+`complete_for(ctx, ...)` counts a job's calls on the job's own ledger
+connection, under the run lock. A conversation (`core/talk`, Standalone Tim
+shot 1) is not a job, and holding the ledger across a model call would turn
+away a receipt someone sends meanwhile. So the policy call has a second
+front, `complete_metered(settings, meter, ...)`: the tenant's `[llm]`
+settings and a `CallMeter` (this month's spend, one row per call) in place of
+a job context. `complete_for` is now that call with a meter over the job's
+connection; nothing about a job's calls changed. `core.talk.Meter` reads the
+month's spend read-only and writes each `llm_calls` row under the ledger's
+write lock taken only for the insert, so the cap is one cap for everything a
+model does for a ministry.
+
+A ministry switches Tim's voice on in its own file:
+
+```toml
+[llm.tiers]
+everyday = { adapter = "anthropic_messages", model = "<the provider's model id>", api_key_env = "TIM_AI_KEY", pricing = { input_usd_per_mtok = "<price>", output_usd_per_mtok = "<price>", cache_write_usd_per_mtok = "<price>", cache_read_usd_per_mtok = "<price>" } }
+
+[llm.jobs]
+talk = "everyday"
+```
+
+With no tier named for `talk`, Tim says his voice isn't on and no call is
+made. The same holds for a tier on the `claude_agent_sdk` adapter, at either
+speed (`speeds.AGENT_ADAPTERS`, issue #681): the owner's Claude seat answers
+each call as a whole agent session with tools of its own, and in the first
+live trial (2026-11-18) it looked for Tim's tools there and told the person
+her books weren't connected. Tim's voice needs a tier that returns one plain
+reply, such as `anthropic_messages`, and its model needs green results on
+the `talk` eval set (below, "The eval gate"). The prices come from the provider's own price page on the day the tier
+is written; the two cache prices are optional, and a tier that leaves them
+out is charged the full input price for cached tokens, so a budget never
+assumes a discount.
+
+**Caching.** `complete(..., cache=True)` (and the same keyword on
+`complete_for` and `complete_metered`) sets `PromptBundle.cache`. The
+Anthropic adapter then sends the system text as one block marked
+`cache_control`, and reads `cache_creation_input_tokens` and
+`cache_read_input_tokens` back into `Usage`. `CallRecord.input_tokens` is
+every token that went in; `cache_write_tokens` and `cache_read_tokens` say
+how many of those were cached, and `usd` prices each kind at its own rate. A
+job that does not ask sends byte for byte what it sent before.
+
+**A scripted model for an outside harness.** `ENGINE_FIXTURE_REPLIES` names
+a file of replies, one a line, that every `fixture` tier reads in order
+(`core.llm.adapters.fixture.replies_from_file`). It is how the proving
+ground, which imports nothing from the engine, plays the model for `engine
+talk`. It reaches `fixture` tiers only.
+
+**What the model sees of earlier exchanges.** Her words as she typed them,
+then Tim's reply as `{"say": ..., "read_from": [...]}`, naming the tools
+whose answers that reply was read from (the conversation file keeps them).
+What those tools returned is not kept, and the brief says to call them
+again before repeating an amount. Without `read_from`, the first live trial
+showed the model its own true figures with no sign of where they came from,
+and it called them made up (issue #681).
+
+**Where a person talks to him.** `engine talk` is the terminal's way in. On a
+box, `/talk` (`core/tools/talk_page.py`, card T1) is her phone's: the one
+thing waiting on her on top, the last few exchanges, one box and one Send,
+each message one plain form post that runs `core.talk.reply` with the same
+tools the door builds and answers 303 back to the page. Who is asking is the
+browser the doorkeeper remembers, asked over its engine-only `/session/who`.
+
+**Two speeds and the cap (card V3).** A ministry names two tiers for Tim:
+
+```toml
+[llm.jobs]
+talk = "everyday"        # every turn, unless a rule steps it up
+talk_hard = "strong"     # a hard question
+
+[llm.budget]
+monthly_usd = 5
+soft_percent = 80        # optional; 80 when left out
+```
+
+Both job types are named-only (`policy.NAMED_ONLY`): a `default` line never
+switches Tim's voice on or picks his strong model. With `talk` alone every
+turn runs on it; with `talk_hard` alone Tim has no voice. Stepping up is
+code (`core/talk/speeds.py`, word and tool lists in `speeds.toml`), never
+the person asking and never the model: her message names taxes, the turn
+calls a tax or bank-statement tool (the rest of that turn steps up), she has
+a setup step ahead (setup's own next screen, `SetupPage.unfinished`), or she
+repeats her last message. Each call's job type is on its `llm_calls` row.
+Past the soft line (`soft_percent` of `monthly_usd`) Tim never steps up and
+says once a day that he is near his month's limit; at the cap he says his
+capped line, and the photo button, the receipt page, a Yes already waiting,
+and the month page keep working, since none of them needs a model.
+`soft_percent` is excluded from the `[llm]` dump the nightly jobs fold into
+their run keys, so it moves no job's key. `engine spend <tenant> [--json]`
+prints the month's spend by job type with the cap and the soft line.
+
 ## Telemetry: `CallRecord`
 
 Every successful call returns one record, summed over its attempts:
@@ -333,6 +427,42 @@ which joined them in row 7.13b once 7.11 landed the grouper's reply contract;
 `audit_triage` is a runner lane with no single reply schema. That is every
 `complete_for` site in the engine.
 
+`receipt_read` (Standalone Tim card R1, below) is the first set of PICTURES:
+40 made-up receipt photos (foreign money, hand-written, faded, crooked, two
+pages), drawn by `scripts/receipt_read_set.py`, which `job.json` names as
+`built_by`. A test rebuilds the set and compares it byte for byte, and no
+document in it has a text layer, so the model reads what a phone sends.
+
+`letter_read` and `statement_read` (Standalone Tim card R2) are two more
+sets of pictures, drawn with the receipt set's own code
+(`scripts/picture_set.py`, shared by `scripts/receipt_read_set.py`,
+`scripts/letter_read_set.py`, and `scripts/statement_read_set.py`): made-up
+IRS letters (clean, crooked, faded, two pages, and one to a business, which
+must read as not a nonprofit's) and made-up bank statements (two banks'
+layouts, two pages, a crooked photo, and one whose printed lines do not add
+up to its printed balances). A case states the faithful reading; the
+statement reader's code check, not the case, turns the bad one away, and a
+test holds that it does.
+
+`talk` (issue #681) is the first set of CONVERSATIONS. Tim's voice is not
+one document read once: a case carries `messages`, the conversation up to
+her latest message, and `job.json` names `system_from`
+(`core.talk.eval_set:system`), which builds Tim's own brief and tool list
+for a made-up solo missionary on a fixed day, so a set scored today
+measures today's brief. Five cases: she greets him (he calls `start_here`),
+she asks what she has spent (any tool call; words alone fail), she asks
+where a figure he read from her books came from (the first live trial
+called it made up: he reads the books again), she asks her tax bracket (he
+calls `tax_packet`), and she asks him to approve a report he has found (he
+calls `decide_card`, whose yes page she taps). An expectation of
+`{"call": {}}` asks only that a tool was called; because it is not a valid
+reply by itself, such a case names the `seed` a seeded fixture run answers.
+`talk_hard`, his strong speed, is gated by the same set
+(`evals.SHARED_SETS`), so a ministry names a model for either speed only
+after `uv run engine evals run talk --tenant <slug> --tier <tier>` is green
+and committed. The set checks the turn a model takes, never its words; the
+words are the live phone test's to judge.
+
 `scan_group` is the first gated contract holding a LIST of objects, and it
 set two harness rules. An expectation is a subset all the way down, so a case
 states the grouping and says nothing about the vendor, amount, and date that
@@ -363,6 +493,34 @@ job, and the results file is deliberately not a run-key input
 `docs/decisions/2026-09-16-eval-gated-tier-changes.md`.
 
 ## The call sites
+
+- **The receipt page reads a photo as it lands (Standalone Tim card R1).**
+  `core/tools/receipt_read.py` runs the expense lane's own
+  `GatewayExtractor` (its brief, its reply contract) with one field more, the
+  currency printed (`PageReading`), as job type `receipt_read`. It is a
+  caller that is not a job: `complete_metered` and the talk `Meter`, so the
+  ledger is never held across the call. A ministry switches it on only by
+  naming `receipt_read` in `[llm.jobs]` (`policy.NAMED_ONLY`: a `default`
+  tier never covers it); every failure (no line, a bare fixture tier, a
+  refusal, a timeout, the cap) leaves the page answering as it always has.
+  The reading is recorded as a proposal and counts on her tap. The nightly
+  `receipt_extract` job keeps its own line and its own words.
+
+- **The interview reads her IRS letter; a catch-up link reads a bank
+  statement (Standalone Tim card R2).** `core/tools/letter_read.py` and
+  `core/tools/statement_read.py`, job types `letter_read` and
+  `statement_read`, both named-only and both callers that are not jobs: they
+  ask through `core/tools/doc_read.py` (`complete_metered` and the talk
+  `Meter`, so the ledger is never held across the call; every failure reads
+  as "no reading" and the page answers as it always has). The letter's
+  reading is a name and a number that code checks (the IRS's letter to a
+  nonprofit, a number that can be an Employer Identification Number) and
+  only her tap makes her answer. The statement's reading is dollar amounts,
+  so it is offered only when code proves it is the statement's own
+  arithmetic: the opening balance plus every line is the closing balance, to
+  the cent, every line inside the period, and the printed totals, when
+  printed, made too. Her tap holds exactly the lines a CSV would have made,
+  and the path from there is the CSV's.
 
 - **AP extraction (row 7.10, done).** `core/agents/ap/extraction.py` holds one
   `GatewayExtractor`; the two provider classes are gone.

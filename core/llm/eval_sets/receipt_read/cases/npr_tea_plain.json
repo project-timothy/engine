@@ -1,0 +1,12 @@
+{
+  "name": "npr_tea_plain",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "npr_tea_plain.png",
+  "text": "HIMALAYAN TEA HOUSE\nThamel, Kathmandu\n05 Nov 2026\nMasala tea x4 400.00\nMomo x2 560.00\nTotal Rs 960.00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "960.00",
+    "currency": "NPR",
+    "invoice_date": "2026-11-05"
+  }
+}

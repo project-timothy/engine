@@ -114,4 +114,8 @@ backup_after_days = 5
 # steps = [{ role = "approver" }, { role = "owner" }]
 
 [people]
-# Filled in at onboarding: name = { roles = [...], scopes = [...] }
+# Filled in at onboarding: id = { roles = [...], scopes = [...] }
+# An id that is not the slug of the person's name ("sam" for "Sam Staffer")
+# carries the name its cards use: sam = { roles = [...], name = "Sam Staffer" }.
+# A card whose person matches nobody here may be the decider's own, so a
+# decider with no name here cannot decide it when approving your own is off.

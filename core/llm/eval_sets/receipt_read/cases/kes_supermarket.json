@@ -1,0 +1,12 @@
+{
+  "name": "kes_supermarket",
+  "note": "a plain receipt: the total, its currency, and its day read off the picture",
+  "document": "kes_supermarket.png",
+  "text": "NAIVAS SUPERMARKET\nNakuru, Kenya\n2026-10-08 17:05\nMaize flour 2kg 210.00\nSugar 1kg 185.00\nSoap 3pk 330.00\nTOTAL KSh 725.00\nM-PESA",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "725.00",
+    "currency": "KES",
+    "invoice_date": "2026-10-08"
+  }
+}

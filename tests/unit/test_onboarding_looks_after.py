@@ -16,7 +16,7 @@ from decimal import Decimal
 
 import pytest
 
-from core.agents.expenses.jobs import REVIEW_CARD
+from core.agents.expenses.records import REVIEW_CARD
 from core.authority import Request, evaluate, parse_policy
 from core.engine.authority_gate import decide_card
 from core.engine.kit import load_kit

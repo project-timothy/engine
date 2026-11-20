@@ -475,3 +475,76 @@ def test_rules_for_someone_else_find_nothing():
     spent = [Spent("a", "Postage", "Communication", 90000, receipt=True)]
     found = check_month(_rules(text), spent, person="ruth", roles=("missionary",))
     assert not [f for f in found if f.rule.id == "newsletter-cap"]
+
+
+# ---- an accountable plan (chunk 3) ------------------------------------------------
+
+PLAN_HANDBOOK = """
+layer = "handbook"
+document = "Example accountable plan"
+plan = true
+adopted_by = "board"
+
+[[rule]]
+id = "cash"
+who = ["missionary"]
+cash_up_to = "1500"
+account_within = 60
+return_within = 120
+says = "Cash on hand stays at or under $1,500, accounted for in 60 days."
+source = { quote = "Cash on hand is not to exceed $1,500." }
+"""
+
+PLAN_REGION = """
+layer = "region"
+document = "Region plan"
+plan = true
+adopted_by = "board"
+
+[[rule]]
+id = "cash-region"
+who = ["missionary"]
+{key} = {value}
+says = "The region's own cash rule."
+source = {{ quote = "The region says so." }}
+"""
+
+
+def test_a_rule_written_before_plans_keeps_its_fingerprint():
+    """A yes given to a rule before plans existed still covers it: the
+    plan's settings, left unsaid, are not part of the fingerprint, nor is a
+    draft's ``replaces`` left empty (t-rule-drafting, 2026-10-29)."""
+    import hashlib
+    import json
+    from dataclasses import asdict
+
+    from core.policy import PAY, PLAN
+
+    rule = _layer(HANDBOOK).rules[0]
+    # Pay (c34) came later still, and is left out the same way.
+    before = {k: v for k, v in asdict(rule).items() if k not in PLAN + PAY and k != "replaces"}
+    body = json.dumps(before, sort_keys=True, default=str)
+    assert rule.sha == hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "complaint"),
+    [
+        ("cash_up_to", '"2000"', "cash up to 2000 is above 1500"),
+        ("account_within", "90", "account within 90 is above 60"),
+        ("return_within", "180", "return within 180 is above 120"),
+    ],
+)
+def test_a_lower_layer_may_not_loosen_a_plan(tmp_path, key, value, complaint):
+    region = PLAN_REGION.format(key=key, value=value)
+    with pytest.raises(PolicyError, match=complaint):
+        _book(tmp_path, {"h.toml": PLAN_HANDBOOK, "r.toml": region})
+
+
+def test_a_lower_layer_may_tighten_a_plan_and_the_clock_takes_the_strictest(tmp_path):
+    from core.policy import clock
+
+    region = PLAN_REGION.format(key="account_within", value="30")
+    book = _book(tmp_path, {"h.toml": PLAN_HANDBOOK, "r.toml": region})
+    held = clock(book.rules, person="ruth-adeyemi", roles=("missionary",))
+    assert (held.due, held.back, held.cash_up_to) == (30, 120, Decimal("1500.00"))

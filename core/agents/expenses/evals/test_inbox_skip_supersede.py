@@ -37,9 +37,9 @@ F, G, H, J = "ff", "a1", "b2", "c3"
 def _lane():
     """The containment test this row adds. Absent today: ``_inbox_run`` parks
     its fresh card and leaves every older pending card exactly where it was."""
-    from core.agents.expenses import jobs
+    from core.agents.expenses import job_inbox
 
-    return jobs
+    return job_inbox
 
 
 def _card(card_id: int, *, shas: tuple[str, ...], action: str = "", status: str = "pending"):

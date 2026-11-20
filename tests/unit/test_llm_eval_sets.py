@@ -19,6 +19,8 @@ would fail at 08:00 tomorrow if this row got the gate wrong.
 from __future__ import annotations
 
 import json
+import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -288,8 +290,14 @@ def test_every_gated_job_has_cases_a_job_file_and_results():
     assert jobs, "the row ships at least one gated job"
     for job in jobs:
         spec = load_job(job)
-        assert 3 <= len(spec.cases) <= 5, f"{job}: keep the set small and readable"
-        assert spec.system and spec.user
+        if _built(job):  # a set of photos is as large as the looks it has to cover
+            minimum = getattr(_builder(job), "MINIMUM", 40)  # the receipts' 40 looks
+            assert len(spec.cases) >= minimum, f"{job}: the photo set covers every look"
+        else:
+            assert 3 <= len(spec.cases) <= 5, f"{job}: keep the set small and readable"
+        assert spec.system_text()
+        # A conversation's cases carry their own messages (the talk set).
+        assert spec.user or all(case.messages for case in spec.cases)
         results = sorted((eval_sets_root() / job / "results").glob("*.json"))
         assert results, f"{job}: no results file shipped"
 
@@ -317,12 +325,138 @@ def test_every_case_document_is_the_pdf_of_the_case_text():
     ``minimal_pdf(case.text)``, so a case cannot drift from what the model
     actually reads."""
     for job in gated_jobs():
+        if _built(job):  # pictures, built by a script: see the test below
+            continue
         spec = load_job(job)
         for case in spec.cases:
             if not case.document:
                 continue
             path = eval_sets_root() / job / "documents" / case.document
             assert path.read_bytes() == minimal_pdf(case.text), f"{job}/{case.name}"
+
+
+def _built(job: str) -> str:
+    """The script that builds a set's documents, for a set of pictures."""
+    spec = json.loads((eval_sets_root() / job / "job.json").read_text(encoding="utf-8"))
+    return str(spec.get("built_by", ""))
+
+
+def _builder(job: str):
+    import importlib.util
+
+    script = Path(__file__).resolve().parents[2] / _built(job)
+    loader = importlib.util.spec_from_file_location("built_set", script)
+    module = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(module)
+    return module
+
+
+def test_a_built_set_is_its_own_manifest_and_its_cases_are_the_scripts():
+    """The receipt page's photo set (card R1), on any machine: every file is
+    the one the script wrote (``manifest.json``, by SHA-256), nothing sits
+    in the set unlisted, the cases and job.json are what a rebuild writes,
+    and no picture carries a text layer to read instead. The pictures are
+    Mac-built (PDFium draws them with other pixels on Linux), so here the
+    manifest holds them, and on a Mac the pixel rebuild below does too."""
+    import hashlib
+
+    from core.llm.rasterize import has_text_layer
+
+    for job in gated_jobs():
+        if not _built(job):
+            continue
+        module, base = _builder(job), eval_sets_root() / job
+        sums = json.loads((base / module.MANIFEST).read_text(encoding="utf-8"))
+        held = {
+            str(p.relative_to(base))
+            for p in base.rglob("*")
+            if p.is_file() and p.parent.name != "results" and p.name != module.MANIFEST
+        }
+        assert held == set(sums), f"{job}: the files and manifest.json disagree"
+        for path, digest in sums.items():
+            assert hashlib.sha256((base / path).read_bytes()).hexdigest() == digest, path
+        built = module.build()
+        assert set(built) == set(sums)
+        for path, data in built.items():
+            if not module.picture(path):
+                assert (base / path).read_bytes() == data, f"{job}/{path}"
+        for doc in sorted((base / "documents").glob("*.pdf")):
+            assert not has_text_layer(doc), f"{doc.name} must be a picture"
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin",
+    reason="the photo set is Mac-built: PDFium draws it with other pixels on Linux",
+)
+def test_on_a_mac_each_picture_draws_what_the_script_draws():
+    """Pixel row for pixel row, however zlib packed the file."""
+    for job in gated_jobs():
+        if not _built(job):
+            continue
+        module = _builder(job)
+        for path, data in module.build().items():
+            committed = (eval_sets_root() / job / path).read_bytes()
+            assert module.drawn(path, committed) == module.drawn(path, data), f"{job}/{path}"
+
+
+def test_the_built_set_check_reads_pixels_not_packing():
+    """The check is blind to how zlib packed a file and sees one changed
+    pixel: a picture re-packed at another level still matches, and the
+    same picture with one pixel off does not (CI's Linux, 2026-11-18)."""
+    import zlib
+
+    module = _builder("receipt_read")
+    docs = eval_sets_root() / "receipt_read" / "documents"
+
+    def repacked(data: bytes, level: int, poke: bool = False) -> bytes:
+        kind = "png" if data.startswith(b"\x89PNG") else "pdf"
+        if kind == "png":
+            png = module.drawn("x.png", data)
+            rows = bytearray(png[3])
+            if poke:
+                rows[100] ^= 1
+            body = zlib.compress(bytes(rows), level)
+            idat = len(body).to_bytes(4, "big") + b"IDAT" + body
+            idat += zlib.crc32(b"IDAT" + body).to_bytes(4, "big")
+            head = data[: 8 + 12 + 13]
+            return head + idat + data[-12:]
+        out = data
+        for found in module._STREAM.finditer(data):
+            if b"/FlateDecode" not in found.group(1):
+                continue
+            raw = bytearray(zlib.decompress(found.group(2)))
+            if poke:
+                raw[100] ^= 1
+                poke = False
+            body = zlib.compress(bytes(raw), level)
+            meta = re.sub(rb"/Length \d+", b"/Length %d" % len(body), found.group(1))
+            out = out.replace(
+                found.group(0), b"<<" + meta + b">>\nstream\n" + body + b"\nendstream"
+            )
+        return out
+
+    for name in ("usd_grocery.png", "gbp_hotel_two_pages.pdf"):
+        data = (docs / name).read_bytes()
+        other = repacked(data, 1)
+        assert other != data and module.drawn(name, other) == module.drawn(name, data)
+        assert module.drawn(name, repacked(data, 1, poke=True)) != module.drawn(name, data)
+
+
+def test_the_receipt_page_set_asks_what_the_page_asks():
+    """The probe is the page's own prompt: the extractor's brief, the one
+    currency line, and the ask for a file with no text layer."""
+    from core.agents.ap.extraction import _ATTACHED_ASK, _JSON_SPEC
+    from core.tools.receipt_read import CURRENCY, PageReading
+
+    spec = load_job("receipt_read")
+    assert spec.system == _JSON_SPEC + CURRENCY and spec.user == _ATTACHED_ASK
+    assert spec.output_model() is PageReading
+    looks = {case.name.rsplit("_", 1)[-1] for case in spec.cases} | {
+        "two_pages" for case in spec.cases if case.name.endswith("two_pages")
+    }
+    assert {"faded", "hand", "tilted", "pages"} <= looks
+    foreign = [c for c in spec.cases if c.expect["currency"] != "USD"]
+    assert len(foreign) >= 30, "most of a missionary's receipts are not in dollars"
 
 
 def test_each_eval_set_declares_the_reply_contract_its_site_uses():
@@ -332,6 +466,9 @@ def test_each_eval_set_declares_the_reply_contract_its_site_uses():
     assert load_job("invoice_extract").output_model() is ExtractionReply
     assert load_job("receipt_extract").output_model() is ExtractionReply
     assert load_job("inbox_classify").output_model() is InboxLabel
+    from core.talk.loop import Turn
+
+    assert load_job("talk").output_model() is Turn
 
 
 # ---- the harness ------------------------------------------------------------------
@@ -560,3 +697,109 @@ def test_the_eval_command_loads_a_tenant_the_gate_would_refuse(tmp_path: Path, m
     assert code == 0
     assert (sets / "invoice_extract" / "results" / "ghost-9.json").exists()
     assert load_tenant("t6", tenants_root=tenants).llm.jobs["invoice_extract"] == "ghost"
+
+
+# ---- a conversation's set: Tim's own voice (issue #681) ---------------------------
+
+
+def _talk_job(root: Path) -> None:
+    directory = root / "talk"
+    (directory / "cases").mkdir(parents=True)
+    (directory / "job.json").write_text(
+        json.dumps(
+            {
+                "job": "talk",
+                "output_model": "core.talk.loop:Turn",
+                "system_from": "core.talk.eval_set:system",
+                "user": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (directory / "cases" / "greeting.json").write_text(
+        json.dumps(
+            {
+                "note": "she says hello",
+                "messages": [
+                    {"role": "user", "content": "How much have I spent?"},
+                    {"role": "assistant", "content": '{"say": "$10.00."}'},
+                    {"role": "user", "content": "Hey Tim"},
+                ],
+                "expect": {"call": {}},
+                "seed": {"call": {"tool": "start_here"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_a_case_carries_its_conversation_and_the_job_builds_todays_system(tmp_path: Path):
+    """Tim's voice is a conversation: a case carries the messages up to her
+    latest one, and the job names the function that builds his system text
+    as it is today, so the set always measures the brief that ships."""
+    from core.talk import eval_set
+
+    _talk_job(tmp_path)
+    model = FixtureAdapter([json.dumps({"call": {"tool": "start_here"}})])
+    report = run_eval_set(
+        "talk",
+        model="m",
+        adapter_name="fixture",
+        make_adapter=lambda case: model,
+        root=tmp_path,
+    )
+    assert report.failed == 0
+    sent = model.calls[0]
+    assert sent.system_text().startswith(eval_set.system())  # then the gateway's reply format
+    assert [(m.role, m.content) for m in sent.turns()] == [
+        ("user", "How much have I spent?"),
+        ("assistant", '{"say": "$10.00."}'),
+        ("user", "Hey Tim"),
+    ]
+
+
+def test_an_empty_expectation_asks_only_that_a_tool_was_called(tmp_path: Path):
+    """``{"call": {}}`` passes any tool call and fails words: the first live
+    trial's Tim answered about money with no tool behind it."""
+    _talk_job(tmp_path)
+    words = FixtureAdapter([json.dumps({"say": "You've spent about $4,000."})])
+    report = run_eval_set(
+        "talk", model="m", adapter_name="fixture", make_adapter=lambda case: words, root=tmp_path
+    )
+    assert report.failed == 1
+
+
+def test_a_seeded_run_answers_a_cases_seed_where_it_has_one(tmp_path: Path):
+    """An expectation that names no tool can't be a valid reply, so the case
+    says what the seeded fixture answers."""
+    _talk_job(tmp_path)
+    report = run_eval_set(
+        "talk",
+        model="fixture-model",
+        adapter_name="fixture",
+        make_adapter=seeded_fixture_adapter,
+        root=tmp_path,
+    )
+    assert report.failed == 0 and report.seeded is True
+
+
+def test_a_hard_question_s_model_is_gated_by_the_talk_set(tmp_path: Path):
+    """``talk_hard`` is Tim's voice at its other speed: the same set gates it,
+    and the refusal names the command that scores it."""
+    _tenant_file(tmp_path, "t1", tiers=f"{PROVEN}\n{UNPROVEN}", jobs='talk_hard = "ghost"')
+    with pytest.raises(EvalGateError) as err:
+        load_tenant("t1", tenants_root=tmp_path)
+    message = str(err.value)
+    assert "[llm.jobs].talk_hard" in message
+    assert "uv run engine evals run talk --tenant t1 --tier ghost" in message
+    assert "talk/results/ghost-9.json" in message
+
+
+def test_the_talk_set_measures_tims_own_brief_on_every_case():
+    from core.talk.loop import BRIEF_FILE
+
+    spec = load_job("talk")
+    assert BRIEF_FILE.read_text(encoding="utf-8").strip() in spec.system_text()
+    for case in spec.cases:
+        assert case.messages and case.messages[-1]["role"] == "user", case.name
+        assert "call" in case.expect, case.name

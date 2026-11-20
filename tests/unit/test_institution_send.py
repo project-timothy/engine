@@ -19,7 +19,8 @@ from decimal import Decimal
 from pathlib import Path
 
 from core.adapters.pretend_institution import PretendInstitution
-from core.agents.expenses.jobs import HELD_EVENT, REVIEW_CARD, SEND_CARD, SENT_EVENT
+from core.agents.expenses.job_send import HELD_EVENT
+from core.agents.expenses.records import REVIEW_CARD, SEND_CARD, SENT_EVENT
 from core.contracts.institution import Claim as Sent
 from core.engine.runner import run
 from core.ledger import Ledger

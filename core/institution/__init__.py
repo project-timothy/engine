@@ -19,15 +19,6 @@ from ..engine.config import InstitutionSettings
 
 SENT, HELD = "sent", "held"
 
-# The IRS standard mileage rate for business use, by the day it took
-# effect. Add a row when the IRS announces one; a drive is priced at the
-# rate in force on its own day. [NEEDS REVIEW] a mid-2026 change is
-# reported (76 cents from 2026-07-01) but not confirmed on IRS.gov.
-IRS_MILEAGE: tuple[tuple[date, Decimal], ...] = (
-    (date(2025, 1, 1), Decimal("0.70")),
-    (date(2026, 1, 1), Decimal("0.725")),
-)
-
 SINKS = ("pretend",)
 
 
@@ -44,14 +35,41 @@ class Outcome:
     say: str = ""  # for the person, in plain words, when it was held
 
 
+def irs_mileage_rate(day: date) -> Decimal:
+    """The IRS standard rate per mile for business use on ``day``, from the
+    year's tax table (``core.tax.mileage``)."""
+    from ..tax import figures, mileage
+
+    try:
+        return mileage.irs_rate(day)
+    except figures.NoYear as gone:
+        raise InstitutionError(
+            f"Tim doesn't hold the IRS mileage rate for {gone.year} yet."
+        ) from gone
+
+
 def mileage_rate(settings: InstitutionSettings, day: date) -> tuple[Decimal, str]:
-    """The rate per mile for a drive on ``day`` and whose rate it is."""
-    if settings.mileage_rate is not None:
-        return settings.mileage_rate, settings.name or "the ministry"
-    rates = [rate for start, rate in IRS_MILEAGE if start <= day]
-    if not rates:
-        raise InstitutionError(f"no IRS rate on file for {day.isoformat()}")
-    return rates[-1], "IRS"
+    """The rate a drive on ``day`` is paid back at and whose rate it is: the
+    ministry's when it sets one, else the IRS rate. A ministry rate above
+    the IRS rate that day is refused (c34 PR 6): the excess counts as pay."""
+    irs = irs_mileage_rate(day)
+    own = settings.mileage_rate
+    if own is None:
+        return irs, "IRS"
+    who = settings.name or "The ministry"
+    if own > irs:
+        raise InstitutionError(
+            f"{who} pays drives back at {_cents(own)} a mile, above the IRS rate of "
+            f"{_cents(irs)} on {day:%b} {day.day}, {day.year}. Tim pays a drive back at the "
+            "IRS rate or less, because anything above it counts as pay. Lower the "
+            "ministry's mileage rate to the IRS rate or below, and the drive is priced."
+        )
+    return own, settings.name or "the ministry"
+
+
+def _cents(rate: Decimal) -> str:
+    """72.5 cents, 74 cents."""
+    return f"{(rate * 100).normalize():f} cents"
 
 
 def claim_sink(settings: InstitutionSettings, *, store: Path | None) -> ClaimSink | None:
@@ -97,12 +115,12 @@ def submit(sink: ClaimSink, claims: Sequence[Claim], *, institution: str) -> lis
 
 __all__ = [
     "HELD",
-    "IRS_MILEAGE",
     "SENT",
     "InstitutionError",
     "Outcome",
     "claim_sink",
     "held_words",
+    "irs_mileage_rate",
     "mileage_rate",
     "submit",
 ]

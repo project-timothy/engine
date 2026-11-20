@@ -89,6 +89,22 @@ def _card(ctx: JobContext, week: str) -> tuple[str, int | None, dict]:
     return "none", None, {}
 
 
+def _lapsed_keys(ctx: JobContext, week: str) -> list[str]:
+    """Keys of the pending send cards of EARLIER weeks. A send is looked up by
+    its ISO week and only the running week's card is ever acted on, so a card
+    still pending when its week ends can never execute: approving it moves
+    nothing. This week's card declares them so the runner closes them as
+    ``superseded`` (queue hygiene, not a decision) instead of leaving one more
+    dead question on the owner's list every week."""
+    rows = ctx.ledger.conn.execute(
+        "SELECT params_json FROM approval_queue WHERE tenant = ? AND action_type = ? "
+        "AND status = 'pending' ORDER BY id",
+        (ctx.tenant_slug, SEND_ACTION),
+    ).fetchall()
+    weeks = {json.loads(r["params_json"] or "{}").get("week") for r in rows}
+    return [_send_key(w) for w in sorted(w for w in weeks if w and w < week)]
+
+
 def _sent(ctx: JobContext, week: str) -> bool:
     rows = ctx.ledger.conn.execute(
         "SELECT payload_json FROM events WHERE tenant = ? AND event_type = ?",
@@ -327,7 +343,14 @@ def _weekly_run(ctx: JobContext) -> JobOutput:
         if granted is not None and card_id is None:
             agent, verdict = granted
             decided = [
-                _send_card(week, path, recipients, decided_by=agent, decided_reason=verdict.reason)
+                _send_card(
+                    week,
+                    path,
+                    recipients,
+                    lapsed=_lapsed_keys(ctx, week),
+                    decided_by=agent,
+                    decided_reason=verdict.reason,
+                )
             ]
         return JobOutput(
             status="ok",
@@ -343,13 +366,19 @@ def _weekly_run(ctx: JobContext) -> JobOutput:
         summary=f"{summary}; send approval card parked",
         actions=actions,
         events=events,
-        approvals=[_send_card(week, path, recipients)],
+        approvals=[_send_card(week, path, recipients, lapsed=_lapsed_keys(ctx, week))],
     )
 
 
-def _send_card(week: str, path, recipients: list[str], **decided: str) -> ApprovalSpec:
+def _send_key(week: str) -> str:
+    return f"brief:{week}"
+
+
+def _send_card(
+    week: str, path, recipients: list[str], *, lapsed: list[str] | None = None, **decided: str
+) -> ApprovalSpec:
     return ApprovalSpec(
-        key=f"brief:{week}",
+        key=_send_key(week),
         action_type=SEND_ACTION,
         params={
             "week": week,
@@ -357,6 +386,7 @@ def _send_card(week: str, path, recipients: list[str], **decided: str) -> Approv
             "recipients": ", ".join(recipients),
         },
         reason=f"email this week's brief to {', '.join(recipients)}",
+        supersedes_keys=lapsed or [],
         **decided,
     )
 

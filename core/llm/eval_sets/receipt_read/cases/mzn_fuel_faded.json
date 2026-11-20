@@ -1,0 +1,12 @@
+{
+  "name": "mzn_fuel_faded",
+  "note": "a faded receipt: the total, its currency, and its day read off the picture",
+  "document": "mzn_fuel_faded.png",
+  "text": "GALP NAMPULA\nNampula, Mocambique\n2026-10-25 08:10\nGasoleo 30,00 L\nTotal MZN 2.598,00",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "2598.00",
+    "currency": "MZN",
+    "invoice_date": "2026-10-25"
+  }
+}

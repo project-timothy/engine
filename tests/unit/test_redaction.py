@@ -59,6 +59,7 @@ BENIGN = [
 # ---- the redactor's own rules --------------------------------------------------
 
 
+@pytest.mark.security("SEC-16")
 def test_a_declared_secrets_value_is_replaced_by_its_variable_name():
     """Rule 1, and the only airtight one: the tenant NAMES the variable, so
     the engine knows the exact string that must never land."""
@@ -97,6 +98,7 @@ def test_a_named_token_family_is_redacted_anywhere_in_prose(planted):
     assert "<redacted:key>" in out
 
 
+@pytest.mark.security("SEC-16")
 def test_a_tin_shape_is_still_redacted():
     """Rule 3, the W-9 rule this row extends and must not weaken."""
     assert redact_text("EIN 12-3456789 on the form") == "EIN <redacted:tin> on the form"
@@ -187,6 +189,7 @@ def planted(tmp_path, monkeypatch):
     return result, root
 
 
+@pytest.mark.security("SEC-16")
 def test_a_planted_key_is_redacted_in_the_card_summary_and_params(planted):
     result, root = planted
     card = result.approvals_needed[0]

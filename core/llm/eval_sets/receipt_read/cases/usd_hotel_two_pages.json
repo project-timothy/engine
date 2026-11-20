@@ -1,0 +1,12 @@
+{
+  "name": "usd_hotel_two_pages",
+  "note": "a two pages receipt: the total, its currency, and its day read off the picture",
+  "document": "usd_hotel_two_pages.pdf",
+  "text": "RIVERBEND INN\nGuest folio\nArrive 2026-10-20\nDepart 2026-10-22\n10/20 Room 129.00\n10/20 Tax 16.77\n10/21 Room 129.00\n(continued)\n\f\nRIVERBEND INN  page 2\n10/21 Tax 16.77\n10/22 Parking 12.00\nBALANCE DUE $303.54\nPaid MC ****2201",
+  "expect": {
+    "doc_type": "receipt",
+    "amount": "303.54",
+    "currency": "USD",
+    "invoice_date": "2026-10-22"
+  }
+}
